@@ -25,7 +25,7 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
    changed and how to verify it, suggest a commit message, and wait.
 3. Ask before adding any dependency that is not in the approved list in
    `docs/architecture.md` (section "Dependencies"). That includes Gradle
-   plugins, Go modules, Docker images and git submodules.
+   plugins, Go modules, Homebrew formulas and git submodules.
 4. If something in the spec or the plan looks wrong, say so before building on
    it. Do not quietly work around it.
 5. A significant decision gets an ADR in `docs/adr/NNNN-short-title.md`, written
@@ -38,8 +38,7 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 /android   Kotlin, Jetpack Compose, single Gradle module (:app)
 /server    Go service: HTTP API, job queue, workers
 /docs      architecture.md, plan.md, adr/
-Makefile              common commands for both sides
-docker-compose.yml    Postgres for local dev and tests
+Makefile   common commands for both sides
 ```
 
 Android package layout (inside `:app`):
@@ -101,11 +100,15 @@ migrations/          plain SQL, embedded in the binary
 
 ## Commands
 
-The Makefile is created in milestone 1. Targets, once it exists:
+Postgres is a local Homebrew install (`postgresql@16`), not Docker: the dev
+machine is short on disk and RAM. `make help` lists every target. The Android
+targets arrive with checkpoint 1.4.
 
 | Command | What it does |
 | --- | --- |
-| `make db-up` / `make db-down` | start / stop Postgres in Docker |
+| `make db-install` | one-time `brew install postgresql@16` |
+| `make db-up` / `make db-down` | start / stop Postgres, create the dev and test databases |
+| `make db-psql` | open `psql` on the dev database |
 | `make server-run` | run the Go server (applies migrations on start) |
 | `make server-test` | Go tests; queue tests need `make db-up` first |
 | `make server-lint` | `go vet` and `gofmt -l` |

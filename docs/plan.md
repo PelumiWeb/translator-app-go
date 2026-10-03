@@ -12,7 +12,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` approved.
 
 ---
 
-## [~] Milestone 0: Agree on the design
+## [x] Milestone 0: Agree on the design
 
 No code.
 
@@ -23,7 +23,7 @@ No code.
 
 ---
 
-## [ ] Milestone 1: End to end, ugly
+## [~] Milestone 1: End to end, ugly
 
 Record on Android, upload, Go enqueues, the fake provider "transcribes", SSE
 streams status back, text shows on screen. No on-device inference, no
@@ -34,7 +34,7 @@ screen shows `queued`, `processing`, the words arriving one by one, then the
 final text. Kill and restart the server mid-job to show nothing is lost.
 
 **Checkpoint 1.1: repo skeleton**
-- `.gitignore`, `Makefile`, `docker-compose.yml` (Postgres 16)
+- `.gitignore`, `Makefile` (Postgres 16 through Homebrew)
 - `server/` Go module, `cmd/server` with config, `slog`, `/healthz`, graceful
   HTTP shutdown
 - Embedded SQL migrations and the runner; `jobs` and `job_events` tables
@@ -59,7 +59,9 @@ final text. Kill and restart the server mid-job to show nothing is lost.
   then `curl -N` on the events URL
 
 **Checkpoint 1.4: Android app**
-- Gradle project, one Compose screen: Record/Stop button, status line, text
+- The owner creates the Android project in `/android` (application id chosen
+  then); Claude builds inside it
+- One Compose screen: Record/Stop button, status line, text
 - `AudioRecorder` (16 kHz mono PCM), WAV encoding, microphone permission
 - `Transcriber` interface and `RemoteTranscriber` (upload and SSE)
 - Minimal `SpeechTranslationPipeline` without translation yet
@@ -174,17 +176,11 @@ Checkpoints: (7.1) provider, (7.2) UI, (7.3) README and CI.
 
 ## Open questions
 
-Blocking milestone 1:
+Answered on 2026-10-04: dependencies approved; Postgres through Homebrew
+instead of Docker; the owner creates the Android project at checkpoint 1.4.
 
-1. Approve the new dependencies listed in `docs/architecture.md` section 5:
-   pgx, OkHttp with okhttp-sse, kotlinx-serialization-json, and the test
-   libraries.
-2. Docker is not installed on this machine. Install Docker Desktop (or
-   OrbStack or Colima), or change the plan to a Homebrew Postgres?
-3. Android application id and package name.
+Still open, not blocking yet:
 
-Not blocking yet:
-
-4. Which real cloud provider (milestone 7).
-5. Whether the source language is always picked by hand or can be detected
+1. Which real cloud provider (milestone 7).
+2. Whether the source language is always picked by hand or can be detected
    (milestone 3).

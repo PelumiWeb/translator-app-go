@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.iml
+
+# Go
+/server/bin/
+/server/data/
+*.test
+*.out
+
+# Android
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/app/.cxx/
+/android/local.properties
+/android/captures/
+*.apk
+*.aab
+
+# Whisper models are downloaded, never committed
+*.bin
+*.gguf
+
+# Local environment
+.env

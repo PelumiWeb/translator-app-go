@@ -1,6 +1,6 @@
 # Architecture
 
-Status: draft, awaiting approval. Nothing here is built yet.
+Status: approved 2026-10-04.
 
 ## 1. What the system does
 
@@ -327,7 +327,7 @@ the job id on every line that concerns a job.
 
 | Area | How |
 | --- | --- |
-| Queue (required) | Go tests against real Postgres from docker-compose, in a separate test database. Covers: concurrent workers never claim the same job, retry with backoff, giving up after max attempts, expired lease recovery, shutdown releasing in-flight jobs. `SKIP LOCKED` behaviour cannot be faked meaningfully. |
+| Queue (required) | Go tests against the local Postgres, in a separate test database where every test gets its own schema. Covers: concurrent workers never claim the same job, retry with backoff, giving up after max attempts, expired lease recovery, shutdown releasing in-flight jobs. `SKIP LOCKED` behaviour cannot be faked meaningfully. |
 | SSE handler (required) | `httptest` with an in-memory event source, no database. Covers: framing, replay from `Last-Event-ID`, no duplicates across the replay/live boundary, stream closes on terminal event, handler returns when the client disconnects. |
 | Model checksum (required) | Kotlin JVM tests with OkHttp `MockWebServer`: good hash, bad hash, resumed download, server ignoring `Range`. Go test that manifest hashes match the files on disk. |
 | Fallback policy | Kotlin JVM tests with fake `Transcriber`s. |
@@ -335,16 +335,16 @@ the job id on every line that concerns a job.
 
 ## 5. Dependencies
 
-Anything outside this list needs approval first. Items marked **new** were not
-named in the original spec and are awaiting approval.
+Anything outside this list needs approval first. Items marked *added* were not
+in the original spec; the owner approved them on 2026-10-04.
 
 **Server**
 
 | Dependency | Why |
 | --- | --- |
 | Go standard library | HTTP, routing, logging, tests |
-| Postgres 16 (Docker image) | database and queue |
-| `github.com/jackc/pgx/v5` (**new**) | Postgres driver and connection pool. A driver is unavoidable; pgx is the standard one and supports `LISTEN/NOTIFY`. |
+| Postgres 16, Homebrew `postgresql@16` (*added*) | database and queue. Installed locally instead of Docker to save disk and RAM on the dev machine. |
+| `github.com/jackc/pgx/v5` (*added*) | Postgres driver and connection pool. A driver is unavoidable; pgx is the standard one and supports `LISTEN/NOTIFY`. |
 
 No router (Go 1.22+ `ServeMux` covers method and path patterns, so chi is not
 needed), no migration tool (SQL files embedded with `embed`, applied by a small
@@ -358,9 +358,9 @@ runner at startup), no UUID library (Postgres generates ids), no test library.
 | kotlinx-coroutines | implied by Kotlin on Android |
 | whisper.cpp (git submodule), NDK, CMake | named in the spec |
 | ML Kit Translate | named in the spec |
-| OkHttp and `okhttp-sse` (**new**) | upload, ranged download, SSE client |
-| kotlinx-serialization-json (**new**) | JSON for the manifest and SSE payloads |
-| JUnit 4, kotlinx-coroutines-test, OkHttp MockWebServer (**new**, test only) | unit tests |
+| OkHttp and `okhttp-sse` (*added*) | upload, ranged download, SSE client |
+| kotlinx-serialization-json (*added*) | JSON for the manifest and SSE payloads |
+| JUnit 4, kotlinx-coroutines-test, OkHttp MockWebServer (*added*, test only) | unit tests |
 
 No DI framework, no Retrofit, no Room.
 
