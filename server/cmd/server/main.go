@@ -1,5 +1,5 @@
-// Command server runs the voice translation backend: HTTP API and, from
-// checkpoint 1.2, the job workers.
+// Command server runs the voice translation backend: the HTTP API and the
+// job workers, in one process.
 package main
 
 import (
@@ -15,9 +15,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"voicetranslation/server/internal/api"
-	"voicetranslation/server/internal/config"
-	"voicetranslation/server/migrations"
+	"github.com/PelumiWeb/translator-app-go/server/internal/api"
+	"github.com/PelumiWeb/translator-app-go/server/internal/config"
+	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fake"
+	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
+	"github.com/PelumiWeb/translator-app-go/server/internal/storage"
+	"github.com/PelumiWeb/translator-app-go/server/migrations"
 )
 
 const shutdownTimeout = 30 * time.Second
@@ -55,6 +58,32 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	audio, err := storage.NewLocal(cfg.AudioDir)
+	if err != nil {
+		return err
+	}
+	defer audio.Close()
+
+	// The only provider so far. A real one is chosen in milestone 7.
+	transcriber := fake.Provider{
+		Text:      "this is a fake transcript from the fake provider",
+		WordDelay: 300 * time.Millisecond,
+	}
+	workers := queue.NewPool(queue.NewStore(pool), transcriber, audio, logger, queue.Config{
+		Workers:       cfg.Workers,
+		PollInterval:  time.Second,
+		Lease:         2 * time.Minute,
+		ShutdownGrace: shutdownTimeout,
+	})
+
+	// Closed when the workers have stopped, so run can wait for them.
+	workersDone := make(chan struct{})
+	go func() {
+		defer close(workersDone)
+		logger.Info("workers started", "count", cfg.Workers)
+		workers.Run(ctx)
+	}()
+
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
 		Handler: api.NewHandler(logger, pool),
@@ -76,6 +105,8 @@ func run(logger *slog.Logger) error {
 	select {
 	case err := <-serveErr:
 		// Returned before any shutdown was requested, e.g. the port is taken.
+		stop() // cancels ctx, which stops the workers
+		<-workersDone
 		return fmt.Errorf("http server: %w", err)
 	case <-ctx.Done():
 		logger.Info("shutdown signal received")
@@ -90,6 +121,7 @@ func run(logger *slog.Logger) error {
 	defer cancel()
 
 	// Shutdown stops accepting connections and waits for in-flight requests.
+	// The workers are draining at the same time: they saw ctx cancelled too.
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutting down http server: %w", err)
 	}
@@ -97,6 +129,8 @@ func run(logger *slog.Logger) error {
 	if err := <-serveErr; !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("http server: %w", err)
 	}
+
+	<-workersDone
 
 	logger.Info("server stopped cleanly")
 	return nil

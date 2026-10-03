@@ -53,6 +53,10 @@ server-run: ## Run the Go server on :8080 (applies migrations on start)
 server-test: ## Run the Go tests (needs `make db-up`)
 	cd server && go test ./...
 
+.PHONY: server-test-race
+server-test-race: ## Go tests with the race detector, each run 3 times
+	cd server && go test -race -count=3 ./...
+
 .PHONY: server-lint
 server-lint: ## go vet, and fail if any file is not gofmt-formatted
 	cd server && go vet ./...

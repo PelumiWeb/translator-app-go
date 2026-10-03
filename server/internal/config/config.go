@@ -1,11 +1,16 @@
 // Package config reads the server's settings from environment variables.
 package config
 
-import "os"
+import (
+	"os"
+	"strconv"
+)
 
 type Config struct {
 	HTTPAddr    string
 	DatabaseURL string
+	AudioDir    string
+	Workers     int
 }
 
 // Load is called once from main. Nothing else in the server reads the
@@ -16,7 +21,17 @@ func Load() Config {
 		// No user or password: a Homebrew Postgres trusts local connections
 		// and pgx defaults the user to the current OS user.
 		DatabaseURL: env("DATABASE_URL", "postgres://localhost:5432/voice_translation?sslmode=disable"),
+		AudioDir:    env("AUDIO_DIR", "data/audio"),
+		Workers:     envInt("WORKERS", 4),
 	}
+}
+
+func envInt(key string, fallback int) int {
+	n, err := strconv.Atoi(os.Getenv(key))
+	if err != nil || n < 1 {
+		return fallback
+	}
+	return n
 }
 
 func env(key, fallback string) string {

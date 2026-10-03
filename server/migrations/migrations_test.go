@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"voicetranslation/server/internal/testdb"
-	"voicetranslation/server/migrations"
+	"github.com/PelumiWeb/translator-app-go/server/internal/testdb"
+	"github.com/PelumiWeb/translator-app-go/server/migrations"
 )
 
 func TestApplyCreatesTables(t *testing.T) {

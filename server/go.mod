@@ -1,4 +1,4 @@
-module voicetranslation/server
+module github.com/PelumiWeb/translator-app-go/server
 
 go 1.27.1
 

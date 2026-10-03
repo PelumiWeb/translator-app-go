@@ -111,6 +111,7 @@ targets arrive with checkpoint 1.4.
 | `make db-psql` | open `psql` on the dev database |
 | `make server-run` | run the Go server (applies migrations on start) |
 | `make server-test` | Go tests; queue tests need `make db-up` first |
+| `make server-test-race` | the same with the race detector, each test run 3 times |
 | `make server-lint` | `go vet` and `gofmt -l` |
 | `make android-build` | `./gradlew assembleDebug` |
 | `make android-test` | JVM unit tests |

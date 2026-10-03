@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"voicetranslation/server/migrations"
+	"github.com/PelumiWeb/translator-app-go/server/migrations"
 )
 
 const defaultURL = "postgres://localhost:5432/voice_translation_test?sslmode=disable"

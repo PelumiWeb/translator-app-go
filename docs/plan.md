@@ -33,24 +33,28 @@ translation, no styling.
 screen shows `queued`, `processing`, the words arriving one by one, then the
 final text. Kill and restart the server mid-job to show nothing is lost.
 
-**Checkpoint 1.1: repo skeleton**
+**Checkpoint 1.1: repo skeleton** (done)
 - `.gitignore`, `Makefile` (Postgres 16 through Homebrew)
 - `server/` Go module, `cmd/server` with config, `slog`, `/healthz`, graceful
   HTTP shutdown
 - Embedded SQL migrations and the runner; `jobs` and `job_events` tables
 - Verify: `make db-up && make server-run`, `curl localhost:8080/healthz`
 
-**Checkpoint 1.2: queue**
-- Job store: enqueue, claim (`FOR UPDATE SKIP LOCKED`), complete, fail
-- Worker pool with graceful shutdown
+**Checkpoint 1.2: queue** (done)
+- Job store: enqueue, claim (`FOR UPDATE SKIP LOCKED`), complete, fail,
+  release; every status change records a `job_events` row
+- Worker pool with two-stage graceful shutdown
 - `Provider` interface and the fake provider
+- Local audio storage (moved here from 1.3 so the workers could be wired into
+  `main` and run for real)
 - Queue tests against Postgres: no double claims under concurrency, a job
-  reaches `done`, shutdown releases in-flight jobs
+  reaches `done`, a provider error marks it `failed`, shutdown lets a job
+  finish within the grace period and releases it after
 - ADR 0001
 - Verify: `make server-test`
 
 **Checkpoint 1.3: HTTP API and SSE**
-- `POST /v1/jobs` (multipart, size limit, audio to local `BlobStore`)
+- `POST /v1/jobs` (multipart, size limit, audio into storage, wakes a worker)
 - `GET /v1/jobs/{id}/events` with persisted events, in-process `EventBus`,
   replay, heartbeat
 - SSE handler tests with `httptest`
