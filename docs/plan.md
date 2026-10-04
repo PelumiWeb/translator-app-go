@@ -96,14 +96,19 @@ Deliberately left out of M1: retries with backoff, lease expiry sweep,
 - Verify: `make model-download android-push-model android-device-test` with an
   emulator running
 
-**Checkpoint 2.2: on-device transcription in the app**
+**Checkpoint 2.2: on-device transcription in the app** (done)
 - `WhisperTranscriber` behind `Transcriber`, with confidence from token
   probabilities, on a single-thread dispatcher
+- Silence and non-speech are reported as "no speech" instead of being
+  transcribed into invented text
+- `RoutingTranscriber` and a switch on screen: on this device, or on the server
+- Time taken, real-time factor and confidence shown under each transcript
 - Model read from the app's files; pushed by hand with
   `make android-push-model` for now (model manager is M4)
-- A debug toggle on screen: on-device or cloud
-- Show time taken and real-time factor, so slow devices are visible
-- Verify: the demo above
+- Verify: `make android-install android-push-model`, turn on airplane mode,
+  record. On the emulator, enable the host microphone first (Extended
+  controls, Microphone, "Virtual microphone uses host audio input"), or the
+  recording is silent and the app says so.
 
 ---
 

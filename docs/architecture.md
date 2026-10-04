@@ -102,7 +102,7 @@ Implementations:
 | --- | --- | --- |
 | `RemoteTranscriber` | 1 | uploads WAV, maps SSE events to `TranscriptEvent` |
 | `WhisperTranscriber` | 2 | whisper.cpp through JNI |
-| `RoutingTranscriber` | 6 | picks between the two, applies fallback policy |
+| `RoutingTranscriber` | 2, 6 | picks between the two: by a switch on screen from milestone 2, by the fallback policy from milestone 6 |
 
 ### 2.4 whisper.cpp via JNI
 

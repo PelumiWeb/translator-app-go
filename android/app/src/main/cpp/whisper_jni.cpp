@@ -83,6 +83,11 @@ Java_com_example_ptranslate_core_stt_WhisperContext_nativeTranscribe(
     params.translate = false;      // keep the spoken language; ML Kit translates
     params.no_context = true;      // each recording stands alone
     params.no_timestamps = true;   // not shown anywhere, and skipping them is faster
+    // By default a low-confidence result is decoded again, up to five times,
+    // at rising "temperature". On a phone that turns a bad recording into a
+    // very long wait. One pass only: a weak result is reported as weak, and
+    // the app can send the audio to the backend instead.
+    params.temperature_inc = 0.0f;
     params.print_realtime = false;
     params.print_progress = false;
     params.print_timestamps = false;
@@ -136,6 +141,15 @@ Java_com_example_ptranslate_core_stt_WhisperContext_nativeMeanTokenProbability(J
         }
     }
     return count == 0 ? -1.0f : static_cast<jfloat>(sum / count);
+}
+
+// The model's own estimate, 0 to 1, that the last audio contained no speech.
+// Taken from the first segment; -1 if there were no segments.
+JNIEXPORT jfloat JNICALL
+Java_com_example_ptranslate_core_stt_WhisperContext_nativeNoSpeechProbability(JNIEnv *, jclass, jlong handle) {
+    whisper_context *context = toContext(handle);
+    if (whisper_full_n_segments(context) == 0) return -1.0f;
+    return whisper_full_get_segment_no_speech_prob(context, 0);
 }
 
 // Which CPU features this build uses, e.g. "NEON = 1". ASCII only, so

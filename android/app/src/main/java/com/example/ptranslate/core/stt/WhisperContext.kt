@@ -22,11 +22,11 @@ class WhisperContext private constructor(private var handle: Long) : Closeable {
 
         val utf8 = nativeTranscribe(handle, samples, languageTag, threads)
             ?: throw TranscriptionException("The on-device model failed to run")
-        val probability = nativeMeanTokenProbability(handle)
 
         return Result(
             text = String(utf8, Charsets.UTF_8).trim(),
-            meanTokenProbability = probability.takeIf { it >= 0f },
+            meanTokenProbability = nativeMeanTokenProbability(handle).takeIf { it >= 0f },
+            noSpeechProbability = nativeNoSpeechProbability(handle).takeIf { it >= 0f },
         )
     }
 
@@ -41,6 +41,8 @@ class WhisperContext private constructor(private var handle: Long) : Closeable {
         val text: String,
         /** 0 to 1, or null when the model produced no words. */
         val meanTokenProbability: Float?,
+        /** The model's estimate, 0 to 1, that the audio held no speech at all. */
+        val noSpeechProbability: Float?,
     )
 
     companion object {
@@ -71,6 +73,7 @@ class WhisperContext private constructor(private var handle: Long) : Closeable {
             threads: Int,
         ): ByteArray?
         @JvmStatic private external fun nativeMeanTokenProbability(handle: Long): Float
+        @JvmStatic private external fun nativeNoSpeechProbability(handle: Long): Float
         @JvmStatic private external fun nativeSystemInfo(): String
     }
 }

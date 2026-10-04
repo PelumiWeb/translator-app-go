@@ -9,11 +9,13 @@ import com.example.ptranslate.core.stt.Transcriber
 import com.example.ptranslate.core.stt.Transcript
 import com.example.ptranslate.core.stt.TranscriptEvent
 import com.example.ptranslate.core.stt.TranscriptionException
+import com.example.ptranslate.core.stt.TranscriptionRoute
 import com.example.ptranslate.core.stt.TranscriptionStage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -55,6 +57,12 @@ class TranslateViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
 
+    private val route = MutableStateFlow(TranscriptionRoute.ON_DEVICE)
+    private var clockMs = 0L
+
+    private fun newViewModel(recorder: AudioRecorder, transcriber: Transcriber) =
+        TranslateViewModel(recorder, SpeechTranslationPipeline(transcriber), route, now = { clockMs })
+
     @Before
     fun setUp() {
         // viewModelScope runs on Dispatchers.Main, which does not exist in a
@@ -70,7 +78,7 @@ class TranslateViewModelTest {
     @Test
     fun `record, stop, then text arrives word by word`() = runTest(dispatcher) {
         val transcriber = FakeTranscriber()
-        val viewModel = TranslateViewModel(FakeRecorder(), SpeechTranslationPipeline(transcriber))
+        val viewModel = newViewModel(FakeRecorder(), transcriber)
 
         viewModel.onRecordClicked()
         assertEquals(Phase.RECORDING, viewModel.state.value.phase)
@@ -106,7 +114,7 @@ class TranslateViewModelTest {
             override fun transcribe(audio: PcmAudio, language: Language): Flow<TranscriptEvent> =
                 flow { throw TranscriptionException("provider exploded") }
         }
-        val viewModel = TranslateViewModel(FakeRecorder(), SpeechTranslationPipeline(failing))
+        val viewModel = newViewModel(FakeRecorder(), failing)
 
         viewModel.onRecordClicked()
         viewModel.onRecordClicked()
@@ -122,7 +130,7 @@ class TranslateViewModelTest {
     fun `a recording that is too short is not uploaded`() = runTest(dispatcher) {
         val transcriber = FakeTranscriber()
         val recorder = FakeRecorder(audio = PcmAudio(ShortArray(160))) // 10 ms
-        val viewModel = TranslateViewModel(recorder, SpeechTranslationPipeline(transcriber))
+        val viewModel = newViewModel(recorder, transcriber)
 
         viewModel.onRecordClicked()
         viewModel.onRecordClicked()
@@ -135,7 +143,7 @@ class TranslateViewModelTest {
     @Test
     fun `recording stops by itself at the time limit`() = runTest(dispatcher) {
         val transcriber = FakeTranscriber()
-        val viewModel = TranslateViewModel(FakeRecorder(), SpeechTranslationPipeline(transcriber), maxRecordingMs = 30_000)
+        val viewModel = newViewModel(FakeRecorder(), transcriber)
 
         viewModel.onRecordClicked()
         advanceTimeBy(29_999)
@@ -153,9 +161,62 @@ class TranslateViewModelTest {
     }
 
     @Test
+    fun `shows where the transcript came from, how long it took, and the confidence`() = runTest(dispatcher) {
+        val transcriber = FakeTranscriber()
+        val recorder = FakeRecorder(audio = PcmAudio(ShortArray(64_000))) // 4 seconds
+        val viewModel = newViewModel(recorder, transcriber)
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+        clockMs += 1_200
+        transcriber.events.send(
+            TranscriptEvent.Final(Transcript("hello", confidence = 0.874f, Transcript.Source.ON_DEVICE)),
+        )
+        transcriber.events.close()
+        runCurrent()
+
+        assertEquals(
+            "On device, 1.2 s for 4.0 s of audio (0.30x real time), confidence 0.87",
+            viewModel.state.value.details,
+        )
+    }
+
+    @Test
+    fun `details leave out the confidence when there is none`() = runTest(dispatcher) {
+        val transcriber = FakeTranscriber()
+        val viewModel = newViewModel(FakeRecorder(), transcriber) // 1 second of audio
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+        clockMs += 3_000
+        transcriber.events.send(TranscriptEvent.Final(Transcript("hello", confidence = null, Transcript.Source.CLOUD)))
+        transcriber.events.close()
+        runCurrent()
+
+        assertEquals("Cloud, 3.0 s for 1.0 s of audio (3.00x real time)", viewModel.state.value.details)
+    }
+
+    @Test
+    fun `the switch changes the route, but not during a recording`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
+        assertTrue(viewModel.state.value.onDevice)
+
+        viewModel.onRouteChanged(onDevice = false)
+        assertEquals(TranscriptionRoute.CLOUD, route.value)
+        assertEquals(false, viewModel.state.value.onDevice)
+
+        viewModel.onRecordClicked() // now recording
+        viewModel.onRouteChanged(onDevice = true)
+        assertEquals(TranscriptionRoute.CLOUD, route.value)
+        assertEquals(false, viewModel.state.value.onDevice)
+    }
+
+    @Test
     fun `a microphone that cannot be opened is reported`() = runTest(dispatcher) {
         val recorder = FakeRecorder().apply { startError = IllegalStateException("Could not open the microphone") }
-        val viewModel = TranslateViewModel(recorder, SpeechTranslationPipeline(FakeTranscriber()))
+        val viewModel = newViewModel(recorder, FakeTranscriber())
 
         viewModel.onRecordClicked()
 
