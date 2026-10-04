@@ -36,33 +36,40 @@ Two things to notice:
 
 ## 2. Android
 
-Kotlin, Jetpack Compose, one Gradle module. minSdk 26, ABIs `arm64-v8a` (real
-devices) and `x86_64` (emulator).
+Kotlin, Jetpack Compose, one Gradle module, in `android/`. minSdk 26. From
+milestone 2 the native code is built for `arm64-v8a` (real devices) and
+`x86_64` (emulator).
 
 ### 2.1 Core and UI split
 
 Everything that is not a screen lives under `core/` and knows nothing about
-Compose or Activities. The entry point is one class:
+Compose or Activities. Two things are the surface a front end uses:
 
 ```kotlin
+interface AudioRecorder {
+    fun start(): Recording          // Recording.stop(): PcmAudio
+}
+
 class SpeechTranslationPipeline(
-    private val recorder: AudioRecorder,
     private val transcriber: Transcriber,
-    private val translator: Translator,
+    private val translator: Translator,   // from milestone 3
 ) {
-    fun run(source: Language, target: Language): Flow<PipelineEvent>
+    fun process(audio: PcmAudio, source: Language, target: Language): Flow<PipelineEvent>
 }
 ```
 
-A future IME would construct this same class from its `InputMethodService`.
-That is the whole extent of IME support for now. When the IME is actually
-built, `core/` moves into its own Gradle module; until then the boundary is
-kept by package discipline (see CLAUDE.md).
+Recording is kept out of the pipeline because the front end owns the record
+button: it decides when a recording starts and stops, then hands the audio
+over. A future IME would use these same two classes from its
+`InputMethodService`. That is the whole extent of IME support for now. When
+the IME is actually built, `core/` moves into its own Gradle module; until then
+the boundary is kept by package discipline (see CLAUDE.md).
 
 ### 2.2 Audio capture
 
 `AudioRecord` at 16 kHz, mono, 16-bit PCM, which is what Whisper expects, so no
-resampling. Recordings are capped at 30 seconds, one Whisper window. For upload
+resampling. Capture runs on its own thread, because `AudioRecord.read` blocks.
+Recordings are capped at 30 seconds, one Whisper window. For upload
 the PCM is wrapped in a WAV header (44 bytes, no encoder dependency). A 30
 second clip is about 960 KB.
 
@@ -74,6 +81,7 @@ interface Transcriber {
 }
 
 sealed interface TranscriptEvent {
+    data class StageChanged(val stage: TranscriptionStage) : TranscriptEvent  // uploading, queued, processing
     data class Partial(val text: String) : TranscriptEvent
     data class Final(val transcript: Transcript) : TranscriptEvent
 }
@@ -154,9 +162,14 @@ State is exposed as `StateFlow<ModelState>`: `Missing`, `Downloading(progress)`,
 
 ### 2.8 Networking
 
-OkHttp for upload, download, and SSE (`okhttp-sse`). Debug builds allow
-cleartext HTTP to `10.0.2.2` and `localhost` through a debug-only network
-security config; release builds do not.
+OkHttp for upload, download, and SSE (`okhttp-sse`). `BackendClient` is the
+only class that knows the backend's URLs and JSON. The stream uses a client
+with no read timeout, since an event stream is silent between events.
+
+The backend URL is a build config field, `http://localhost:8080` for now;
+`adb reverse` forwards it to the dev machine. Debug builds allow cleartext HTTP
+to `localhost` and `10.0.2.2` through a debug-only network security config;
+release builds do not.
 
 ## 3. Server
 
@@ -359,7 +372,8 @@ runner at startup), no UUID library (Postgres generates ids), no test library.
 | whisper.cpp (git submodule), NDK, CMake | named in the spec |
 | ML Kit Translate | named in the spec |
 | OkHttp and `okhttp-sse` (*added*) | upload, ranged download, SSE client |
-| kotlinx-serialization-json (*added*) | JSON for the manifest and SSE payloads |
+| kotlinx-serialization-json and its Kotlin compiler plugin (*added*) | JSON for the manifest and SSE payloads |
+| lifecycle-runtime-compose | `collectAsStateWithLifecycle`; part of AndroidX lifecycle |
 | JUnit 4, kotlinx-coroutines-test, OkHttp MockWebServer (*added*, test only) | unit tests |
 
 No DI framework, no Retrofit, no Room.

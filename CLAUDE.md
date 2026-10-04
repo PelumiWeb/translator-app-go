@@ -102,7 +102,8 @@ migrations/          plain SQL, embedded in the binary
 
 Postgres is a local Homebrew install (`postgresql@16`), not Docker: the dev
 machine is short on disk and RAM. `make help` lists every target. The Android
-targets arrive with checkpoint 1.4.
+project lives in `android/` (package `com.example.ptranslate`); open that
+folder in Android Studio.
 
 | Command | What it does |
 | --- | --- |
@@ -116,10 +117,11 @@ targets arrive with checkpoint 1.4.
 | `make sample-job` | upload a test clip to the running server and stream its events |
 | `make android-build` | `./gradlew assembleDebug` |
 | `make android-test` | JVM unit tests |
-| `make android-install` | install the debug build on the connected device |
-| `make device-proxy` | `adb reverse tcp:8080 tcp:8080` for a physical device |
+| `make android-install` | install the debug build on the connected device and open it |
+| `make device-proxy` | `adb reverse tcp:8080 tcp:8080`; run by `android-install` |
 
-The emulator reaches the host server at `http://10.0.2.2:8080`.
+The app calls `http://localhost:8080`. `adb reverse` forwards that to this
+machine, on the emulator and on a phone over USB alike.
 
 ## Non-goals for now
 

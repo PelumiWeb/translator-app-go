@@ -65,14 +65,17 @@ final text. Kill and restart the server mid-job to show nothing is lost.
   `curl -F audio=@sample.wav -F source_lang=en localhost:8080/v1/jobs`
   then `curl -N localhost:8080<events_url>`
 
-**Checkpoint 1.4: Android app**
-- The owner creates the Android project in `/android` (application id chosen
-  then); Claude builds inside it
+**Checkpoint 1.4: Android app** (done)
+- Android project in `android/`, package `com.example.ptranslate`
 - One Compose screen: Record/Stop button, status line, text
 - `AudioRecorder` (16 kHz mono PCM), WAV encoding, microphone permission
-- `Transcriber` interface and `RemoteTranscriber` (upload and SSE)
+- `BackendClient` (upload and SSE), `Transcriber` interface and
+  `RemoteTranscriber`
 - Minimal `SpeechTranslationPipeline` without translation yet
-- Verify: the demo above, on the emulator
+- JVM tests: WAV encoding, `RemoteTranscriber` against `MockWebServer`,
+  the ViewModel with fakes
+- Verify: `make db-up`, `make server-run`, then `make android-install` with an
+  emulator running. Tap Record, speak, tap Stop.
 
 Deliberately left out of M1: retries with backoff, lease expiry sweep,
 `Last-Event-ID` on the client, any error UI beyond a line of text.

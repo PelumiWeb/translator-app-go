@@ -74,3 +74,25 @@ sample-job: ## Upload a test clip to the running server and stream its events
 	@python3 -c "import wave; w = wave.open('/tmp/vt-sample.wav', 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(bytes(32000)); w.close()"
 	@url=$$(curl -sf -F audio=@/tmp/vt-sample.wav -F source_lang=en localhost:8080/v1/jobs | sed -E 's/.*"events_url":"([^"]+)".*/\1/') \
 		&& echo "streaming $$url" && curl -sN "localhost:8080$$url"
+
+# --- Android ----------------------------------------------------------------
+
+.PHONY: android-build
+android-build: ## Build the debug APK
+	cd android && ./gradlew :app:assembleDebug
+
+.PHONY: android-test
+android-test: ## Run the Android JVM unit tests
+	cd android && ./gradlew :app:testDebugUnitTest
+
+# `adb reverse` forwards the device's localhost:8080 to this machine, so the
+# same backend URL works on the emulator and on a phone connected by USB. It
+# is forgotten when the device disconnects, so it is set on every install.
+.PHONY: device-proxy
+device-proxy: ## Let the connected device reach the local server
+	adb reverse tcp:8080 tcp:8080
+
+.PHONY: android-install
+android-install: device-proxy ## Install the debug build on the connected device and open it
+	cd android && ./gradlew :app:installDebug
+	adb shell am start -n com.example.ptranslate/.MainActivity
