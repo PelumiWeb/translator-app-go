@@ -12,6 +12,9 @@ android {
         }
     }
 
+    // Pinned so everyone builds the native code with the same compiler.
+    ndkVersion = "27.1.12297006"
+
     defaultConfig {
         applicationId = "com.example.ptranslate"
         minSdk = 26
@@ -25,6 +28,19 @@ android {
         // `adb reverse`, which makes the device's localhost:8080 reach it, on
         // the emulator and on a phone over USB alike.
         buildConfigField("String", "BACKEND_URL", "\"http://localhost:8080\"")
+
+        ndk {
+            // 64-bit ARM: every current phone, and the emulator on Apple
+            // silicon. Add "x86_64" here to run on an Intel emulator.
+            abiFilters += "arm64-v8a"
+        }
+        externalNativeBuild {
+            cmake {
+                // Newer devices use 16 KB memory pages and refuse to load a
+                // library aligned for 4 KB. NDK 27 needs to be asked.
+                arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
     }
 
     buildTypes {
@@ -39,6 +55,19 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+    sourceSets {
+        // The device tests transcribe whisper.cpp's own sample recording, so
+        // no audio file has to be copied into this repository.
+        getByName("androidTest") {
+            assets.srcDir("../../third_party/whisper.cpp/samples")
+        }
     }
     buildFeatures {
         compose = true

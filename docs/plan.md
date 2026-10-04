@@ -23,7 +23,7 @@ No code.
 
 ---
 
-## [~] Milestone 1: End to end, ugly
+## [x] Milestone 1: End to end, ugly
 
 Record on Android, upload, Go enqueues, the fake provider "transcribes", SSE
 streams status back, text shows on screen. No on-device inference, no
@@ -82,20 +82,28 @@ Deliberately left out of M1: retries with backoff, lease expiry sweep,
 
 ---
 
-## [ ] Milestone 2: On-device transcription
+## [~] Milestone 2: On-device transcription
 
 **Demo**: airplane mode on, record, the transcript appears.
 
-- whisper.cpp submodule, CMake build, JNI bridge, `WhisperContext`
+**Checkpoint 2.1: native build and JNI** (done)
+- whisper.cpp v1.9.4 as a shallow submodule in `third_party/`
+- CMake build into one shared library, always optimised, 16 KB page aligned
+- JNI bridge and `WhisperContext`, the only class that calls native code
+- Device tests that load the library and transcribe whisper.cpp's sample clip
+- `make model-download`, `make android-push-model`, `make android-device-test`
+- ADR 0004
+- Verify: `make model-download android-push-model android-device-test` with an
+  emulator running
+
+**Checkpoint 2.2: on-device transcription in the app**
 - `WhisperTranscriber` behind `Transcriber`, with confidence from token
-  probabilities
-- Model file pushed by hand with `adb push` for now (model manager is M4)
+  probabilities, on a single-thread dispatcher
+- Model read from the app's files; pushed by hand with
+  `make android-push-model` for now (model manager is M4)
 - A debug toggle on screen: on-device or cloud
 - Show time taken and real-time factor, so slow devices are visible
-- ADR 0004
-
-Checkpoints: (2.1) native build and JNI smoke test, (2.2) `WhisperTranscriber`
-wired into the pipeline and screen.
+- Verify: the demo above
 
 ---
 

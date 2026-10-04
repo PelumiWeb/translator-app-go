@@ -38,6 +38,7 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 /android   Kotlin, Jetpack Compose, single Gradle module (:app)
 /server    Go service: HTTP API, job queue, workers
 /docs      architecture.md, plan.md, adr/
+/third_party/whisper.cpp   git submodule, pinned to a release tag
 Makefile   common commands for both sides
 ```
 
@@ -52,6 +53,9 @@ core/net         backend client: upload, SSE
 core/pipeline    record -> transcribe -> translate, the reusable entry point
 ui/              Compose screens and ViewModels
 ```
+
+Native code is in `android/app/src/main/cpp`: the CMake build and the JNI
+bridge.
 
 Server layout:
 
@@ -100,6 +104,8 @@ migrations/          plain SQL, embedded in the binary
 
 ## Commands
 
+After cloning, fetch whisper.cpp: `git submodule update --init`.
+
 Postgres is a local Homebrew install (`postgresql@16`), not Docker: the dev
 machine is short on disk and RAM. `make help` lists every target. The Android
 project lives in `android/` (package `com.example.ptranslate`); open that
@@ -119,6 +125,9 @@ folder in Android Studio.
 | `make android-test` | JVM unit tests |
 | `make android-install` | install the debug build on the connected device and open it |
 | `make device-proxy` | `adb reverse tcp:8080 tcp:8080`; run by `android-install` |
+| `make android-device-test` | tests that need a device (native code); uninstalls the app afterwards |
+| `make model-download` | download the Whisper model into `server/data/models/` (57 MB, git-ignored) |
+| `make android-push-model` | copy the model to the connected device; repeat after every reinstall |
 
 The app calls `http://localhost:8080`. `adb reverse` forwards that to this
 machine, on the emulator and on a phone over USB alike.

@@ -8,6 +8,14 @@ PG_BIN     := $(shell brew --prefix)/opt/$(PG_FORMULA)/bin
 DEV_DB  := voice_translation
 TEST_DB := voice_translation_test
 
+# The Whisper model used on the device: multilingual "base", quantised, 57 MB.
+# It is downloaded, never committed. server/data/ is git-ignored, and this is
+# where the server will serve models from in milestone 4.
+MODEL      := ggml-base-q5_1.bin
+MODEL_FILE := server/data/models/$(MODEL)
+MODEL_URL  := https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$(MODEL)
+APP_ID     := com.example.ptranslate
+
 .DEFAULT_GOAL := help
 
 .PHONY: help
@@ -95,4 +103,35 @@ device-proxy: ## Let the connected device reach the local server
 .PHONY: android-install
 android-install: device-proxy ## Install the debug build on the connected device and open it
 	cd android && ./gradlew :app:installDebug
-	adb shell am start -n com.example.ptranslate/.MainActivity
+	adb shell am start -n $(APP_ID)/.MainActivity
+
+.PHONY: android-device-test
+android-device-test: ## Run the tests that need a device (native code). Removes the app afterwards
+	cd android && ./gradlew :app:connectedDebugAndroidTest
+
+# --- Whisper model ----------------------------------------------------------
+
+# A file target: make skips the download when the file already exists.
+# -C - resumes a partial download.
+$(MODEL_FILE):
+	mkdir -p $(dir $(MODEL_FILE))
+	curl -L --fail -C - -o $(MODEL_FILE) $(MODEL_URL)
+
+.PHONY: model-download
+model-download: $(MODEL_FILE) ## Download the Whisper model (57 MB, once)
+
+# Until the model manager exists (milestone 4) the model is copied by hand.
+# It goes to two places: /data/local/tmp for the device tests, which survive
+# the app being uninstalled, and the app's own files, where the app looks.
+# run-as only works for debuggable builds, and only once the app is installed.
+.PHONY: android-push-model
+android-push-model: $(MODEL_FILE) ## Copy the model to the connected device
+	adb shell mkdir -p /data/local/tmp/ptranslate
+	adb push $(MODEL_FILE) /data/local/tmp/ptranslate/$(MODEL)
+	@if adb shell pm path $(APP_ID) >/dev/null 2>&1; then \
+		adb shell run-as $(APP_ID) mkdir -p files/models && \
+		adb shell run-as $(APP_ID) cp /data/local/tmp/ptranslate/$(MODEL) files/models/$(MODEL) && \
+		echo "model copied into the app"; \
+	else \
+		echo "app not installed: run make android-install, then this again"; \
+	fi

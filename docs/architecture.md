@@ -36,9 +36,9 @@ Two things to notice:
 
 ## 2. Android
 
-Kotlin, Jetpack Compose, one Gradle module, in `android/`. minSdk 26. From
-milestone 2 the native code is built for `arm64-v8a` (real devices) and
-`x86_64` (emulator).
+Kotlin, Jetpack Compose, one Gradle module, in `android/`. minSdk 26. Native
+code is built for `arm64-v8a`, which covers phones and the emulator on Apple
+silicon.
 
 ### 2.1 Core and UI split
 
@@ -106,15 +106,18 @@ Implementations:
 
 ### 2.4 whisper.cpp via JNI
 
-whisper.cpp is a git submodule, built by CMake through the Android Gradle
-plugin. One Kotlin class (`WhisperContext`) owns the native pointer and is the
-only place with `external` functions: `init(modelPath)`, `transcribe(samples,
-language)`, `free()`. Native calls run on a single-thread dispatcher because a
-whisper context is not safe for concurrent use.
+whisper.cpp is a git submodule in `third_party/`, pinned to a release tag and
+built by CMake through the Android Gradle plugin into one shared library. One
+Kotlin class, `WhisperContext`, owns the native pointer and is the only place
+with `external` functions: load, free, transcribe, confidence of the last
+transcript, and system info. A context is not safe for concurrent use, so
+`WhisperTranscriber` runs it on a single-thread dispatcher.
 
-Model: multilingual `ggml-base`, quantised (q5_1, roughly 60 MB), with `tiny`
-(roughly 30 MB) as the option for slow devices. The English-only `.en` models
-are not used because the source language is not always English.
+Model: multilingual `ggml-base`, quantised (q5_1, 57 MB), with `tiny` (about
+30 MB) as the option for slow devices. The English-only `.en` models are not
+used because the source language is not always English.
+
+Details and the reasons are in ADR 0004.
 
 ### 2.5 Translator
 
