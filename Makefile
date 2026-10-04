@@ -65,3 +65,12 @@ server-lint: ## go vet, and fail if any file is not gofmt-formatted
 .PHONY: server-build
 server-build: ## Build the server binary into server/bin/
 	cd server && go build -o bin/server ./cmd/server
+
+# Uploads one second of silence and follows the job's event stream. Needs
+# `make server-run` in another terminal. -N stops curl from buffering, so
+# events print as they arrive.
+.PHONY: sample-job
+sample-job: ## Upload a test clip to the running server and stream its events
+	@python3 -c "import wave; w = wave.open('/tmp/vt-sample.wav', 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(bytes(32000)); w.close()"
+	@url=$$(curl -sf -F audio=@/tmp/vt-sample.wav -F source_lang=en localhost:8080/v1/jobs | sed -E 's/.*"events_url":"([^"]+)".*/\1/') \
+		&& echo "streaming $$url" && curl -sN "localhost:8080$$url"

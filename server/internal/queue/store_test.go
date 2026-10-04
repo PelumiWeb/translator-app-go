@@ -13,7 +13,7 @@ import (
 const testLease = time.Minute
 
 func TestClaimOnEmptyQueue(t *testing.T) {
-	store := NewStore(testdb.New(t))
+	store := NewStore(testdb.New(t), NewBus())
 
 	_, err := store.Claim(context.Background(), testLease)
 	if !errors.Is(err, ErrNoJobs) {
@@ -23,7 +23,7 @@ func TestClaimOnEmptyQueue(t *testing.T) {
 
 func TestClaimMarksJobAsProcessing(t *testing.T) {
 	pool := testdb.New(t)
-	store := NewStore(pool)
+	store := NewStore(pool, NewBus())
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -59,7 +59,7 @@ func TestClaimMarksJobAsProcessing(t *testing.T) {
 // The property SKIP LOCKED exists for: many workers claiming at the same
 // time each get a different job, and every job is handed out exactly once.
 func TestClaimConcurrentWorkersNeverShareAJob(t *testing.T) {
-	store := NewStore(testdb.New(t))
+	store := NewStore(testdb.New(t), NewBus())
 	ctx := context.Background()
 
 	const jobs, workers = 60, 8
@@ -106,7 +106,7 @@ func TestClaimConcurrentWorkersNeverShareAJob(t *testing.T) {
 }
 
 func TestFinishRequiresProcessingJob(t *testing.T) {
-	store := NewStore(testdb.New(t))
+	store := NewStore(testdb.New(t), NewBus())
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -126,6 +126,69 @@ func TestFinishRequiresProcessingJob(t *testing.T) {
 	}
 	if got := eventTypes(events); len(got) != 1 || got[0] != EventQueued {
 		t.Errorf("events = %v, want [queued]", got)
+	}
+}
+
+func TestStatus(t *testing.T) {
+	store := NewStore(testdb.New(t), NewBus())
+	ctx := context.Background()
+
+	id, err := store.Enqueue(ctx, "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if status, err := store.Status(ctx, id); err != nil || status != StatusQueued {
+		t.Errorf("Status = %q, %v; want queued, nil", status, err)
+	}
+
+	const unknown = "00000000-0000-0000-0000-000000000000"
+	if _, err := store.Status(ctx, unknown); !errors.Is(err, ErrJobNotFound) {
+		t.Errorf("Status of unknown job: error = %v, want ErrJobNotFound", err)
+	}
+}
+
+// Events reach the bus only after their transaction has committed.
+func TestStorePublishesRecordedEvents(t *testing.T) {
+	bus := NewBus()
+	store := NewStore(testdb.New(t), bus)
+	ctx := context.Background()
+
+	id, err := store.Enqueue(ctx, "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	live, unsubscribe := bus.Subscribe(id)
+	defer unsubscribe()
+
+	if _, err := store.Claim(ctx, testLease); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if err := store.Complete(ctx, id, "hello", "en"); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	// A rejected change must publish nothing.
+	if err := store.Complete(ctx, id, "again", "en"); !errors.Is(err, ErrNotProcessing) {
+		t.Fatalf("second Complete error = %v, want ErrNotProcessing", err)
+	}
+	unsubscribe() // closes live, which ends the loop below
+
+	var got []Event
+	for e := range live {
+		got = append(got, e)
+	}
+	if types := eventTypes(got); len(types) != 2 || types[0] != EventProcessing || types[1] != EventDone {
+		t.Errorf("published %v, want [processing done]", types)
+	}
+
+	// What was published must be byte-for-byte what a replay returns.
+	stored, err := store.Events(ctx, id, 1)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	for i := range got {
+		if string(got[i].Payload) != string(stored[i].Payload) {
+			t.Errorf("event %d: published payload %s, stored payload %s", got[i].Seq, got[i].Payload, stored[i].Payload)
+		}
 	}
 }
 

@@ -23,7 +23,11 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/migrations"
 )
 
-const shutdownTimeout = 30 * time.Second
+const (
+	shutdownTimeout = 30 * time.Second
+	// A 30 second clip of 16 kHz mono 16-bit audio is just under 1 MB.
+	maxUploadBytes = 10 << 20 // 10 MB
+)
 
 // main only reports the error and sets the exit code. The work is in run so
 // that its deferred cleanups execute: os.Exit skips defers.
@@ -69,7 +73,12 @@ func run(logger *slog.Logger) error {
 		Text:      "this is a fake transcript from the fake provider",
 		WordDelay: 300 * time.Millisecond,
 	}
-	workers := queue.NewPool(queue.NewStore(pool), transcriber, audio, logger, queue.Config{
+	// The bus connects the two halves of the process: workers record events
+	// through the store, and the store announces them to the SSE handlers.
+	bus := queue.NewBus()
+	store := queue.NewStore(pool, bus)
+
+	workers := queue.NewPool(store, transcriber, audio, logger, queue.Config{
 		Workers:       cfg.Workers,
 		PollInterval:  time.Second,
 		Lease:         2 * time.Minute,
@@ -84,9 +93,21 @@ func run(logger *slog.Logger) error {
 		workers.Run(ctx)
 	}()
 
+	handlers := &api.API{
+		Logger:         logger,
+		DB:             pool,
+		Jobs:           store,
+		Events:         bus,
+		Audio:          audio,
+		Wake:           workers.Wake,
+		Stopping:       ctx.Done(),
+		MaxUploadBytes: maxUploadBytes,
+		Heartbeat:      15 * time.Second,
+	}
+
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
-		Handler: api.NewHandler(logger, pool),
+		Handler: handlers.Handler(),
 		// Limits how long a client may take to send its headers. There is
 		// deliberately no WriteTimeout: it would cut off SSE streams, which
 		// stay open for as long as a job runs.

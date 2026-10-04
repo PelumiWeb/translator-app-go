@@ -122,7 +122,7 @@ func waitForStatus(t *testing.T, db *pgxpool.Pool, id, want string) jobRow {
 
 func TestPoolProcessesJobToDone(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db)
+	store := NewStore(db, NewBus())
 	audio := &fakeAudio{}
 	ctx := context.Background()
 
@@ -169,7 +169,7 @@ func TestPoolProcessesJobToDone(t *testing.T) {
 
 func TestPoolMarksJobFailedOnProviderError(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db)
+	store := NewStore(db, NewBus())
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -196,7 +196,7 @@ func TestPoolMarksJobFailedOnProviderError(t *testing.T) {
 // A job that finishes inside the grace period is not interrupted.
 func TestPoolShutdownLetsRunningJobFinish(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db)
+	store := NewStore(db, NewBus())
 
 	started := make(chan struct{})
 	finish := make(chan struct{})
@@ -230,7 +230,7 @@ func TestPoolShutdownLetsRunningJobFinish(t *testing.T) {
 // untouched, ready for the next server start.
 func TestPoolShutdownReleasesJobAfterGrace(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db)
+	store := NewStore(db, NewBus())
 	audio := &fakeAudio{}
 
 	started := make(chan struct{})

@@ -113,6 +113,7 @@ targets arrive with checkpoint 1.4.
 | `make server-test` | Go tests; queue tests need `make db-up` first |
 | `make server-test-race` | the same with the race detector, each test run 3 times |
 | `make server-lint` | `go vet` and `gofmt -l` |
+| `make sample-job` | upload a test clip to the running server and stream its events |
 | `make android-build` | `./gradlew assembleDebug` |
 | `make android-test` | JVM unit tests |
 | `make android-install` | install the debug build on the connected device |

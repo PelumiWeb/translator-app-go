@@ -53,14 +53,17 @@ final text. Kill and restart the server mid-job to show nothing is lost.
 - ADR 0001
 - Verify: `make server-test`
 
-**Checkpoint 1.3: HTTP API and SSE**
-- `POST /v1/jobs` (multipart, size limit, audio into storage, wakes a worker)
-- `GET /v1/jobs/{id}/events` with persisted events, in-process `EventBus`,
-  replay, heartbeat
-- SSE handler tests with `httptest`
+**Checkpoint 1.3: HTTP API and SSE** (done)
+- `POST /v1/jobs` (multipart, size limit, WAV check, audio into storage,
+  wakes a worker)
+- `GET /v1/jobs/{id}/events` with persisted events, in-process bus, replay
+  from `Last-Event-ID`, heartbeat; streams end on server shutdown
+- The store publishes each event after its transaction commits
+- SSE handler tests and upload handler tests with `httptest`, no database
 - ADR 0002, ADR 0003
-- Verify: `curl -F audio=@sample.wav -F source_lang=en localhost:8080/v1/jobs`
-  then `curl -N` on the events URL
+- Verify: `make sample-job`, or by hand:
+  `curl -F audio=@sample.wav -F source_lang=en localhost:8080/v1/jobs`
+  then `curl -N localhost:8080<events_url>`
 
 **Checkpoint 1.4: Android app**
 - The owner creates the Android project in `/android` (application id chosen
