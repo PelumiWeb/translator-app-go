@@ -12,6 +12,7 @@ import com.example.ptranslate.core.stt.TranscriptEvent
 import com.example.ptranslate.core.stt.TranscriptionException
 import com.example.ptranslate.core.stt.TranscriptionRoute
 import com.example.ptranslate.core.stt.TranscriptionStage
+import com.example.ptranslate.core.translate.TranslationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -61,8 +62,23 @@ class TranslateViewModelTest {
     private val route = MutableStateFlow(TranscriptionRoute.ON_DEVICE)
     private var clockMs = 0L
 
+    private val translator = FakeTranslator()
+
     private fun newViewModel(recorder: AudioRecorder, transcriber: Transcriber) =
-        TranslateViewModel(recorder, SpeechTranslationPipeline(transcriber, FakeTranslator()), route, now = { clockMs })
+        TranslateViewModel(
+            recorder = recorder,
+            pipeline = SpeechTranslationPipeline(transcriber, translator),
+            route = route,
+            sourceLanguages = listOf(Language("en"), Language("es")),
+            targetLanguages = listOf(Language("en"), Language("es"), Language("fr")),
+            now = { clockMs },
+        )
+
+    /** A transcriber that answers at once with [text]. */
+    private fun saying(text: String) = object : Transcriber {
+        override fun transcribe(audio: PcmAudio, language: Language): Flow<TranscriptEvent> =
+            flow { emit(TranscriptEvent.Final(Transcript(text, confidence = null, Transcript.Source.ON_DEVICE))) }
+    }
 
     @Before
     fun setUp() {
@@ -212,6 +228,84 @@ class TranslateViewModelTest {
         viewModel.onRouteChanged(onDevice = true)
         assertEquals(TranscriptionRoute.CLOUD, route.value)
         assertEquals(false, viewModel.state.value.onDevice)
+    }
+
+    @Test
+    fun `shows the transcript and its translation into the chosen language`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), saying("good morning"))
+        viewModel.onTargetSelected(Language("fr"))
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+
+        val state = viewModel.state.value
+        assertEquals("good morning", state.text)
+        assertEquals("[en>fr] good morning", state.translation)
+        assertEquals("Done", state.status)
+        assertEquals(Phase.IDLE, state.phase)
+    }
+
+    @Test
+    fun `the same language on both sides shows the transcript only`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), saying("good morning"))
+        viewModel.onTargetSelected(Language("en"))
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+
+        assertEquals("good morning", viewModel.state.value.text)
+        assertEquals("", viewModel.state.value.translation)
+        assertEquals("Done", viewModel.state.value.status)
+    }
+
+    @Test
+    fun `a failed translation keeps the transcript on screen`() = runTest(dispatcher) {
+        translator.translateError = TranslationException("Translation failed")
+        val viewModel = newViewModel(FakeRecorder(), saying("good morning"))
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+
+        val state = viewModel.state.value
+        assertEquals("good morning", state.text)
+        assertEquals("", state.translation)
+        assertEquals("Translation failed", state.error)
+        assertEquals(Phase.IDLE, state.phase)
+    }
+
+    @Test
+    fun `a new recording clears the last result but keeps the languages`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), saying("good morning"))
+        viewModel.onSourceSelected(Language("es"))
+        viewModel.onTargetSelected(Language("fr"))
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+        assertEquals("[es>fr] good morning", viewModel.state.value.translation)
+
+        viewModel.onRecordClicked()
+
+        val state = viewModel.state.value
+        assertEquals("", state.text)
+        assertEquals("", state.translation)
+        assertNull(state.details)
+        assertEquals(Language("es"), state.source)
+        assertEquals(Language("fr"), state.target)
+    }
+
+    @Test
+    fun `languages cannot be changed during a recording`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
+
+        viewModel.onRecordClicked()
+        viewModel.onSourceSelected(Language("es"))
+        viewModel.onTargetSelected(Language("fr"))
+
+        assertEquals(Language.ENGLISH, viewModel.state.value.source)
+        assertEquals(Language.SPANISH, viewModel.state.value.target)
     }
 
     @Test

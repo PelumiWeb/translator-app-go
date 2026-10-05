@@ -5,5 +5,6 @@ package com.example.ptranslate.core
 value class Language(val tag: String) {
     companion object {
         val ENGLISH = Language("en")
+        val SPANISH = Language("es")
     }
 }

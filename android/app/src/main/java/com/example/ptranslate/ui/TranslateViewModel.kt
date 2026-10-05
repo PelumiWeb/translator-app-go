@@ -30,23 +30,38 @@ enum class Phase { IDLE, RECORDING, WORKING }
 data class TranslateUiState(
     val phase: Phase = Phase.IDLE,
     val status: String = "Tap Record and speak",
+    /** What was said, in the source language. */
     val text: String = "",
+    /** The same, in the target language. Empty until translated. */
+    val translation: String = "",
     /** Where the last transcript came from and how long it took. */
     val details: String? = null,
     val error: String? = null,
     val onDevice: Boolean = true,
+    val source: Language = Language.ENGLISH,
+    val target: Language = Language.SPANISH,
+    val sourceLanguages: List<Language> = emptyList(),
+    val targetLanguages: List<Language> = emptyList(),
 )
 
 class TranslateViewModel(
     private val recorder: AudioRecorder,
     private val pipeline: SpeechTranslationPipeline,
     private val route: MutableStateFlow<TranscriptionRoute>,
+    sourceLanguages: List<Language>,
+    targetLanguages: List<Language>,
     private val maxRecordingMs: Long = 30_000,
     /** A clock that only moves forward, in milliseconds. Replaced in tests. */
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(TranslateUiState(onDevice = route.value == TranscriptionRoute.ON_DEVICE))
+    private val _state = MutableStateFlow(
+        TranslateUiState(
+            onDevice = route.value == TranscriptionRoute.ON_DEVICE,
+            sourceLanguages = sourceLanguages,
+            targetLanguages = targetLanguages,
+        ),
+    )
     val state: StateFlow<TranslateUiState> = _state.asStateFlow()
 
     private var recording: Recording? = null
@@ -56,7 +71,7 @@ class TranslateViewModel(
     fun onRecordClicked() {
         when (_state.value.phase) {
             Phase.IDLE -> startRecording()
-            Phase.RECORDING -> stopAndTranscribe()
+            Phase.RECORDING -> stopAndProcess()
             Phase.WORKING -> Unit
         }
     }
@@ -66,6 +81,16 @@ class TranslateViewModel(
         if (_state.value.phase != Phase.IDLE) return
         route.value = if (onDevice) TranscriptionRoute.ON_DEVICE else TranscriptionRoute.CLOUD
         _state.update { it.copy(onDevice = onDevice) }
+    }
+
+    fun onSourceSelected(language: Language) {
+        if (_state.value.phase != Phase.IDLE) return
+        _state.update { it.copy(source = language) }
+    }
+
+    fun onTargetSelected(language: Language) {
+        if (_state.value.phase != Phase.IDLE) return
+        _state.update { it.copy(target = language) }
     }
 
     fun onPermissionDenied() {
@@ -79,20 +104,30 @@ class TranslateViewModel(
             _state.update { it.copy(error = e.message ?: "Could not start recording") }
             return
         }
+        // A new recording clears the previous result but keeps the settings.
         _state.update {
-            TranslateUiState(phase = Phase.RECORDING, status = "Recording. Tap Stop when done", onDevice = it.onDevice)
+            it.copy(
+                phase = Phase.RECORDING,
+                status = "Recording. Tap Stop when done",
+                text = "",
+                translation = "",
+                details = null,
+                error = null,
+            )
         }
 
         autoStop = viewModelScope.launch {
             delay(maxRecordingMs)
-            stopAndTranscribe()
+            stopAndProcess()
         }
     }
 
-    private fun stopAndTranscribe() {
+    private fun stopAndProcess() {
         val finished = recording ?: return
         recording = null
         _state.update { it.copy(phase = Phase.WORKING, status = "Preparing audio") }
+        // Read once, so the whole run uses the languages chosen at this moment.
+        val (source, target) = _state.value.let { it.source to it.target }
 
         viewModelScope.launch {
             val audio = finished.stop()
@@ -103,16 +138,14 @@ class TranslateViewModel(
 
             val startedAt = now()
             var failed = false
-            // Source and target are the same until the language pickers
-            // arrive in checkpoint 3.2, so nothing is translated yet.
-            pipeline.process(audio, source = Language.ENGLISH, target = Language.ENGLISH)
+            pipeline.process(audio, source, target)
                 // catch sees failures from the pipeline but lets cancellation
                 // through, so leaving the screen still stops the work.
                 .catch { e ->
                     failed = true
                     finish(error = e.message ?: "Something went wrong")
                 }
-                .collect { event -> show(event, audio.durationMs, startedAt) }
+                .collect { event -> show(event, audio.durationMs, startedAt, translating = source != target) }
             if (!failed) finish(error = null)
         }
         // Cancelled last: when the 30 second limit triggered this call, the
@@ -120,20 +153,24 @@ class TranslateViewModel(
         autoStop?.cancel()
     }
 
-    private fun show(event: PipelineEvent, audioMs: Long, startedAt: Long) {
+    private fun show(event: PipelineEvent, audioMs: Long, startedAt: Long, translating: Boolean) {
         _state.update {
             when (event) {
                 is PipelineEvent.Transcribing -> it.copy(status = event.stage.label())
                 is PipelineEvent.PartialTranscript -> it.copy(text = event.text)
                 is PipelineEvent.Transcribed -> it.copy(
-                    status = "Done",
+                    status = "Transcribed",
                     text = event.transcript.text,
                     details = describe(event.transcript, audioMs, elapsedMs = now() - startedAt),
                 )
-                PipelineEvent.DownloadingLanguages,
-                PipelineEvent.Translating,
-                is PipelineEvent.Translated,
-                -> it // shown from checkpoint 3.2
+                PipelineEvent.DownloadingLanguages -> it.copy(status = "Downloading language pack")
+                PipelineEvent.Translating -> it.copy(status = "Translating")
+                // With the same language on both sides there is nothing to
+                // show twice.
+                is PipelineEvent.Translated -> it.copy(
+                    status = "Done",
+                    translation = if (translating) event.text else "",
+                )
             }
         }
     }
@@ -175,7 +212,13 @@ class TranslateViewModel(
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val container = (this[APPLICATION_KEY] as PtranslateApp).container
-                TranslateViewModel(container.recorder, container.pipeline, container.route)
+                TranslateViewModel(
+                    recorder = container.recorder,
+                    pipeline = container.pipeline,
+                    route = container.route,
+                    sourceLanguages = container.sourceLanguages,
+                    targetLanguages = container.targetLanguages,
+                )
             }
         }
     }

@@ -129,11 +129,14 @@ The first point at which the app does what it is for.
 - Verify: `make android-test`, and `make android-device-test` with the
   emulator online
 
-**Checkpoint 3.2: language pickers and the translation on screen**
-- Source and target language pickers, limited to what both Whisper and ML Kit
-  support; the source is picked by hand, not detected
-- Language pack download state on screen
+**Checkpoint 3.2: language pickers and the translation on screen** (done)
+- "From" and "To" pickers. "From" lists what both Whisper and ML Kit support;
+  "To" lists everything ML Kit translates into. The source is picked by hand,
+  not detected
+- Status shows "Downloading language pack" and "Translating"
 - The transcript, then the translation under it
+- A new recording clears the last result and keeps the chosen languages
+- Verify: `make android-install android-push-model`, pick languages, record
 
 ---
 

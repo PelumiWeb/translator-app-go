@@ -2,6 +2,7 @@ package com.example.ptranslate
 
 import android.app.Application
 import android.content.Context
+import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.audio.AndroidAudioRecorder
 import com.example.ptranslate.core.audio.AudioRecorder
 import com.example.ptranslate.core.net.BackendClient
@@ -9,6 +10,7 @@ import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
 import com.example.ptranslate.core.stt.RemoteTranscriber
 import com.example.ptranslate.core.stt.RoutingTranscriber
 import com.example.ptranslate.core.stt.TranscriptionRoute
+import com.example.ptranslate.core.stt.WhisperLanguages
 import com.example.ptranslate.core.stt.WhisperTranscriber
 import com.example.ptranslate.core.translate.MlKitTranslator
 import com.example.ptranslate.core.translate.Translator
@@ -45,7 +47,12 @@ class AppContainer(context: Context) {
     val route = MutableStateFlow(TranscriptionRoute.ON_DEVICE)
 
     val recorder: AudioRecorder = AndroidAudioRecorder()
-    val translator: Translator = MlKitTranslator()
+    private val translator: Translator = MlKitTranslator()
+
+    /** A language can be spoken only if Whisper transcribes it and ML Kit translates from it. */
+    val sourceLanguages: List<Language> = translator.supportedLanguages.filter(WhisperLanguages::supports)
+    val targetLanguages: List<Language> = translator.supportedLanguages
+
     val pipeline = SpeechTranslationPipeline(
         transcriber = RoutingTranscriber(onDevice = whisper, cloud = RemoteTranscriber(backend), route = route),
         translator = translator,
