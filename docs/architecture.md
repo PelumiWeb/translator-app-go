@@ -123,14 +123,23 @@ Details and the reasons are in ADR 0004.
 
 ```kotlin
 interface Translator {
+    val supportedLanguages: List<Language>
+    suspend fun isReady(source: Language, target: Language): Boolean
+    suspend fun prepare(source: Language, target: Language)      // downloads language packs
     suspend fun translate(text: String, source: Language, target: Language): String
-    suspend fun ensureReady(source: Language, target: Language)  // downloads language packs
 }
 ```
 
 `MlKitTranslator` wraps ML Kit on-device translation. ML Kit downloads and
 stores its own language packs (about 30 MB each), so they do not go through our
-model manager.
+model manager. `isReady` is separate from `prepare` so the pipeline can tell
+the screen that a download is about to happen instead of appearing to hang.
+
+The pipeline emits the transcript before it starts translating. If translation
+fails, for example offline with no language pack, the transcript is still
+shown.
+
+ML Kit's native library adds about 16 MB to the APK.
 
 ### 2.6 Fallback policy
 

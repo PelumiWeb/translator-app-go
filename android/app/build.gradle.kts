@@ -88,6 +88,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.mlkit.translate)
     implementation(libs.okhttp)
     implementation(libs.okhttp.sse)
     testImplementation(libs.junit)

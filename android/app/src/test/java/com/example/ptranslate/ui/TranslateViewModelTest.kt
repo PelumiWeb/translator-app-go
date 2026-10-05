@@ -1,5 +1,6 @@
 package com.example.ptranslate.ui
 
+import com.example.ptranslate.core.FakeTranslator
 import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.audio.AudioRecorder
 import com.example.ptranslate.core.audio.PcmAudio
@@ -61,7 +62,7 @@ class TranslateViewModelTest {
     private var clockMs = 0L
 
     private fun newViewModel(recorder: AudioRecorder, transcriber: Transcriber) =
-        TranslateViewModel(recorder, SpeechTranslationPipeline(transcriber), route, now = { clockMs })
+        TranslateViewModel(recorder, SpeechTranslationPipeline(transcriber, FakeTranslator()), route, now = { clockMs })
 
     @Before
     fun setUp() {

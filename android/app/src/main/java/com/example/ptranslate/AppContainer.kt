@@ -10,6 +10,8 @@ import com.example.ptranslate.core.stt.RemoteTranscriber
 import com.example.ptranslate.core.stt.RoutingTranscriber
 import com.example.ptranslate.core.stt.TranscriptionRoute
 import com.example.ptranslate.core.stt.WhisperTranscriber
+import com.example.ptranslate.core.translate.MlKitTranslator
+import com.example.ptranslate.core.translate.Translator
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import okhttp3.OkHttpClient
@@ -43,8 +45,10 @@ class AppContainer(context: Context) {
     val route = MutableStateFlow(TranscriptionRoute.ON_DEVICE)
 
     val recorder: AudioRecorder = AndroidAudioRecorder()
+    val translator: Translator = MlKitTranslator()
     val pipeline = SpeechTranslationPipeline(
-        RoutingTranscriber(onDevice = whisper, cloud = RemoteTranscriber(backend), route = route),
+        transcriber = RoutingTranscriber(onDevice = whisper, cloud = RemoteTranscriber(backend), route = route),
+        translator = translator,
     )
 }
 

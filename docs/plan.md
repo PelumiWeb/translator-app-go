@@ -82,7 +82,7 @@ Deliberately left out of M1: retries with backoff, lease expiry sweep,
 
 ---
 
-## [~] Milestone 2: On-device transcription
+## [x] Milestone 2: On-device transcription
 
 **Demo**: airplane mode on, record, the transcript appears.
 
@@ -112,19 +112,28 @@ Deliberately left out of M1: retries with backoff, lease expiry sweep,
 
 ---
 
-## [ ] Milestone 3: Translation
+## [~] Milestone 3: Translation
 
 The first point at which the app does what it is for.
 
 **Demo**: pick source and target language, speak, read the translation.
 
-- `Translator` interface, `MlKitTranslator`
-- Source and target language pickers
-- Language pack download state on screen
-- Pipeline emits transcript, then translation
-- Tests for the pipeline with fake `Transcriber` and `Translator`
+**Checkpoint 3.1: translator and pipeline** (done)
+- `Translator` interface and `MlKitTranslator` (ML Kit Translate 17.0.3)
+- Pipeline transcribes, downloads language packs if missing, then translates;
+  a failed translation still delivers the transcript
+- JVM tests for the pipeline with fakes; device tests that translate English
+  to Spanish with ML Kit for real
+- The screen is unchanged: it still passes the same source and target, so
+  nothing is translated until 3.2
+- Verify: `make android-test`, and `make android-device-test` with the
+  emulator online
 
-Checkpoints: (3.1) translator and pipeline with tests, (3.2) UI.
+**Checkpoint 3.2: language pickers and the translation on screen**
+- Source and target language pickers, limited to what both Whisper and ML Kit
+  support; the source is picked by hand, not detected
+- Language pack download state on screen
+- The transcript, then the translation under it
 
 ---
 
@@ -202,8 +211,10 @@ Checkpoints: (7.1) provider, (7.2) UI, (7.3) README and CI.
 Answered on 2026-10-04: dependencies approved; Postgres through Homebrew
 instead of Docker; the owner creates the Android project at checkpoint 1.4.
 
+Decided on 2026-10-04: the source language is picked by hand. ML Kit needs an
+explicit source language, and detecting it would mean running Whisper's
+language detection first; that can be added later behind the same picker.
+
 Still open, not blocking yet:
 
 1. Which real cloud provider (milestone 7).
-2. Whether the source language is always picked by hand or can be detected
-   (milestone 3).

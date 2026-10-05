@@ -103,7 +103,9 @@ class TranslateViewModel(
 
             val startedAt = now()
             var failed = false
-            pipeline.process(audio, Language.ENGLISH)
+            // Source and target are the same until the language pickers
+            // arrive in checkpoint 3.2, so nothing is translated yet.
+            pipeline.process(audio, source = Language.ENGLISH, target = Language.ENGLISH)
                 // catch sees failures from the pipeline but lets cancellation
                 // through, so leaving the screen still stops the work.
                 .catch { e ->
@@ -128,6 +130,10 @@ class TranslateViewModel(
                     text = event.transcript.text,
                     details = describe(event.transcript, audioMs, elapsedMs = now() - startedAt),
                 )
+                PipelineEvent.DownloadingLanguages,
+                PipelineEvent.Translating,
+                is PipelineEvent.Translated,
+                -> it // shown from checkpoint 3.2
             }
         }
     }
