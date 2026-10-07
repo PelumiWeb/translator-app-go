@@ -112,7 +112,7 @@ Deliberately left out of M1: retries with backoff, lease expiry sweep,
 
 ---
 
-## [~] Milestone 3: Translation
+## [x] Milestone 3: Translation
 
 The first point at which the app does what it is for.
 
@@ -140,21 +140,33 @@ The first point at which the app does what it is for.
 
 ---
 
-## [ ] Milestone 4: Model distribution
+## [~] Milestone 4: Model distribution
 
 **Demo**: fresh install with no model. The app downloads it with a progress
 bar. Turn the network off halfway and back on: the download resumes. Corrupt
 the file on the server: the app rejects it.
 
-- Server: `GET /v1/models/manifest`, `GET /v1/models/{id}` with range support,
-  manifest built from the files in `MODELS_DIR`, test that hashes match
-- Android: `ModelManager` (manifest, resumable download, SHA-256, atomic
-  rename), state on screen
+**Checkpoint 4.1: server endpoints** (done)
+- `internal/models`: a catalogue built at startup from the `.bin` files in
+  `MODELS_DIR` (default `data/models`), each hashed with SHA-256
+- `GET /v1/models/manifest` and `GET /v1/models/{id}`
+- Range and resume through `http.ServeContent`; the SHA-256 is the `ETag`, so
+  a resume against a replaced file gets the whole new file
+- Tests: manifest matches the bytes served, resume from an offset, changed
+  file, impossible range, unknown ids
+- Verify: `make server-test`, then with the server running
+  `curl localhost:8080/v1/models/manifest`
+
+**Checkpoint 4.2: Android model manager**
+- `ModelManager`: fetch the manifest, download with resume, verify SHA-256,
+  rename into place
 - Checksum and resume tests with `MockWebServer`
 - ADR 0005
 
-Checkpoints: (4.1) server endpoints and tests, (4.2) Android model manager and
-tests, (4.3) UI and the removal of the `adb push` step.
+**Checkpoint 4.3: download on screen**
+- Model state and progress on screen; `WhisperTranscriber` uses the managed
+  model
+- `make android-push-model` is no longer needed for the app
 
 ---
 

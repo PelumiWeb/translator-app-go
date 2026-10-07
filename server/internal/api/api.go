@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 )
 
@@ -37,6 +38,12 @@ type AudioStore interface {
 	Delete(key string) error
 }
 
+type ModelCatalog interface {
+	List() []models.Model
+	Get(id string) (models.Model, error)
+	Open(id string) (file io.ReadSeekCloser, modified time.Time, err error)
+}
+
 // API carries the handlers' dependencies. The handlers are methods on it,
 // which is how they reach those dependencies without any global state.
 type API struct {
@@ -45,6 +52,7 @@ type API struct {
 	Jobs   JobStore
 	Events EventSubscriber
 	Audio  AudioStore
+	Models ModelCatalog
 
 	// Wake nudges an idle worker after a job is enqueued.
 	Wake func()
@@ -63,6 +71,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", a.handleHealth)
 	mux.HandleFunc("POST /v1/jobs", a.handleCreateJob)
 	mux.HandleFunc("GET /v1/jobs/{id}/events", a.handleJobEvents)
+	mux.HandleFunc("GET /v1/models/manifest", a.handleModelManifest)
+	mux.HandleFunc("GET /v1/models/{id}", a.handleModelDownload)
 	return mux
 }
 

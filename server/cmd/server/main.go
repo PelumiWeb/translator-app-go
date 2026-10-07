@@ -17,6 +17,7 @@ import (
 
 	"github.com/PelumiWeb/translator-app-go/server/internal/api"
 	"github.com/PelumiWeb/translator-app-go/server/internal/config"
+	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fake"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 	"github.com/PelumiWeb/translator-app-go/server/internal/storage"
@@ -68,6 +69,12 @@ func run(logger *slog.Logger) error {
 	}
 	defer audio.Close()
 
+	catalog, err := models.Load(cfg.ModelsDir)
+	if err != nil {
+		return err
+	}
+	logger.Info("models loaded", "dir", cfg.ModelsDir, "count", len(catalog.List()))
+
 	// The only provider so far. A real one is chosen in milestone 7.
 	transcriber := fake.Provider{
 		Text:      "this is a fake transcript from the fake provider",
@@ -99,6 +106,7 @@ func run(logger *slog.Logger) error {
 		Jobs:           store,
 		Events:         bus,
 		Audio:          audio,
+		Models:         catalog,
 		Wake:           workers.Wake,
 		Stopping:       ctx.Done(),
 		MaxUploadBytes: maxUploadBytes,

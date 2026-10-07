@@ -10,6 +10,7 @@ type Config struct {
 	HTTPAddr    string
 	DatabaseURL string
 	AudioDir    string
+	ModelsDir   string
 	Workers     int
 }
 
@@ -22,6 +23,7 @@ func Load() Config {
 		// and pgx defaults the user to the current OS user.
 		DatabaseURL: env("DATABASE_URL", "postgres://localhost:5432/voice_translation?sslmode=disable"),
 		AudioDir:    env("AUDIO_DIR", "data/audio"),
+		ModelsDir:   env("MODELS_DIR", "data/models"),
 		Workers:     envInt("WORKERS", 4),
 	}
 }

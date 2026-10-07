@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 )
 
@@ -107,6 +108,15 @@ func (a *fakeAudio) keys() []string {
 	return keys
 }
 
+// emptyCatalog is a real catalogue over a directory that does not exist.
+func emptyCatalog() *models.Catalog {
+	catalog, err := models.Load("/nonexistent/models")
+	if err != nil {
+		panic(err)
+	}
+	return catalog
+}
+
 const testJobID = "5b1c0c1e-0000-4000-8000-000000000001"
 
 // newTestAPI returns an API wired to fakes. Tests replace the fields they
@@ -118,6 +128,7 @@ func newTestAPI() *API {
 		Jobs:           &fakeJobs{},
 		Events:         queue.NewBus(),
 		Audio:          &fakeAudio{},
+		Models:         emptyCatalog(),
 		Wake:           func() {},
 		Stopping:       make(chan struct{}),
 		MaxUploadBytes: 1 << 20,

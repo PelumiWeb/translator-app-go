@@ -222,9 +222,17 @@ proxies from closing an idle connection.
     "size": 59700000, "sha256": "ab12...", "url": "/v1/models/whisper-base-q5_1" } ] }
 ```
 
+The catalogue is built once at startup from the `.bin` files in `MODELS_DIR`.
+A model's `id` is its file name without the extension, and its `version` is the
+first 12 characters of its SHA-256, so replacing a file changes the version
+with nothing to bump by hand.
+
 **`GET /v1/models/{id}`**: the model file. Served with `http.ServeContent`,
 which implements `Range`, `If-Range` and `206 Partial Content` in the standard
-library, so resume support needs no code of ours.
+library, so resume support needs no code of ours. The SHA-256 is sent as the
+`ETag`. A client resuming a download sends it back in `If-Range`; if the file
+has been replaced, the server sends the whole new file instead of a tail that
+would not match the half the client already has.
 
 ### 3.2 Data model
 
