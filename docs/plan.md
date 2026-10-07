@@ -140,7 +140,7 @@ The first point at which the app does what it is for.
 
 ---
 
-## [~] Milestone 4: Model distribution
+## [x] Milestone 4: Model distribution
 
 **Demo**: fresh install with no model. The app downloads it with a progress
 bar. Turn the network off halfway and back on: the download resumes. Corrupt
@@ -168,10 +168,16 @@ the file on the server: the app rejects it.
 - Nothing in the app calls it yet; that is 4.3
 - Verify: `make android-test`
 
-**Checkpoint 4.3: download on screen**
-- Model state and progress on screen; `WhisperTranscriber` uses the managed
-  model
-- `make android-push-model` is no longer needed for the app
+**Checkpoint 4.3: download on screen** (done)
+- `ModelInstaller` interface; the ViewModel mirrors the model's state
+- Screen: "not on this device yet" with a Download button, a progress bar,
+  "Checking the download", the failure reason with "Try again", or "ready"
+- `WhisperTranscriber` asks for the managed model on each transcription
+- The download starts only when the user asks, not on first launch: it is
+  57 MB of their data
+- `make android-push-model` is now only needed for the device tests
+- Verify: `make server-run`, `make android-install`, tap "Download speech
+  model"
 
 ---
 
@@ -247,20 +253,24 @@ Added on 2026-10-07. The second step: the spoken translation sounds like the
 person who spoke. This is for every user of the app, each in their own voice,
 not one fixed voice.
 
-**Demo**: a new user records a short voice sample once. From then on their
-translations are spoken in their voice, in the target language. A second user
-on another phone gets their own voice, not the first user's.
+Approach, decided on 2026-10-07: the recording being translated is itself the
+voice reference (zero-shot voice cloning). There is no enrolment, no stored
+voice profile and no account. Whoever speaks into the phone is the voice that
+comes out.
 
-- Voice sample capture in the app, with a clear statement of what it is used
-  for; a user can delete their sample
-- A voice profile per user on the backend, and a rule that a profile is only
-  ever used for its owner's output
-- A synthesis job type on the backend, next to transcription: queued, run by a
-  worker through a provider interface, audio streamed or fetched when done
+**Demo**: speak a sentence; the translation is spoken back in your voice. Hand
+the phone to someone else; their translation comes back in theirs.
+
+- A synthesis job type on the backend, next to transcription: it takes the
+  recording and the translated text, is queued and run by a worker through a
+  provider interface, and returns audio
+- The recording is used for that one job and then deleted, as transcription
+  audio already is
 - A fake synthesis provider for local development and tests
-- A second `SpeechSynthesizer` implementation that uses the backend, with the
-  stock voice as the fallback when offline
-- ADRs for the voice-cloning engine and for how users are told apart
+- A second `SpeechSynthesizer` implementation that uses the backend
+- Fallback to the stock voice from milestone 8 when offline, or when the
+  recording is too short to clone from (a few seconds of speech are needed)
+- ADR for the voice-cloning engine
 
 Needs decisions first: see open questions.
 
@@ -275,16 +285,15 @@ Decided on 2026-10-04: the source language is picked by hand. ML Kit needs an
 explicit source language, and detecting it would mean running Whisper's
 language detection first; that can be added later behind the same picker.
 
+Decided on 2026-10-07: own-voice output uses the current recording as the
+voice reference, so no voice profiles, enrolment or accounts are needed, and
+auth stays a non-goal.
+
 Still open, not blocking yet:
 
 1. Which real cloud provider (milestone 7).
 2. Which voice-cloning engine (milestone 9): a paid API, or a self-hosted open
    model that needs a GPU server. Either is a new dependency to approve.
-3. How users are told apart (milestone 9). A voice profile per user needs
-   some identity, and auth and accounts are non-goals today. The lightest
-   option is an id generated on each install, with no login: enough to keep
-   voices separate, but the profile is lost if the app is reinstalled. Real
-   accounts would lift that limit and would mean revisiting the non-goals.
-4. Whether voice synthesis may be cloud-only (milestone 9). Cross-language
+3. Whether voice synthesis may be cloud-only (milestone 9). Cross-language
    voice cloning is too heavy for a phone today, so the recommendation is to
    run it on the backend and keep the stock voice for offline use.

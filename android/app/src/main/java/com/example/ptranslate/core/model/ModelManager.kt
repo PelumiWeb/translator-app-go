@@ -25,6 +25,19 @@ sealed interface ModelState {
 
 class ModelException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
+/** What the rest of the app needs from the model manager. */
+interface ModelInstaller {
+    val state: StateFlow<ModelState>
+
+    /**
+     * Returns the installed model, downloading it first if needed.
+     *
+     * @throws ModelException if the model cannot be installed. [state] then
+     *   holds [ModelState.Failed] with the same reason.
+     */
+    suspend fun ensureInstalled(): File
+}
+
 /**
  * Gets one model from the backend onto the device and keeps it there.
  *
@@ -42,7 +55,7 @@ class ModelManager(
     private val directory: File,
     private val modelId: String,
     private val ioDispatcher: CoroutineDispatcher,
-) {
+) : ModelInstaller {
     private val installed = File(directory, "$modelId.bin")
     private val partial = File(directory, "$modelId.part")
     private val partialSha = File(directory, "$modelId.part.sha256")
@@ -50,22 +63,19 @@ class ModelManager(
     private val _state = MutableStateFlow(
         if (installed.isFile) ModelState.Ready(installed) else ModelState.Missing,
     )
-    val state: StateFlow<ModelState> = _state.asStateFlow()
+    override val state: StateFlow<ModelState> = _state.asStateFlow()
 
     // One download at a time: two callers asking at once share the result
     // instead of writing to the same file.
     private val mutex = Mutex()
 
     /**
-     * Returns the installed model, downloading it first if needed. Safe to
-     * call again after a failure: it continues the partial download.
+     * Safe to call again after a failure: it continues the partial download.
      *
      * An installed model is returned without contacting the server, so the
      * app works offline once it has one.
-     *
-     * @throws ModelException if the model cannot be installed.
      */
-    suspend fun ensureInstalled(): File = mutex.withLock {
+    override suspend fun ensureInstalled(): File = mutex.withLock {
         if (installed.isFile) {
             _state.value = ModelState.Ready(installed)
             return@withLock installed

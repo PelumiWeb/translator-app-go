@@ -132,7 +132,7 @@ folder in Android Studio.
 | `make device-proxy` | `adb reverse tcp:8080 tcp:8080`; run by `android-install` |
 | `make android-device-test` | tests that need a device (native code); uninstalls the app afterwards |
 | `make model-download` | download the Whisper model into `server/data/models/` (57 MB, git-ignored) |
-| `make android-push-model` | copy the model to the connected device; repeat after every reinstall |
+| `make android-push-model` | copy the model to the device for the device tests; the app itself downloads its model from the server |
 
 The app calls `http://localhost:8080`. `adb reverse` forwards that to this
 machine, on the emulator and on a phone over USB alike.

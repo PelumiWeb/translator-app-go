@@ -5,6 +5,9 @@ import android.content.Context
 import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.audio.AndroidAudioRecorder
 import com.example.ptranslate.core.audio.AudioRecorder
+import com.example.ptranslate.core.model.ModelInstaller
+import com.example.ptranslate.core.model.ModelManager
+import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.net.BackendClient
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
 import com.example.ptranslate.core.stt.RemoteTranscriber
@@ -14,6 +17,7 @@ import com.example.ptranslate.core.stt.WhisperLanguages
 import com.example.ptranslate.core.stt.WhisperTranscriber
 import com.example.ptranslate.core.translate.MlKitTranslator
 import com.example.ptranslate.core.translate.Translator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import okhttp3.OkHttpClient
@@ -33,10 +37,16 @@ class AppContainer(context: Context) {
     private val whisperDispatcher =
         Executors.newSingleThreadExecutor { Thread(it, "whisper") }.asCoroutineDispatcher()
 
+    /** Downloads the Whisper model from the backend and keeps it in the app's files. */
+    val models: ModelInstaller = ModelManager(
+        backend = backend,
+        directory = File(context.filesDir, "models"),
+        modelId = WHISPER_MODEL_ID,
+        ioDispatcher = Dispatchers.IO,
+    )
+
     private val whisper = WhisperTranscriber(
-        // Where the model manager will put models from milestone 4. Until
-        // then `make android-push-model` copies the file here.
-        modelFile = File(context.filesDir, "models/ggml-base-q5_1.bin"),
+        modelFile = { (models.state.value as? ModelState.Ready)?.file },
         dispatcher = whisperDispatcher,
         // More threads than fast cores makes Whisper slower, not faster:
         // the slow cores hold the others back.
@@ -58,6 +68,9 @@ class AppContainer(context: Context) {
         translator = translator,
     )
 }
+
+/** Multilingual "base", quantised: 57 MB. The reasons are in ADR 0004. */
+private const val WHISPER_MODEL_ID = "ggml-base-q5_1"
 
 class PtranslateApp : Application() {
     val container: AppContainer by lazy { AppContainer(this) }

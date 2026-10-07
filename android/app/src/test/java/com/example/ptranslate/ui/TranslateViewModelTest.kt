@@ -5,6 +5,9 @@ import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.audio.AudioRecorder
 import com.example.ptranslate.core.audio.PcmAudio
 import com.example.ptranslate.core.audio.Recording
+import com.example.ptranslate.core.model.ModelException
+import com.example.ptranslate.core.model.ModelInstaller
+import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
 import com.example.ptranslate.core.stt.Transcriber
 import com.example.ptranslate.core.stt.Transcript
@@ -32,6 +35,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TranslateViewModelTest {
@@ -64,11 +68,29 @@ class TranslateViewModelTest {
 
     private val translator = FakeTranslator()
 
+    private class FakeModels : ModelInstaller {
+        override val state = MutableStateFlow<ModelState>(ModelState.Missing)
+        var installCalls = 0
+        var failWith: String? = null
+
+        override suspend fun ensureInstalled(): File {
+            installCalls++
+            failWith?.let {
+                state.value = ModelState.Failed(it)
+                throw ModelException(it)
+            }
+            return File("model.bin").also { state.value = ModelState.Ready(it) }
+        }
+    }
+
+    private val models = FakeModels()
+
     private fun newViewModel(recorder: AudioRecorder, transcriber: Transcriber) =
         TranslateViewModel(
             recorder = recorder,
             pipeline = SpeechTranslationPipeline(transcriber, translator),
             route = route,
+            models = models,
             sourceLanguages = listOf(Language("en"), Language("es")),
             targetLanguages = listOf(Language("en"), Language("es"), Language("fr")),
             now = { clockMs },
@@ -306,6 +328,61 @@ class TranslateViewModelTest {
 
         assertEquals(Language.ENGLISH, viewModel.state.value.source)
         assertEquals(Language.SPANISH, viewModel.state.value.target)
+    }
+
+    @Test
+    fun `shows the state of the speech model as it changes`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
+        runCurrent()
+        assertEquals(ModelState.Missing, viewModel.state.value.model)
+
+        models.state.value = ModelState.Downloading(bytes = 10, total = 100)
+        runCurrent()
+        assertEquals(ModelState.Downloading(10, 100), viewModel.state.value.model)
+
+        models.state.value = ModelState.Verifying
+        runCurrent()
+        assertEquals(ModelState.Verifying, viewModel.state.value.model)
+    }
+
+    @Test
+    fun `the download button installs the model`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
+
+        viewModel.onDownloadModelClicked()
+        runCurrent()
+
+        assertEquals(1, models.installCalls)
+        assertTrue(viewModel.state.value.model is ModelState.Ready)
+    }
+
+    @Test
+    fun `a failed download shows its reason and can be tried again`() = runTest(dispatcher) {
+        models.failWith = "The download was interrupted"
+        val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
+
+        viewModel.onDownloadModelClicked()
+        runCurrent()
+        assertEquals(ModelState.Failed("The download was interrupted"), viewModel.state.value.model)
+
+        models.failWith = null
+        viewModel.onDownloadModelClicked()
+        runCurrent()
+
+        assertEquals(2, models.installCalls)
+        assertTrue(viewModel.state.value.model is ModelState.Ready)
+    }
+
+    @Test
+    fun `the download button does nothing while a download is running`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
+        models.state.value = ModelState.Downloading(bytes = 10, total = 100)
+        runCurrent()
+
+        viewModel.onDownloadModelClicked()
+        runCurrent()
+
+        assertEquals(0, models.installCalls)
     }
 
     @Test

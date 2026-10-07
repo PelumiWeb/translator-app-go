@@ -120,12 +120,13 @@ $(MODEL_FILE):
 .PHONY: model-download
 model-download: $(MODEL_FILE) ## Download the Whisper model (57 MB, once)
 
-# Until the model manager exists (milestone 4) the model is copied by hand.
-# It goes to two places: /data/local/tmp for the device tests, which survive
-# the app being uninstalled, and the app's own files, where the app looks.
+# The app downloads its own model from the server (the Download button on
+# screen). This target is for the device tests, which read the model from
+# /data/local/tmp so that it survives the app being uninstalled. It also drops
+# a copy into the installed app, which skips the in-app download.
 # run-as only works for debuggable builds, and only once the app is installed.
 .PHONY: android-push-model
-android-push-model: $(MODEL_FILE) ## Copy the model to the connected device
+android-push-model: $(MODEL_FILE) ## Copy the model to the device for the device tests
 	adb shell mkdir -p /data/local/tmp/ptranslate
 	adb push $(MODEL_FILE) /data/local/tmp/ptranslate/$(MODEL)
 	@if adb shell pm path $(APP_ID) >/dev/null 2>&1; then \

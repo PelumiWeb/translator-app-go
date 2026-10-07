@@ -10,6 +10,9 @@ import com.example.ptranslate.PtranslateApp
 import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.audio.AudioRecorder
 import com.example.ptranslate.core.audio.Recording
+import com.example.ptranslate.core.model.ModelException
+import com.example.ptranslate.core.model.ModelInstaller
+import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.pipeline.PipelineEvent
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
 import com.example.ptranslate.core.stt.Transcript
@@ -42,12 +45,15 @@ data class TranslateUiState(
     val target: Language = Language.SPANISH,
     val sourceLanguages: List<Language> = emptyList(),
     val targetLanguages: List<Language> = emptyList(),
+    /** The on-device speech model: missing, downloading, ready or failed. */
+    val model: ModelState = ModelState.Missing,
 )
 
 class TranslateViewModel(
     private val recorder: AudioRecorder,
     private val pipeline: SpeechTranslationPipeline,
     private val route: MutableStateFlow<TranscriptionRoute>,
+    private val models: ModelInstaller,
     sourceLanguages: List<Language>,
     targetLanguages: List<Language>,
     private val maxRecordingMs: Long = 30_000,
@@ -60,12 +66,33 @@ class TranslateViewModel(
             onDevice = route.value == TranscriptionRoute.ON_DEVICE,
             sourceLanguages = sourceLanguages,
             targetLanguages = targetLanguages,
+            model = models.state.value,
         ),
     )
     val state: StateFlow<TranslateUiState> = _state.asStateFlow()
 
     private var recording: Recording? = null
     private var autoStop: Job? = null
+
+    init {
+        // Mirror the model's state onto the screen for as long as it exists.
+        viewModelScope.launch {
+            models.state.collect { model -> _state.update { it.copy(model = model) } }
+        }
+    }
+
+    /** Starts, or after a failure continues, the download of the speech model. */
+    fun onDownloadModelClicked() {
+        if (_state.value.model is ModelState.Downloading || _state.value.model is ModelState.Verifying) return
+        viewModelScope.launch {
+            try {
+                models.ensureInstalled()
+            } catch (_: ModelException) {
+                // Nothing to do here: the reason is already on screen, because
+                // the manager's state is ModelState.Failed.
+            }
+        }
+    }
 
     /** The one button: starts a recording, or stops it and sends it off. */
     fun onRecordClicked() {
@@ -216,6 +243,7 @@ class TranslateViewModel(
                     recorder = container.recorder,
                     pipeline = container.pipeline,
                     route = container.route,
+                    models = container.models,
                     sourceLanguages = container.sourceLanguages,
                     targetLanguages = container.targetLanguages,
                 )

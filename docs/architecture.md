@@ -178,6 +178,10 @@ An installed model is returned without contacting the server.
 State is exposed as `StateFlow<ModelState>`: `Missing`,
 `Downloading(bytes, total)`, `Verifying`, `Ready(file)`, `Failed(reason)`.
 
+The download starts when the user asks for it on screen, not on first launch.
+`WhisperTranscriber` asks for the installed model on every transcription, so a
+model that finishes downloading is used without restarting anything.
+
 The reasons are in ADR 0005.
 
 ### 2.8 Networking

@@ -12,12 +12,15 @@ import kotlin.math.roundToInt
 /**
  * Transcribes on the device with whisper.cpp.
  *
+ * @param modelFile returns the installed model, or null while there is none.
+ *   It is asked on every transcription, so a model that finishes downloading
+ *   is picked up without restarting anything.
  * @param dispatcher must run on a single thread: it is what keeps the
  *   underlying [WhisperContext] from being used by two callers at once.
  * @param threads how many CPU threads Whisper itself may use.
  */
 class WhisperTranscriber(
-    private val modelFile: File,
+    private val modelFile: () -> File?,
     private val dispatcher: CoroutineDispatcher,
     private val threads: Int,
 ) : Transcriber {
@@ -67,8 +70,9 @@ class WhisperTranscriber(
 
     private fun loadedContext(): WhisperContext =
         context ?: run {
-            if (!modelFile.isFile) throw TranscriptionException("The on-device model is not installed")
-            WhisperContext.load(modelFile).also { context = it }
+            val file = modelFile()?.takeIf { it.isFile }
+                ?: throw TranscriptionException("The on-device model is not installed")
+            WhisperContext.load(file).also { context = it }
         }
 
     private companion object {

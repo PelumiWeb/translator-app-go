@@ -22,7 +22,7 @@ class WhisperTranscriberTest {
 
     // limitedParallelism(1) gives the single-threaded access the transcriber requires.
     private fun transcriber(model: File) =
-        WhisperTranscriber(model, Dispatchers.Default.limitedParallelism(1), threads = 4)
+        WhisperTranscriber({ model }, Dispatchers.Default.limitedParallelism(1), threads = 4)
 
     @Test
     fun transcribesSpeechAndReportsConfidence() = runBlocking {
