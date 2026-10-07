@@ -157,11 +157,16 @@ the file on the server: the app rejects it.
 - Verify: `make server-test`, then with the server running
   `curl localhost:8080/v1/models/manifest`
 
-**Checkpoint 4.2: Android model manager**
-- `ModelManager`: fetch the manifest, download with resume, verify SHA-256,
-  rename into place
-- Checksum and resume tests with `MockWebServer`
+**Checkpoint 4.2: Android model manager** (done)
+- `BackendClient`: fetch the manifest, open a model download from an offset
+- `ModelManager`: download with resume, verify SHA-256, rename into place;
+  state as a `StateFlow`
+- JVM tests against `MockWebServer`: good hash, bad hash, resume, server
+  ignoring the range, partial file from another version, dropped connection,
+  offline with a model installed
 - ADR 0005
+- Nothing in the app calls it yet; that is 4.3
+- Verify: `make android-test`
 
 **Checkpoint 4.3: download on screen**
 - Model state and progress on screen; `WhisperTranscriber` uses the managed
@@ -221,6 +226,46 @@ Checkpoints: (7.1) provider, (7.2) UI, (7.3) README and CI.
 
 ---
 
+## [ ] Milestone 8: Speak the translation
+
+Added on 2026-10-07. The aim of the product is speech-to-speech
+interpretation: a person says something in one language and hears it in
+another, in their own voice. Milestones 8 and 9 get there in two steps.
+
+**Demo**: speak, and the phone says the translation aloud.
+
+- `SpeechSynthesizer` interface after `Translator` in the pipeline
+- An implementation on Android's built-in `TextToSpeech`: a stock voice, no new
+  dependency, works offline
+- Play, stop and replay on screen
+
+---
+
+## [ ] Milestone 9: Speak it in the user's own voice
+
+Added on 2026-10-07. The second step: the spoken translation sounds like the
+person who spoke. This is for every user of the app, each in their own voice,
+not one fixed voice.
+
+**Demo**: a new user records a short voice sample once. From then on their
+translations are spoken in their voice, in the target language. A second user
+on another phone gets their own voice, not the first user's.
+
+- Voice sample capture in the app, with a clear statement of what it is used
+  for; a user can delete their sample
+- A voice profile per user on the backend, and a rule that a profile is only
+  ever used for its owner's output
+- A synthesis job type on the backend, next to transcription: queued, run by a
+  worker through a provider interface, audio streamed or fetched when done
+- A fake synthesis provider for local development and tests
+- A second `SpeechSynthesizer` implementation that uses the backend, with the
+  stock voice as the fallback when offline
+- ADRs for the voice-cloning engine and for how users are told apart
+
+Needs decisions first: see open questions.
+
+---
+
 ## Open questions
 
 Answered on 2026-10-04: dependencies approved; Postgres through Homebrew
@@ -233,3 +278,13 @@ language detection first; that can be added later behind the same picker.
 Still open, not blocking yet:
 
 1. Which real cloud provider (milestone 7).
+2. Which voice-cloning engine (milestone 9): a paid API, or a self-hosted open
+   model that needs a GPU server. Either is a new dependency to approve.
+3. How users are told apart (milestone 9). A voice profile per user needs
+   some identity, and auth and accounts are non-goals today. The lightest
+   option is an id generated on each install, with no login: enough to keep
+   voices separate, but the profile is lost if the app is reinstalled. Real
+   accounts would lift that limit and would mean revisiting the non-goals.
+4. Whether voice synthesis may be cloud-only (milestone 9). Cross-language
+   voice cloning is too heavy for a phone today, so the recommendation is to
+   run it on the backend and keep the stock voice for offline use.

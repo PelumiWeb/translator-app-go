@@ -27,6 +27,11 @@ work, runs it through a cloud provider, and streams progress back.
       +-------------- job_events <--------------+
 ```
 
+The aim of the product goes one stage further than this diagram: the translated
+text is spoken aloud, in the voice of whoever spoke, for every user. That stage is not designed
+yet; it is planned as milestones 8 and 9 and will sit after `Translator` behind
+a `SpeechSynthesizer` interface.
+
 Two things to notice:
 
 - Translation always runs on the device, on both paths. The backend only
@@ -159,18 +164,21 @@ on-device result marked as low confidence, or an error if there is no result.
 
 ### 2.7 Model manager
 
-1. `GET /v1/models/manifest`.
-2. Pick the model for this device.
-3. Download to `<files>/models/<id>.part` with a `Range: bytes=<size>-` header
-   if a partial file exists. If the server answers 200 instead of 206, start
-   over.
-4. Check the SHA-256 of the complete file against the manifest. On mismatch,
-   delete and report an error.
-5. Rename `.part` to the final name. A model file without the `.part` suffix is
-   therefore always a verified one.
+1. `GET /v1/models/manifest`, and find the model.
+2. Download to `<files>/models/<id>.part`. If a partial file exists and belongs
+   to the same model, send `Range: bytes=<size>-` with `If-Range: "<sha256>"`.
+   If the server answers 200 instead of 206, start over.
+3. Check the SHA-256 of the complete file against the manifest. On mismatch,
+   delete it and report an error.
+4. Rename `.part` to `.bin`. A `.bin` file is therefore always a verified
+   model.
 
-State is exposed as `StateFlow<ModelState>`: `Missing`, `Downloading(progress)`,
-`Verifying`, `Ready(path)`, `Failed(reason)`.
+An installed model is returned without contacting the server.
+
+State is exposed as `StateFlow<ModelState>`: `Missing`,
+`Downloading(bytes, total)`, `Verifying`, `Ready(file)`, `Failed(reason)`.
+
+The reasons are in ADR 0005.
 
 ### 2.8 Networking
 

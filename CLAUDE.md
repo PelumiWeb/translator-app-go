@@ -4,6 +4,11 @@ Record speech on Android, transcribe it, translate it into a target language
 chosen for the receiver. Portfolio piece that must prove three things: native
 Android, on-device inference, and Go backend services.
 
+The aim is speech-to-speech interpretation: each user speaks in one language
+and hears the translation in another, in their own voice. It is being built in
+steps; text output comes first, spoken output is milestones 8 and 9 in the
+plan.
+
 Read `docs/architecture.md` for the design and `docs/plan.md` for the current
 milestone before starting any work.
 
