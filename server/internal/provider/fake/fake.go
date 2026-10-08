@@ -17,7 +17,11 @@ import (
 type Provider struct {
 	Text      string
 	WordDelay time.Duration
-	Err       error // when set, Transcribe fails with it
+	Err       error // when set, Transcribe always fails with it
+
+	// FailAttempts makes the first N attempts of every job fail with a
+	// temporary error, to exercise retries: 2 means fail, fail, succeed.
+	FailAttempts int
 }
 
 func (p Provider) Transcribe(ctx context.Context, audio io.Reader, opts provider.Options, onPartial func(string)) (provider.Result, error) {
@@ -27,6 +31,9 @@ func (p Provider) Transcribe(ctx context.Context, audio io.Reader, opts provider
 	}
 	if p.Err != nil {
 		return provider.Result{}, p.Err
+	}
+	if opts.Attempt <= p.FailAttempts {
+		return provider.Result{}, fmt.Errorf("fake provider: simulated outage on attempt %d", opts.Attempt)
 	}
 
 	words := strings.Fields(p.Text)

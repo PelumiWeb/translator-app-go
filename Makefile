@@ -57,6 +57,10 @@ db-reset: ## Drop and recreate the dev database (deletes all local jobs)
 server-run: ## Run the Go server on :8080 (applies migrations on start)
 	cd server && go run ./cmd/server
 
+.PHONY: server-run-flaky
+server-run-flaky: ## Run the server with a provider that fails each job twice, to watch retries
+	cd server && FAKE_FAIL_ATTEMPTS=2 go run ./cmd/server
+
 .PHONY: server-test
 server-test: ## Run the Go tests (needs `make db-up`)
 	cd server && go test ./...

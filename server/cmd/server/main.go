@@ -77,8 +77,9 @@ func run(logger *slog.Logger) error {
 
 	// The only provider so far. A real one is chosen in milestone 7.
 	transcriber := fake.Provider{
-		Text:      "this is a fake transcript from the fake provider",
-		WordDelay: 300 * time.Millisecond,
+		Text:         "this is a fake transcript from the fake provider",
+		WordDelay:    300 * time.Millisecond,
+		FailAttempts: cfg.FakeFailAttempts,
 	}
 	// The bus connects the two halves of the process: workers record events
 	// through the store, and the store announces them to the SSE handlers.

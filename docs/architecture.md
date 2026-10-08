@@ -305,10 +305,12 @@ everyone else, because uncommitted changes are invisible to other connections.
 - **Worker pool**: N goroutines, each looping claim -> process -> finish. When
   the queue is empty a worker waits for a poll tick (1 second) or a wake-up
   signal sent on enqueue.
-- **Retries**: on a retryable error with attempts left, the job goes back to
-  `queued` with `run_at = now() + backoff`. Backoff is exponential with jitter
-  (2 s, 4 s, 8 s, plus or minus 20%). Out of attempts, or a non-retryable error:
-  `failed`, and an `error` event.
+- **Retries**: an error is assumed to be temporary unless the provider marks
+  it with `provider.Permanent`. A temporary error with attempts left puts the
+  job back to `queued` with `run_at = now() + backoff`. Backoff is exponential
+  with jitter (2 s, 4 s, 8 s ... capped at a minute, each moved by up to 20%).
+  The retry is recorded as a `queued` event carrying the error and the delay.
+  Out of attempts, or a permanent error: `failed`, and an `error` event.
 - **Crashed workers**: a job whose `locked_until` has passed is put back to
   `queued` by a periodic sweep.
 - **Graceful shutdown**: on SIGINT or SIGTERM, stop accepting HTTP requests,

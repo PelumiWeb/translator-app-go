@@ -12,6 +12,10 @@ type Config struct {
 	AudioDir    string
 	ModelsDir   string
 	Workers     int
+
+	// FakeFailAttempts makes the fake provider fail the first N attempts of
+	// every job, to watch retries happen. 0 in normal use.
+	FakeFailAttempts int
 }
 
 // Load is called once from main. Nothing else in the server reads the
@@ -25,6 +29,8 @@ func Load() Config {
 		AudioDir:    env("AUDIO_DIR", "data/audio"),
 		ModelsDir:   env("MODELS_DIR", "data/models"),
 		Workers:     envInt("WORKERS", 4),
+
+		FakeFailAttempts: envInt("FAKE_FAIL_ATTEMPTS", 0),
 	}
 }
 

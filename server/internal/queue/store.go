@@ -39,10 +39,11 @@ const (
 
 // Job is what a worker needs to process one claimed job.
 type Job struct {
-	ID         string
-	SourceLang string
-	AudioKey   string
-	Attempt    int // 1 on the first try
+	ID          string
+	SourceLang  string
+	AudioKey    string
+	Attempt     int // 1 on the first try
+	MaxAttempts int // the job fails for good once Attempt reaches this
 }
 
 // Event is one entry in a job's history. Seq counts 1, 2, 3 ... per job.
@@ -125,9 +126,9 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (Job, error) {
 				FOR UPDATE SKIP LOCKED
 				LIMIT 1
 			)
-			RETURNING id, source_lang, audio_path, attempts`,
+			RETURNING id, source_lang, audio_path, attempts, max_attempts`,
 			lease,
-		).Scan(&job.ID, &job.SourceLang, &job.AudioKey, &job.Attempt)
+		).Scan(&job.ID, &job.SourceLang, &job.AudioKey, &job.Attempt, &job.MaxAttempts)
 		if err != nil {
 			return err
 		}
@@ -174,6 +175,26 @@ func (s *Store) Fail(ctx context.Context, jobID, message string) error {
 		WHERE id = $1 AND status = 'processing'`,
 		[]any{jobID, message},
 		EventError, map[string]string{"message": message},
+	)
+}
+
+// Retry puts a processing job back in the queue to run again after delay.
+// The attempt it just used still counts.
+//
+// The event is "queued", not "error": to a client following the job, "error"
+// means it is over, and this job is not.
+func (s *Store) Retry(ctx context.Context, jobID, message string, delay time.Duration) error {
+	return s.finish(ctx, jobID, `
+		UPDATE jobs
+		SET status = 'queued', run_at = now() + $3::interval, last_error = $2,
+		    locked_until = NULL, updated_at = now()
+		WHERE id = $1 AND status = 'processing'`,
+		[]any{jobID, message, delay},
+		EventQueued, map[string]any{
+			"reason":      "retry",
+			"error":       message,
+			"retry_in_ms": delay.Milliseconds(),
+		},
 	)
 }
 

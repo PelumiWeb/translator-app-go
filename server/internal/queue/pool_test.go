@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"slices"
 	"strings"
@@ -59,6 +61,8 @@ func startPool(t *testing.T, store *Store, p provider.Provider, audio AudioStore
 		PollInterval:  10 * time.Millisecond,
 		Lease:         testLease,
 		ShutdownGrace: grace,
+		// Retries almost at once, so tests of retrying finish in milliseconds.
+		Backoff: func(int) time.Duration { return 5 * time.Millisecond },
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -167,7 +171,82 @@ func TestPoolProcessesJobToDone(t *testing.T) {
 	}
 }
 
-func TestPoolMarksJobFailedOnProviderError(t *testing.T) {
+// The fake provider fails the first two attempts, as a provider having a bad
+// minute would, and the job still ends up done.
+func TestPoolRetriesTemporaryFailures(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+	audio := &fakeAudio{}
+	ctx := context.Background()
+
+	id, err := store.Enqueue(ctx, "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	startPool(t, store, fake.Provider{Text: "third time lucky", FailAttempts: 2}, audio, time.Second)
+
+	row := waitForStatus(t, db, id, "done")
+	if row.Attempts != 3 {
+		t.Errorf("attempts = %d, want 3", row.Attempts)
+	}
+	if row.ResultText == nil || *row.ResultText != "third time lucky" {
+		t.Errorf("result_text = %v", row.ResultText)
+	}
+
+	events, err := store.Events(ctx, id, 0)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	wantTypes := []string{
+		"queued",
+		"processing", "queued", // attempt 1 fails, retry scheduled
+		"processing", "queued", // attempt 2 fails, retry scheduled
+		"processing", "partial", "partial", "partial", "done",
+	}
+	if got := eventTypes(events); !slices.Equal(got, wantTypes) {
+		t.Errorf("event types = %v, want %v", got, wantTypes)
+	}
+
+	// The audio has to survive the failed attempts and go only at the end.
+	if got := audio.deletedKeys(); !slices.Equal(got, []string{"clip.wav"}) {
+		t.Errorf("deleted audio = %v, want [clip.wav] exactly once", got)
+	}
+}
+
+func TestPoolGivesUpAfterMaxAttempts(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+	audio := &fakeAudio{}
+	ctx := context.Background()
+
+	id, err := store.Enqueue(ctx, "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	startPool(t, store, fake.Provider{Err: errors.New("provider exploded")}, audio, time.Second)
+
+	row := waitForStatus(t, db, id, "failed")
+	if row.Attempts != 3 {
+		t.Errorf("attempts = %d, want 3 (the default max_attempts)", row.Attempts)
+	}
+	if row.LastError == nil || *row.LastError != "provider exploded" {
+		t.Errorf("last_error = %v, want %q", row.LastError, "provider exploded")
+	}
+
+	events, err := store.Events(ctx, id, 0)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	wantTypes := []string{"queued", "processing", "queued", "processing", "queued", "processing", "error"}
+	if got := eventTypes(events); !slices.Equal(got, wantTypes) {
+		t.Errorf("event types = %v, want %v", got, wantTypes)
+	}
+	if got := audio.deletedKeys(); !slices.Equal(got, []string{"clip.wav"}) {
+		t.Errorf("deleted audio = %v, want [clip.wav]", got)
+	}
+}
+
+func TestPoolDoesNotRetryPermanentFailures(t *testing.T) {
 	db := testdb.New(t)
 	store := NewStore(db, NewBus())
 	ctx := context.Background()
@@ -176,11 +255,15 @@ func TestPoolMarksJobFailedOnProviderError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
-	startPool(t, store, fake.Provider{Err: errors.New("provider exploded")}, &fakeAudio{}, time.Second)
+	bad := fake.Provider{Err: provider.Permanent(errors.New("audio is not speech"))}
+	startPool(t, store, bad, &fakeAudio{}, time.Second)
 
 	row := waitForStatus(t, db, id, "failed")
-	if row.LastError == nil || *row.LastError != "provider exploded" {
-		t.Errorf("last_error = %v, want %q", row.LastError, "provider exploded")
+	if row.Attempts != 1 {
+		t.Errorf("attempts = %d, want 1: a permanent failure must not be retried", row.Attempts)
+	}
+	if row.LastError == nil || *row.LastError != "audio is not speech" {
+		t.Errorf("last_error = %v", row.LastError)
 	}
 
 	events, err := store.Events(ctx, id, 0)
@@ -192,6 +275,30 @@ func TestPoolMarksJobFailedOnProviderError(t *testing.T) {
 		t.Errorf("event types = %v, want %v", got, wantTypes)
 	}
 }
+
+// Audio that cannot be opened will not appear on a later attempt either.
+func TestPoolDoesNotRetryWhenTheAudioIsMissing(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+
+	id, err := store.Enqueue(context.Background(), "en", "gone.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	startPool(t, store, fake.Provider{Text: "never reached"}, missingAudio{}, time.Second)
+
+	row := waitForStatus(t, db, id, "failed")
+	if row.Attempts != 1 {
+		t.Errorf("attempts = %d, want 1", row.Attempts)
+	}
+}
+
+type missingAudio struct{}
+
+func (missingAudio) Open(key string) (io.ReadCloser, error) {
+	return nil, fmt.Errorf("opening blob %s: %w", key, fs.ErrNotExist)
+}
+func (missingAudio) Delete(string) error { return nil }
 
 // A job that finishes inside the grace period is not interrupted.
 func TestPoolShutdownLetsRunningJobFinish(t *testing.T) {

@@ -181,25 +181,39 @@ the file on the server: the app rejects it.
 
 ---
 
-## [ ] Milestone 5: Queue hardening
+## [~] Milestone 5: Queue hardening
 
 **Demo**: the fake provider fails twice then succeeds; the job retries with
 growing delays and completes. Kill a worker mid-job; the job is picked up
 again after its lease expires. Drop the SSE connection; the client reconnects
 and continues from where it left off.
 
-- Retries with exponential backoff and jitter, `max_attempts`, retryable and
-  non-retryable errors
-- Lease expiry sweep
-- `LISTEN/NOTIFY` `EventBus`, so API and workers can run as separate processes
-- `Last-Event-ID` reconnect in the Android client
-- `Idempotency-Key` on `POST /v1/jobs`, so a retried upload does not create a
-  second job
-- Tests for each of the above
+**Checkpoint 5.1: retries and backoff** (done)
+- A failed attempt is retried after an exponential, jittered delay (2 s, 4 s,
+  8 s ... up to 1 minute, each moved by up to 20%) until `max_attempts`
+- `provider.Permanent` marks failures that retrying cannot fix; those, and
+  missing audio, fail at once
+- A retry is recorded as a `queued` event with `reason: "retry"`, the error
+  and the delay, so a client following the job sees it is still alive
+- The audio is kept across attempts and deleted only when the job ends
+- `FAKE_FAIL_ATTEMPTS=2` (or `make server-run-flaky`) makes the fake provider
+  fail the first two attempts of every job
+- Verify: `make server-test`; or `make server-run-flaky`, then
+  `make sample-job` in another terminal
+
+**Checkpoint 5.2: lease expiry sweep**
+- A job left in `processing` by a worker that died is put back in the queue
+  once its lease has run out
+
+**Checkpoint 5.3: `LISTEN/NOTIFY` event bus**
+- Events reach SSE clients when the API and the workers are separate
+  processes; flags to run each on its own
 - ADR 0006
 
-Checkpoints: (5.1) retries and backoff, (5.2) lease sweep, (5.3)
-`LISTEN/NOTIFY` bus, (5.4) client reconnect and idempotency.
+**Checkpoint 5.4: client reconnect and idempotent uploads**
+- The Android client reconnects a dropped stream with `Last-Event-ID`
+- `Idempotency-Key` on `POST /v1/jobs`, so a retried upload does not create a
+  second job
 
 ---
 

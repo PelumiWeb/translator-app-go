@@ -22,6 +22,10 @@ type Config struct {
 	PollInterval  time.Duration // how often an idle worker checks for jobs
 	Lease         time.Duration // how long a claim is valid
 	ShutdownGrace time.Duration // how long running jobs get to finish on shutdown
+
+	// Backoff says how long to wait before retrying after the given attempt.
+	// Nil means ExponentialBackoff(2s, 1m). Tests pass a short fixed delay.
+	Backoff func(attempt int) time.Duration
 }
 
 // Pool runs a fixed number of workers that claim and process jobs.
@@ -35,6 +39,9 @@ type Pool struct {
 }
 
 func NewPool(store *Store, p provider.Provider, audio AudioStore, logger *slog.Logger, cfg Config) *Pool {
+	if cfg.Backoff == nil {
+		cfg.Backoff = ExponentialBackoff(2*time.Second, time.Minute)
+	}
 	return &Pool{
 		store:    store,
 		provider: p,
@@ -148,12 +155,23 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 		logger.Info("job released for shutdown")
 		return
 
+	case !provider.IsPermanent(err) && job.Attempt < job.MaxAttempts:
+		// Probably temporary, and there are attempts left: try again later.
+		// The audio is kept for the next attempt.
+		delay := p.cfg.Backoff(job.Attempt)
+		if err := p.store.Retry(finishCtx, job.ID, err.Error(), delay); err != nil {
+			logger.Error("scheduling retry", "error", err)
+			return
+		}
+		logger.Warn("job will be retried", "error", err, "attempt", job.Attempt, "retry_in", delay)
+		return
+
 	default:
 		if err := p.store.Fail(finishCtx, job.ID, err.Error()); err != nil {
 			logger.Error("failing job", "error", err)
 			return
 		}
-		logger.Warn("job failed", "error", err)
+		logger.Warn("job failed", "error", err, "attempt", job.Attempt)
 	}
 
 	// Reached only for done and failed jobs: the audio is no longer needed.
@@ -165,7 +183,8 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 func (p *Pool) transcribe(ctx context.Context, logger *slog.Logger, job Job) (provider.Result, error) {
 	audio, err := p.audio.Open(job.AudioKey)
 	if err != nil {
-		return provider.Result{}, err
+		// Audio that is missing now will be missing on every retry.
+		return provider.Result{}, provider.Permanent(err)
 	}
 	defer audio.Close()
 
@@ -175,5 +194,6 @@ func (p *Pool) transcribe(ctx context.Context, logger *slog.Logger, job Job) (pr
 			logger.Warn("recording partial", "error", err)
 		}
 	}
-	return p.provider.Transcribe(ctx, audio, provider.Options{SourceLang: job.SourceLang}, onPartial)
+	opts := provider.Options{SourceLang: job.SourceLang, Attempt: job.Attempt}
+	return p.provider.Transcribe(ctx, audio, opts, onPartial)
 }
