@@ -1,8 +1,11 @@
 package queue
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -13,7 +16,8 @@ import (
 
 // AudioStore is what the workers need from audio storage.
 type AudioStore interface {
-	Open(key string) (io.ReadCloser, error)
+	Open(key string) (io.ReadSeekCloser, error)
+	Put(key string, r io.Reader) error
 	Delete(key string) error
 }
 
@@ -27,6 +31,10 @@ type Config struct {
 	// Zero means 30 seconds.
 	SweepInterval time.Duration
 
+	// ResultTTL is how long generated audio is kept for the client to
+	// fetch before it is deleted. Zero means one hour.
+	ResultTTL time.Duration
+
 	// Backoff says how long to wait before retrying after the given attempt.
 	// Nil means ExponentialBackoff(2s, 1m). Tests pass a short fixed delay.
 	Backoff func(attempt int) time.Duration
@@ -34,15 +42,16 @@ type Config struct {
 
 // Pool runs a fixed number of workers that claim and process jobs.
 type Pool struct {
-	store    *Store
-	provider provider.Provider
-	audio    AudioStore
-	logger   *slog.Logger
-	cfg      Config
-	wake     chan struct{}
+	store       *Store
+	provider    provider.Provider
+	synthesizer provider.Synthesizer
+	audio       AudioStore
+	logger      *slog.Logger
+	cfg         Config
+	wake        chan struct{}
 }
 
-func NewPool(store *Store, p provider.Provider, audio AudioStore, logger *slog.Logger, cfg Config) *Pool {
+func NewPool(store *Store, p provider.Provider, synthesizer provider.Synthesizer, audio AudioStore, logger *slog.Logger, cfg Config) *Pool {
 	if cfg.Backoff == nil {
 		cfg.Backoff = ExponentialBackoff(2*time.Second, time.Minute)
 	}
@@ -52,12 +61,16 @@ func NewPool(store *Store, p provider.Provider, audio AudioStore, logger *slog.L
 	if cfg.SweepInterval <= 0 {
 		cfg.SweepInterval = 30 * time.Second
 	}
+	if cfg.ResultTTL <= 0 {
+		cfg.ResultTTL = time.Hour
+	}
 	return &Pool{
-		store:    store,
-		provider: p,
-		audio:    audio,
-		logger:   logger,
-		cfg:      cfg,
+		store:       store,
+		provider:    p,
+		synthesizer: synthesizer,
+		audio:       audio,
+		logger:      logger,
+		cfg:         cfg,
 		// Buffer of 1: a wake-up sent while every worker is busy is kept
 		// for the next one that goes idle instead of being lost.
 		wake: make(chan struct{}, 1),
@@ -138,6 +151,24 @@ func (p *Pool) sweep(ctx context.Context) {
 				p.logger.Warn("recovered jobs from workers that stopped", "count", n)
 				p.Wake()
 			}
+			p.deleteExpiredResults(ctx)
+		}
+	}
+}
+
+// deleteExpiredResults removes generated audio that has been waiting to be
+// fetched for longer than ResultTTL, so it does not pile up on disk.
+func (p *Pool) deleteExpiredResults(ctx context.Context) {
+	keys, err := p.store.TakeExpiredResults(ctx, p.cfg.ResultTTL)
+	if err != nil {
+		if ctx.Err() == nil {
+			p.logger.Error("finding expired results", "error", err)
+		}
+		return
+	}
+	for _, key := range keys {
+		if err := p.audio.Delete(key); err != nil {
+			p.logger.Warn("deleting expired result", "error", err)
 		}
 	}
 }
@@ -226,7 +257,17 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 	defer cancelWork(nil)
 	stopHeartbeat := p.keepLease(workCtx, cancelWork, logger, job)
 
-	result, err := p.transcribe(workCtx, logger, job)
+	// The work itself differs by kind of job. Everything around it (the
+	// lease, retries, shutdown, clean-up) is the same, so each kind returns
+	// a function that records its own result and the rest is shared.
+	var record func(context.Context) error
+	var err error
+	switch job.Kind {
+	case KindSynthesize:
+		record, err = p.synthesize(workCtx, job)
+	default:
+		record, err = p.transcribe(workCtx, logger, job)
+	}
 	stopHeartbeat()
 
 	if errors.Is(context.Cause(workCtx), errLeaseLost) {
@@ -244,7 +285,7 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 
 	switch {
 	case err == nil:
-		if err := p.store.Complete(finishCtx, job, result.Text, result.Language); err != nil {
+		if err := record(finishCtx); err != nil {
 			logger.Error("completing job", "error", err)
 			return
 		}
@@ -285,11 +326,13 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 	}
 }
 
-func (p *Pool) transcribe(ctx context.Context, logger *slog.Logger, job Job) (provider.Result, error) {
+// transcribe turns the job's audio into text. It returns the function that
+// records the transcript.
+func (p *Pool) transcribe(ctx context.Context, logger *slog.Logger, job Job) (record func(context.Context) error, err error) {
 	audio, err := p.audio.Open(job.AudioKey)
 	if err != nil {
 		// Audio that is missing now will be missing on every retry.
-		return provider.Result{}, provider.Permanent(err)
+		return nil, provider.Permanent(err)
 	}
 	defer audio.Close()
 
@@ -300,5 +343,46 @@ func (p *Pool) transcribe(ctx context.Context, logger *slog.Logger, job Job) (pr
 		}
 	}
 	opts := provider.Options{SourceLang: job.SourceLang, Attempt: job.Attempt}
-	return p.provider.Transcribe(ctx, audio, opts, onPartial)
+	result, err := p.provider.Transcribe(ctx, audio, opts, onPartial)
+	if err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context) error {
+		return p.store.Complete(ctx, job, result.Text, result.Language)
+	}, nil
+}
+
+// synthesize speaks the job's text in the voice of its sample and stores the
+// audio. It returns the function that records where the audio is.
+func (p *Pool) synthesize(ctx context.Context, job Job) (record func(context.Context) error, err error) {
+	voice, err := p.audio.Open(job.AudioKey)
+	if err != nil {
+		return nil, provider.Permanent(err)
+	}
+	defer voice.Close()
+
+	// A sentence of speech is a few hundred kilobytes, so it is collected
+	// in memory and stored once complete. A half-written result is never
+	// visible to anyone.
+	var speech bytes.Buffer
+	opts := provider.SynthesisOptions{Text: job.Text, Language: job.TargetLang, Attempt: job.Attempt}
+	if err := p.synthesizer.Synthesize(ctx, voice, opts, &speech); err != nil {
+		return nil, err
+	}
+
+	// A fresh random name per attempt, so a retry never overwrites audio
+	// that an earlier attempt may have handed out.
+	resultKey := rand.Text() + ".wav"
+	if err := p.audio.Put(resultKey, &speech); err != nil {
+		return nil, fmt.Errorf("storing synthesized audio: %w", err)
+	}
+
+	return func(ctx context.Context) error {
+		err := p.store.CompleteSynthesis(ctx, job, resultKey)
+		if err != nil {
+			// The job was not marked done, so nothing points at this file.
+			_ = p.audio.Delete(resultKey)
+		}
+		return err
+	}, nil
 }

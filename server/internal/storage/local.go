@@ -45,7 +45,9 @@ func (l *Local) Put(key string, r io.Reader) error {
 	return nil
 }
 
-func (l *Local) Open(key string) (io.ReadCloser, error) {
+// Open returns the blob for reading. io.ReadSeekCloser, and not just a
+// reader, because serving a file over HTTP with range support needs to seek.
+func (l *Local) Open(key string) (io.ReadSeekCloser, error) {
 	f, err := l.root.Open(key)
 	if err != nil {
 		return nil, fmt.Errorf("opening blob %s: %w", key, err)

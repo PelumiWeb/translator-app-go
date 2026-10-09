@@ -336,30 +336,57 @@ dependency and makes the app speech-to-speech.
 Next, at the owner's request (2026-10-09), ahead of milestone 7 and
 checkpoint 8.2.
 
-Added on 2026-10-07. The second step: the spoken translation sounds like the
-person who spoke. This is for every user of the app, each in their own voice,
-not one fixed voice.
+The spoken translation sounds like the person who owns the phone. This is for
+every user of the app, each in their own voice.
 
-Approach, decided on 2026-10-07: the recording being translated is itself the
-voice reference (zero-shot voice cloning). There is no enrolment, no stored
-voice profile and no account. Whoever speaks into the phone is the voice that
-comes out.
+Approach, decided on 2026-10-09 (replacing the 2026-10-07 idea of using each
+recording as its own sample): the user is onboarded once by reading a short
+passage aloud, about 20 seconds. That sample stays on the phone and is sent
+with each request to speak. The server stores no voices, and there are still
+no accounts.
 
-**Demo**: speak a sentence; the translation is spoken back in your voice. Hand
-the phone to someone else; their translation comes back in theirs.
+**Demo**: on first launch, read the passage. From then on, every translation
+is spoken in that voice.
 
-- A synthesis job type on the backend, next to transcription: it takes the
-  recording and the translated text, is queued and run by a worker through a
-  provider interface, and returns audio
-- The recording is used for that one job and then deleted, as transcription
-  audio already is
-- A fake synthesis provider for local development and tests
-- A second `SpeechSynthesizer` implementation that uses the backend
-- Fallback to the stock voice from milestone 8 when offline, or when the
-  recording is too short to clone from (a few seconds of speech are needed)
+**Checkpoint 9.1: synthesis jobs on the server** (done)
+- A second kind of job on the same queue (`kind = 'synthesize'`): a voice
+  sample and a text go in, audio comes out, with the same events, retries,
+  leases and recovery as transcription
+- `POST /v1/speech` (voice sample, text, language; idempotency key), and
+  `GET /v1/jobs/{id}/audio` for the result, with range support
+- `provider.Synthesizer` interface, and a fake that answers with one beep per
+  word: audibly not a voice, but real audio of the right length
+- The voice sample is deleted when its job ends; generated audio is deleted an
+  hour after it was made
+- Tests at every layer, and a run with `curl` against a live server
+- Verify: `make server-test-race`; or `make server-run`, then
+  `make sample-speech`
+
+**Checkpoint 9.2: onboarding on Android**
+- A screen to record the voice sample, with what it is used for stated
+  plainly; re-record and delete
+- The sample kept in the app's private storage
+
+**Checkpoint 9.3: the app speaks through the server**
+- A second `SpeechSynthesizer` that uploads the sample and the translation,
+  and plays what comes back
+- Fallback to the phone's stock voice when there is no sample, no network, or
+  the server fails
+
+**Checkpoint 9.4: a real engine, as a free trial**
+- A provider that calls a public Hugging Face Spaces demo of an open
+  voice-cloning model. Free and nothing to install; slow, shared, and liable
+  to change, and the test recordings go to a public demo. For trying the flow,
+  not for real users
 - ADR for the voice-cloning engine
 
-Needs decisions first: see open questions.
+Later, not planned in detail:
+- A paid hosted engine (about $5 a month tier) when reliability matters
+- The owner's long-run idea: a free engine for free users and a paid one for
+  paying users. That needs accounts and billing, both non-goals today; the
+  engine is chosen per request so it stays possible
+- A guest mode: with one enrolled voice per phone, a guest's words come out in
+  the owner's voice
 
 ---
 
@@ -372,15 +399,13 @@ Decided on 2026-10-04: the source language is picked by hand. ML Kit needs an
 explicit source language, and detecting it would mean running Whisper's
 language detection first; that can be added later behind the same picker.
 
-Decided on 2026-10-07: own-voice output uses the current recording as the
-voice reference, so no voice profiles, enrolment or accounts are needed, and
-auth stays a non-goal.
+Decided on 2026-10-09: own-voice output uses a sample recorded once at
+onboarding and kept on the phone (replacing the 2026-10-07 idea of using each
+recording as its own sample). No voice profiles on the server and no accounts,
+so auth stays a non-goal. The trial engine is a public Hugging Face demo.
 
 Still open, not blocking yet:
 
 1. Which real cloud provider (milestone 7).
-2. Which voice-cloning engine (milestone 9): a paid API, or a self-hosted open
-   model that needs a GPU server. Either is a new dependency to approve.
-3. Whether voice synthesis may be cloud-only (milestone 9). Cross-language
-   voice cloning is too heavy for a phone today, so the recommendation is to
-   run it on the backend and keep the stock voice for offline use.
+2. Which paid voice-cloning engine to use once the free trial is not enough
+   (milestone 9). A new dependency to approve.

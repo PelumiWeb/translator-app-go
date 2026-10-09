@@ -39,7 +39,7 @@ func TestClaimMarksJobAsProcessing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
-	want := Job{ID: id, SourceLang: "en", AudioKey: "clip.wav", Attempt: 1, MaxAttempts: 3}
+	want := Job{ID: id, Kind: KindTranscribe, SourceLang: "en", AudioKey: "clip.wav", Attempt: 1, MaxAttempts: 3}
 	if job != want {
 		t.Errorf("job = %+v, want %+v", job, want)
 	}
@@ -484,6 +484,92 @@ func TestEnqueueOnceUnderConcurrencyCreatesOneJob(t *testing.T) {
 	}
 	if rows != 1 {
 		t.Errorf("%d jobs in the table, want 1", rows)
+	}
+}
+
+func TestSynthesisJobIsClaimedWithItsDetails(t *testing.T) {
+	store := NewStore(testdb.New(t))
+	ctx := context.Background()
+
+	id, created, err := store.EnqueueSynthesis(ctx, "fr", "bonjour tout le monde", "voice.wav", "key-1")
+	if err != nil || !created {
+		t.Fatalf("EnqueueSynthesis = %q, %v, %v", id, created, err)
+	}
+	// The idempotency key works for this kind of job too.
+	if repeat, created, err := store.EnqueueSynthesis(ctx, "fr", "bonjour tout le monde", "copy.wav", "key-1"); err != nil || created || repeat != id {
+		t.Errorf("repeat = %q, %v, %v; want the same job and created false", repeat, created, err)
+	}
+
+	job, err := store.Claim(ctx, testLease)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	want := Job{
+		ID: id, Kind: KindSynthesize, AudioKey: "voice.wav",
+		TargetLang: "fr", Text: "bonjour tout le monde",
+		Attempt: 1, MaxAttempts: 3,
+	}
+	if job != want {
+		t.Errorf("job = %+v\nwant  %+v", job, want)
+	}
+
+	// Not ready while it is being worked on.
+	if _, err := store.ResultAudio(ctx, id); !errors.Is(err, ErrNotReady) {
+		t.Errorf("ResultAudio before completion: error = %v, want ErrNotReady", err)
+	}
+	if err := store.CompleteSynthesis(ctx, job, "speech.wav"); err != nil {
+		t.Fatalf("CompleteSynthesis: %v", err)
+	}
+	if key, err := store.ResultAudio(ctx, id); err != nil || key != "speech.wav" {
+		t.Errorf("ResultAudio = %q, %v; want speech.wav", key, err)
+	}
+
+	const unknown = "00000000-0000-0000-0000-000000000000"
+	if _, err := store.ResultAudio(ctx, unknown); !errors.Is(err, ErrJobNotFound) {
+		t.Errorf("ResultAudio of an unknown job: error = %v, want ErrJobNotFound", err)
+	}
+}
+
+func TestTakeExpiredResultsReturnsOnlyOldAudioAndOnlyOnce(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+	ctx := context.Background()
+
+	finish := func(resultKey string) string {
+		t.Helper()
+		id, _, err := store.EnqueueSynthesis(ctx, "es", "hola", "voice.wav", "")
+		if err != nil {
+			t.Fatalf("EnqueueSynthesis: %v", err)
+		}
+		job, err := store.Claim(ctx, testLease)
+		if err != nil {
+			t.Fatalf("Claim: %v", err)
+		}
+		if err := store.CompleteSynthesis(ctx, job, resultKey); err != nil {
+			t.Fatalf("CompleteSynthesis: %v", err)
+		}
+		return id
+	}
+	old := finish("old.wav")
+	finish("fresh.wav")
+	// Make the first one look as if it finished two hours ago.
+	if _, err := db.Exec(ctx, "UPDATE jobs SET updated_at = now() - interval '2 hours' WHERE id = $1", old); err != nil {
+		t.Fatalf("ageing the job: %v", err)
+	}
+
+	keys, err := store.TakeExpiredResults(ctx, time.Hour)
+	if err != nil {
+		t.Fatalf("TakeExpiredResults: %v", err)
+	}
+	if !slices.Equal(keys, []string{"old.wav"}) {
+		t.Errorf("keys = %v, want [old.wav]", keys)
+	}
+	if _, err := store.ResultAudio(ctx, old); !errors.Is(err, ErrNotReady) {
+		t.Errorf("the expired result is still on offer: %v", err)
+	}
+	// A second sweep must not hand the same file out for deletion again.
+	if again, err := store.TakeExpiredResults(ctx, time.Hour); err != nil || len(again) != 0 {
+		t.Errorf("second call = %v, %v; want nothing", again, err)
 	}
 }
 

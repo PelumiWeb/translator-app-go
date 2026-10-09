@@ -1,5 +1,6 @@
-// Package provider defines what the server needs from a speech-to-text
-// service. Implementations live in sub-packages (fake, and a real one later).
+// Package provider defines what the server needs from the outside engines it
+// uses: a speech-to-text service and a voice-cloning speech synthesizer.
+// Implementations live in sub-packages (fake, and real ones later).
 package provider
 
 import (
@@ -27,6 +28,21 @@ type Result struct {
 // Transcribe.
 type Provider interface {
 	Transcribe(ctx context.Context, audio io.Reader, opts Options, onPartial func(text string)) (Result, error)
+}
+
+type SynthesisOptions struct {
+	Text     string // what to say
+	Language string // the language Text is in, as a BCP 47 code
+	Attempt  int    // 1 on the first try of this job
+}
+
+// Synthesizer speaks a text in the voice heard in a sample recording.
+//
+// The audio is written to out as a WAV file. A writer is used instead of a
+// returned buffer so an implementation can stream what the engine sends
+// straight into storage without holding it all in memory.
+type Synthesizer interface {
+	Synthesize(ctx context.Context, voice io.Reader, opts SynthesisOptions, out io.Writer) error
 }
 
 // permanentError marks a failure that trying again cannot fix: audio the

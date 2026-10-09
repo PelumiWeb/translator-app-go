@@ -30,6 +30,9 @@ type fakeJobs struct {
 	events []queue.Event // returned by Events, filtered by afterSeq
 
 	enqueueErr error
+
+	resultKey string // returned by ResultAudio
+	resultErr error
 	// onEvents, if set, runs inside Events. By then the handler has already
 	// subscribed, which lets a test publish an event "during" the replay.
 	onEvents func()
@@ -37,6 +40,8 @@ type fakeJobs struct {
 	mu       sync.Mutex
 	enqueued []string        // "lang key" per job created
 	keys     map[string]bool // idempotency keys seen
+
+	synthesized []string // "lang | text | voice key" per synthesis job created
 }
 
 func (f *fakeJobs) EnqueueOnce(_ context.Context, sourceLang, audioKey, idempotencyKey string) (string, bool, error) {
@@ -54,6 +59,30 @@ func (f *fakeJobs) EnqueueOnce(_ context.Context, sourceLang, audioKey, idempote
 	f.keys[idempotencyKey] = true
 	f.enqueued = append(f.enqueued, sourceLang+" "+audioKey)
 	return testJobID, true, nil
+}
+
+func (f *fakeJobs) EnqueueSynthesis(_ context.Context, targetLang, text, voiceKey, idempotencyKey string) (string, bool, error) {
+	if f.enqueueErr != nil {
+		return "", false, f.enqueueErr
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if idempotencyKey != "" && f.keys[idempotencyKey] {
+		return testJobID, false, nil
+	}
+	if f.keys == nil {
+		f.keys = map[string]bool{}
+	}
+	f.keys[idempotencyKey] = true
+	f.synthesized = append(f.synthesized, targetLang+" | "+text+" | "+voiceKey)
+	return testJobID, true, nil
+}
+
+func (f *fakeJobs) ResultAudio(context.Context, string) (string, error) {
+	if f.resultErr != nil {
+		return "", f.resultErr
+	}
+	return f.resultKey, nil
 }
 
 func (f *fakeJobs) Status(context.Context, string) (string, error) {
@@ -95,6 +124,20 @@ func (a *fakeAudio) Put(key string, r io.Reader) error {
 	}
 	a.blobs[key] = string(data)
 	return nil
+}
+
+type nopCloser struct{ *strings.Reader }
+
+func (nopCloser) Close() error { return nil }
+
+func (a *fakeAudio) Open(key string) (io.ReadSeekCloser, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	data, ok := a.blobs[key]
+	if !ok {
+		return nil, errors.New("no such blob")
+	}
+	return nopCloser{strings.NewReader(data)}, nil
 }
 
 func (a *fakeAudio) Delete(key string) error {

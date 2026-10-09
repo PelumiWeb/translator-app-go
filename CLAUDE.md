@@ -69,7 +69,7 @@ Server layout:
 cmd/server           main: wiring, config, graceful shutdown
 internal/api         HTTP handlers, SSE
 internal/queue       job store (Postgres), worker pool, event listener and bus
-internal/provider    Provider interface, fake provider
+internal/provider    Provider and Synthesizer interfaces, fakes for both
 internal/models      manifest and model file serving
 internal/storage     audio blob storage
 migrations/          plain SQL, embedded in the binary
@@ -130,6 +130,7 @@ folder in Android Studio.
 | `make server-test-race` | the same with the race detector, each test run 3 times |
 | `make server-lint` | `go vet` and `gofmt -l` |
 | `make sample-job` | upload a test clip to the running server and stream its events |
+| `make sample-speech` | ask the running server to speak a sentence, and play the result |
 | `make android-build` | `./gradlew assembleDebug` |
 | `make android-test` | JVM unit tests |
 | `make android-install` | install the debug build on the connected device and open it |

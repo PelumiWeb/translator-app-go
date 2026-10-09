@@ -25,6 +25,8 @@ type Pinger interface {
 
 type JobStore interface {
 	EnqueueOnce(ctx context.Context, sourceLang, audioKey, idempotencyKey string) (id string, created bool, err error)
+	EnqueueSynthesis(ctx context.Context, targetLang, text, voiceKey, idempotencyKey string) (id string, created bool, err error)
+	ResultAudio(ctx context.Context, jobID string) (key string, err error)
 	Status(ctx context.Context, jobID string) (string, error)
 	Events(ctx context.Context, jobID string, afterSeq int) ([]queue.Event, error)
 }
@@ -35,6 +37,7 @@ type EventSubscriber interface {
 
 type AudioStore interface {
 	Put(key string, r io.Reader) error
+	Open(key string) (io.ReadSeekCloser, error)
 	Delete(key string) error
 }
 
@@ -71,6 +74,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", a.handleHealth)
 	mux.HandleFunc("POST /v1/jobs", a.handleCreateJob)
 	mux.HandleFunc("GET /v1/jobs/{id}/events", a.handleJobEvents)
+	mux.HandleFunc("POST /v1/speech", a.handleCreateSpeech)
+	mux.HandleFunc("GET /v1/jobs/{id}/audio", a.handleJobAudio)
 	mux.HandleFunc("GET /v1/models/manifest", a.handleModelManifest)
 	mux.HandleFunc("GET /v1/models/{id}", a.handleModelDownload)
 	return mux

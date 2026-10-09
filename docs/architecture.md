@@ -268,6 +268,23 @@ Event types: `queued`, `processing`, `partial`, `done`, `error`. The stream
 closes after `done` or `error`. A comment line is sent every 15 seconds to keep
 proxies from closing an idle connection.
 
+**`POST /v1/speech`**: `multipart/form-data` with a `voice` part (a WAV sample
+of the voice to imitate), the `text` to say, and its language as `lang`. Like
+a transcription it is queued and answered with `202 Accepted`:
+
+```json
+{ "id": "c688...", "status": "queued",
+  "events_url": "/v1/jobs/c688.../events", "audio_url": "/v1/jobs/c688.../audio" }
+```
+
+Progress comes over the same events endpoint (`queued`, `processing`, `done`
+or `error`). The voice sample is used for that one job and deleted when it
+ends; the server keeps no voices.
+
+**`GET /v1/jobs/{id}/audio`**: the generated speech, a WAV file, with range
+support. `409` with code `not_ready` while the job has no audio: it is
+unfinished, it failed, or an hour has passed and the audio was deleted.
+
 **`GET /v1/models/manifest`**
 
 ```json
@@ -305,6 +322,9 @@ CREATE TABLE jobs (
     updated_at   timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX jobs_ready ON jobs (run_at) WHERE status = 'queued';
+
+-- Added later: jobs.idempotency_key (milestone 5), and for speech synthesis
+-- (milestone 9) jobs.kind, target_lang, input_text and result_path.
 
 CREATE TABLE job_events (
     job_id     uuid NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -391,7 +411,7 @@ replay from the table. ADR 0002 and ADR 0006 have the reasoning.
 The server runs in one of three roles, chosen with `-role`: `all` (default),
 `api` (HTTP and the listener), or `worker` (the pool and the sweeper).
 
-### 3.5 Provider
+### 3.5 Providers
 
 ```go
 type Provider interface {
@@ -410,6 +430,21 @@ delay, and can be told to fail the first N attempts. It serves local dev and
 tests, and is what makes retries demoable.
 
 A real provider is chosen in milestone 7 and gets its own ADR.
+
+Speech synthesis has the same shape, a second interface in the same package:
+
+```go
+type Synthesizer interface {
+    // Synthesize speaks opts.Text in the voice heard in the sample, writing a
+    // WAV file to out.
+    Synthesize(ctx context.Context, voice io.Reader, opts SynthesisOptions, out io.Writer) error
+}
+```
+
+Its fake answers with one beep per word. Both kinds of work run through the
+one queue: a job row has a `kind`, and a worker looks at it to choose the
+provider. Claiming, leases, heartbeats, retries, fencing and events are shared
+and know nothing about which kind they are handling.
 
 ### 3.6 Audio storage
 

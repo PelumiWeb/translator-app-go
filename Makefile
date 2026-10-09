@@ -149,3 +149,16 @@ android-push-model: $(MODEL_FILE) ## Copy the model to the device for the device
 	else \
 		echo "app not installed: run make android-install, then this again"; \
 	fi
+
+# Asks the running server to "speak" a sentence in the voice of a sample, and
+# plays the result. With the fake engine the answer is one beep per word.
+# The voice sample here is three seconds of silence: the fake does not listen.
+.PHONY: sample-speech
+sample-speech: ## Ask the running server to speak a sentence, and play the result
+	@python3 -c "import wave; w = wave.open('/tmp/vt-voice.wav', 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(bytes(96000)); w.close()"
+	@resp=$$(curl -sf -F voice=@/tmp/vt-voice.wav -F lang=es -F "text=Buenos dias, como estas hoy" localhost:8080/v1/speech) \
+		&& events=$$(echo "$$resp" | sed -E 's/.*"events_url":"([^"]+)".*/\1/') \
+		&& audio=$$(echo "$$resp" | sed -E 's/.*"audio_url":"([^"]+)".*/\1/') \
+		&& curl -sN "localhost:8080$$events" \
+		&& curl -sf -o /tmp/vt-speech.wav "localhost:8080$$audio" \
+		&& echo "saved /tmp/vt-speech.wav, playing it" && afplay /tmp/vt-speech.wav

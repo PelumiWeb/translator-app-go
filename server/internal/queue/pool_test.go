@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,7 +10,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -30,19 +30,46 @@ func (f providerFunc) Transcribe(ctx context.Context, _ io.Reader, _ provider.Op
 	return f(ctx, onPartial)
 }
 
-// fakeAudio hands out empty audio and remembers which keys were deleted.
+// fakeAudio is an in-memory AudioStore. Opening a key nobody stored gives
+// three seconds of silence, enough to stand for an upload.
 type fakeAudio struct {
 	mu      sync.Mutex
+	blobs   map[string][]byte
 	deleted []string
 }
 
-func (a *fakeAudio) Open(string) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("")), nil
+// readSeekNopCloser gives a bytes.Reader the Close method the interface wants.
+type readSeekNopCloser struct{ *bytes.Reader }
+
+func (readSeekNopCloser) Close() error { return nil }
+
+func (a *fakeAudio) Open(key string) (io.ReadSeekCloser, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if data, ok := a.blobs[key]; ok {
+		return readSeekNopCloser{bytes.NewReader(data)}, nil
+	}
+	return readSeekNopCloser{bytes.NewReader(make([]byte, 3*16_000*2))}, nil
+}
+
+func (a *fakeAudio) Put(key string, r io.Reader) error {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.blobs == nil {
+		a.blobs = map[string][]byte{}
+	}
+	a.blobs[key] = data
+	return nil
 }
 
 func (a *fakeAudio) Delete(key string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	delete(a.blobs, key)
 	a.deleted = append(a.deleted, key)
 	return nil
 }
@@ -51,6 +78,12 @@ func (a *fakeAudio) deletedKeys() []string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return slices.Clone(a.deleted)
+}
+
+func (a *fakeAudio) blob(key string) []byte {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.blobs[key]
 }
 
 // startPool runs a pool in the background and returns a function that stops
@@ -68,7 +101,7 @@ func startPoolWith(t *testing.T, store *Store, p provider.Provider, audio AudioS
 	cfg.PollInterval = 10 * time.Millisecond
 	// Retries almost at once, so tests of retrying finish in milliseconds.
 	cfg.Backoff = func(int) time.Duration { return 5 * time.Millisecond }
-	pool := NewPool(store, p, audio, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
+	pool := NewPool(store, p, fake.Synthesizer{}, audio, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan struct{})
@@ -300,10 +333,11 @@ func TestPoolDoesNotRetryWhenTheAudioIsMissing(t *testing.T) {
 
 type missingAudio struct{}
 
-func (missingAudio) Open(key string) (io.ReadCloser, error) {
+func (missingAudio) Open(key string) (io.ReadSeekCloser, error) {
 	return nil, fmt.Errorf("opening blob %s: %w", key, fs.ErrNotExist)
 }
-func (missingAudio) Delete(string) error { return nil }
+func (missingAudio) Put(string, io.Reader) error { return nil }
+func (missingAudio) Delete(string) error         { return nil }
 
 // A job that finishes inside the grace period is not interrupted.
 func TestPoolShutdownLetsRunningJobFinish(t *testing.T) {
@@ -499,5 +533,137 @@ func TestPoolAbandonsAJobItNoLongerOwns(t *testing.T) {
 	}
 	if got := audio.deletedKeys(); len(got) != 0 {
 		t.Errorf("deleted audio = %v; it belongs to the new owner", got)
+	}
+}
+
+// --- synthesis jobs: the same queue, a different kind of work ---
+
+func enqueueSynthesis(t *testing.T, store *Store, text string) string {
+	t.Helper()
+	id, _, err := store.EnqueueSynthesis(context.Background(), "es", text, "voice.wav", "")
+	if err != nil {
+		t.Fatalf("EnqueueSynthesis: %v", err)
+	}
+	return id
+}
+
+func TestPoolSynthesizesSpeechAndStoresTheAudio(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+	audio := &fakeAudio{}
+	ctx := context.Background()
+
+	id := enqueueSynthesis(t, store, "buenos días a todos")
+	startPool(t, store, fake.Provider{}, audio, time.Second)
+	waitForStatus(t, db, id, "done")
+
+	key, err := store.ResultAudio(ctx, id)
+	if err != nil {
+		t.Fatalf("ResultAudio: %v", err)
+	}
+	speech := audio.blob(key)
+	if len(speech) < 44 || string(speech[0:4]) != "RIFF" {
+		t.Fatalf("the stored result is not a WAV file (%d bytes)", len(speech))
+	}
+
+	// The voice sample has served its purpose; the speech must stay until fetched.
+	if got := audio.deletedKeys(); !slices.Equal(got, []string{"voice.wav"}) {
+		t.Errorf("deleted = %v, want only the voice sample", got)
+	}
+
+	events, err := store.Events(ctx, id, 0)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	if got := eventTypes(events); !slices.Equal(got, []string{"queued", "processing", "done"}) {
+		t.Errorf("event types = %v", got)
+	}
+}
+
+// Both kinds of job share the queue, the workers and the rules.
+func TestPoolRunsBothKindsOfJobSideBySide(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+
+	speech := enqueueSynthesis(t, store, "hola")
+	transcript, err := store.Enqueue(context.Background(), "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	startPool(t, store, fake.Provider{Text: "hello"}, &fakeAudio{}, time.Second)
+
+	if row := waitForStatus(t, db, transcript, "done"); row.ResultText == nil || *row.ResultText != "hello" {
+		t.Errorf("transcription result = %v, want hello", row.ResultText)
+	}
+	waitForStatus(t, db, speech, "done")
+	if _, err := store.ResultAudio(context.Background(), speech); err != nil {
+		t.Errorf("ResultAudio: %v", err)
+	}
+	// A transcription has no audio to fetch.
+	if _, err := store.ResultAudio(context.Background(), transcript); !errors.Is(err, ErrJobNotFound) {
+		t.Errorf("ResultAudio of a transcription: error = %v, want ErrJobNotFound", err)
+	}
+}
+
+func TestPoolFailsSynthesisAtOnceWhenTheRequestCannotBeServed(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+	audio := &fakeAudio{}
+	// Half a second of voice: the engine refuses, and would refuse again.
+	if err := audio.Put("voice.wav", bytes.NewReader(make([]byte, 16_000))); err != nil {
+		t.Fatal(err)
+	}
+
+	id := enqueueSynthesis(t, store, "hola")
+	startPool(t, store, fake.Provider{}, audio, time.Second)
+
+	row := waitForStatus(t, db, id, "failed")
+	if row.Attempts != 1 {
+		t.Errorf("attempts = %d, want 1: a permanent failure must not be retried", row.Attempts)
+	}
+	if row.LastError == nil || *row.LastError != "the voice sample is too short to imitate" {
+		t.Errorf("last_error = %v", row.LastError)
+	}
+	if _, err := store.ResultAudio(context.Background(), id); !errors.Is(err, ErrNotReady) {
+		t.Errorf("ResultAudio of a failed job: error = %v, want ErrNotReady", err)
+	}
+}
+
+func TestPoolDeletesGeneratedAudioAfterItsTimeIsUp(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+	audio := &fakeAudio{}
+	ctx := context.Background()
+
+	id := enqueueSynthesis(t, store, "hola")
+	startPoolWith(t, store, fake.Provider{}, audio, Config{
+		Lease:         testLease,
+		ShutdownGrace: time.Second,
+		SweepInterval: 20 * time.Millisecond,
+		ResultTTL:     150 * time.Millisecond,
+	})
+	waitForStatus(t, db, id, "done")
+	key, err := store.ResultAudio(ctx, id)
+	if err != nil {
+		t.Fatalf("ResultAudio right after the job: %v", err)
+	}
+
+	// Once the time is up the audio goes, from the table and from storage.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := store.ResultAudio(ctx, id); errors.Is(err, ErrNotReady) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the result was still available 5s after its time was up")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// The row is cleared first and the file a moment after; allow for that.
+	for audio.blob(key) != nil {
+		if time.Now().After(deadline) {
+			t.Fatal("the audio file was not deleted")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

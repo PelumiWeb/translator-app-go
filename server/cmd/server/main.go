@@ -105,6 +105,13 @@ func run(logger *slog.Logger) error {
 		WordDelay:    300 * time.Millisecond,
 		FailAttempts: cfg.FakeFailAttempts,
 	}
+	// Stands in for a voice-cloning engine: it answers with beeps. A real
+	// one is added in milestone 9.4.
+	synthesizer := fake.Synthesizer{
+		Delay:        1500 * time.Millisecond,
+		FailAttempts: cfg.FakeFailAttempts,
+	}
+
 	store := queue.NewStore(pool)
 
 	// Everything started below runs until ctx is cancelled. On any way out
@@ -121,7 +128,7 @@ func run(logger *slog.Logger) error {
 	wake := func() {}
 
 	if role.runsWorkers() {
-		workers := queue.NewPool(store, transcriber, audio, logger, queue.Config{
+		workers := queue.NewPool(store, transcriber, synthesizer, audio, logger, queue.Config{
 			Workers:       cfg.Workers,
 			PollInterval:  time.Second,
 			Lease:         cfg.JobLease,

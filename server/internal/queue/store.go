@@ -18,6 +18,14 @@ var (
 	ErrNoJobs        = errors.New("queue: no job is ready")
 	ErrNotProcessing = errors.New("queue: job is not being processed")
 	ErrJobNotFound   = errors.New("queue: job not found")
+	ErrNotReady      = errors.New("queue: the job has not produced its result yet")
+)
+
+// Kinds of job. Both travel through the same queue; a worker looks at the
+// kind to decide what to do with one.
+const (
+	KindTranscribe = "transcribe"
+	KindSynthesize = "synthesize"
 )
 
 // Job statuses, as stored in jobs.status.
@@ -39,9 +47,17 @@ const (
 
 // Job is what a worker needs to process one claimed job.
 type Job struct {
-	ID          string
-	SourceLang  string
-	AudioKey    string
+	ID   string
+	Kind string // KindTranscribe or KindSynthesize
+
+	// AudioKey is the stored audio the job works from: the speech to
+	// transcribe, or the voice sample to imitate.
+	AudioKey string
+
+	SourceLang string // transcription: the language spoken
+	TargetLang string // synthesis: the language to speak in
+	Text       string // synthesis: what to say
+
 	Attempt     int // 1 on the first try
 	MaxAttempts int // the job fails for good once Attempt reaches this
 }
@@ -66,31 +82,43 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
-// Enqueue adds a job and its first event, and returns the job id.
+// Enqueue adds a transcription job and its first event, and returns the job id.
 func (s *Store) Enqueue(ctx context.Context, sourceLang, audioKey string) (string, error) {
 	id, _, err := s.EnqueueOnce(ctx, sourceLang, audioKey, "")
 	return id, err
 }
 
-// EnqueueOnce adds a job unless one was already created with the same
-// idempotency key, in which case it returns that job's id and created is
-// false. An empty key means "always create".
+// EnqueueOnce adds a transcription job unless one was already created with
+// the same idempotency key, in which case it returns that job's id and
+// created is false. An empty key means "always create".
 //
 // This is what makes a retried upload safe. The check and the insert are one
 // statement backed by a unique index, so two attempts arriving together
 // cannot both create a job; checking first and inserting second could.
 func (s *Store) EnqueueOnce(ctx context.Context, sourceLang, audioKey, idempotencyKey string) (id string, created bool, err error) {
+	return s.enqueue(ctx, Job{Kind: KindTranscribe, SourceLang: sourceLang, AudioKey: audioKey}, idempotencyKey)
+}
+
+// EnqueueSynthesis adds a job to speak text in targetLang, in the voice heard
+// in the stored sample voiceKey. The idempotency key works as in EnqueueOnce.
+func (s *Store) EnqueueSynthesis(ctx context.Context, targetLang, text, voiceKey, idempotencyKey string) (id string, created bool, err error) {
+	return s.enqueue(ctx, Job{Kind: KindSynthesize, TargetLang: targetLang, Text: text, AudioKey: voiceKey}, idempotencyKey)
+}
+
+func (s *Store) enqueue(ctx context.Context, job Job, idempotencyKey string) (id string, created bool, err error) {
 	// BeginFunc commits if the function returns nil and rolls back if it
 	// returns an error, so the job and its "queued" event exist together or
 	// not at all.
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		// NULLIF stores an empty key as NULL, which the unique index ignores.
+		// NULLIF stores an empty value as NULL: a column that does not apply
+		// to this kind of job, or a missing key, which the unique index
+		// ignores.
 		err := tx.QueryRow(ctx, `
-			INSERT INTO jobs (status, source_lang, audio_path, idempotency_key)
-			VALUES ('queued', $1, $2, NULLIF($3, ''))
+			INSERT INTO jobs (status, kind, audio_path, source_lang, target_lang, input_text, idempotency_key)
+			VALUES ('queued', $1, $2, NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), NULLIF($6, ''))
 			ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
 			RETURNING id`,
-			sourceLang, audioKey, idempotencyKey,
+			job.Kind, job.AudioKey, job.SourceLang, job.TargetLang, job.Text, idempotencyKey,
 		).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			// The insert was skipped: a job with this key exists. If another
@@ -136,9 +164,11 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (Job, error) {
 				FOR UPDATE SKIP LOCKED
 				LIMIT 1
 			)
-			RETURNING id, source_lang, audio_path, attempts, max_attempts`,
+			RETURNING id, kind, audio_path, attempts, max_attempts,
+			          COALESCE(source_lang, ''), COALESCE(target_lang, ''), COALESCE(input_text, '')`,
 			lease,
-		).Scan(&job.ID, &job.SourceLang, &job.AudioKey, &job.Attempt, &job.MaxAttempts)
+		).Scan(&job.ID, &job.Kind, &job.AudioKey, &job.Attempt, &job.MaxAttempts,
+			&job.SourceLang, &job.TargetLang, &job.Text)
 		if err != nil {
 			return err
 		}
@@ -183,6 +213,19 @@ func (s *Store) Complete(ctx context.Context, job Job, text, language string) er
 		WHERE id = $1 AND status = 'processing' AND attempts = $2`,
 		[]any{text},
 		EventDone, map[string]string{"text": text, "language": language},
+	)
+}
+
+// CompleteSynthesis marks a synthesis job as done and records where its
+// audio is stored.
+func (s *Store) CompleteSynthesis(ctx context.Context, job Job, resultKey string) error {
+	return s.finish(ctx, job, `
+		UPDATE jobs
+		SET status = 'done', result_path = $3, locked_until = NULL, updated_at = now()
+		WHERE id = $1 AND status = 'processing' AND attempts = $2`,
+		[]any{resultKey},
+		// No URL here: where the audio is served from is the API's business.
+		EventDone, struct{}{},
 	)
 }
 
@@ -331,6 +374,55 @@ func (s *Store) RequeueExpired(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("requeueing expired jobs: %w", err)
 	}
 	return count, nil
+}
+
+// ResultAudio returns the storage key of a synthesis job's audio.
+//
+// It returns ErrJobNotFound if there is no such synthesis job, and
+// ErrNotReady if the job exists but has no audio: it is still running, it
+// failed, or its audio has already been cleaned up.
+func (s *Store) ResultAudio(ctx context.Context, jobID string) (string, error) {
+	var key *string // a pointer, because the column is NULL until the job is done
+	err := s.pool.QueryRow(ctx,
+		"SELECT result_path FROM jobs WHERE id = $1 AND kind = $2", jobID, KindSynthesize,
+	).Scan(&key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrJobNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("reading job result: %w", err)
+	}
+	if key == nil {
+		return "", ErrNotReady
+	}
+	return *key, nil
+}
+
+// TakeExpiredResults forgets the audio of synthesis jobs that finished more
+// than olderThan ago and returns its storage keys, for the caller to delete.
+// A client has that long to fetch what it asked for.
+func (s *Store) TakeExpiredResults(ctx context.Context, olderThan time.Duration) ([]string, error) {
+	// The CTE reads the old values before the update clears them: RETURNING
+	// on its own would give back the new, empty ones.
+	rows, err := s.pool.Query(ctx, `
+		WITH expired AS (
+			SELECT id, result_path FROM jobs
+			WHERE result_path IS NOT NULL AND updated_at < now() - $1::interval
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE jobs SET result_path = NULL
+		FROM expired WHERE jobs.id = expired.id
+		RETURNING expired.result_path`,
+		olderThan,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("finding expired results: %w", err)
+	}
+	keys, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("finding expired results: %w", err)
+	}
+	return keys, nil
 }
 
 // Status returns a job's current status, or ErrJobNotFound.
