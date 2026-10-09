@@ -15,6 +15,9 @@ import com.example.ptranslate.core.model.ModelInstaller
 import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.pipeline.PipelineEvent
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
+import com.example.ptranslate.core.stt.DeviceSpeed
+import com.example.ptranslate.core.stt.FallbackThresholds
+import com.example.ptranslate.core.stt.RoutingNote
 import com.example.ptranslate.core.stt.Transcript
 import com.example.ptranslate.core.stt.TranscriptionRoute
 import com.example.ptranslate.core.stt.TranscriptionStage
@@ -39,14 +42,21 @@ data class TranslateUiState(
     val translation: String = "",
     /** Where the last transcript came from and how long it took. */
     val details: String? = null,
+    /** Why the result came from where it did, when that needs saying. */
+    val routing: String? = null,
     val error: String? = null,
-    val onDevice: Boolean = true,
+    val route: TranscriptionRoute = TranscriptionRoute.AUTO,
     val source: Language = Language.ENGLISH,
     val target: Language = Language.SPANISH,
     val sourceLanguages: List<Language> = emptyList(),
     val targetLanguages: List<Language> = emptyList(),
     /** The on-device speech model: missing, downloading, ready or failed. */
     val model: ModelState = ModelState.Missing,
+    /** This device's measured speed as a real-time factor, or null if unmeasured. */
+    val deviceSpeed: Float? = null,
+    val measuringSpeed: Boolean = false,
+    /** True when [deviceSpeed] is over the limit the automatic route allows. */
+    val deviceTooSlow: Boolean = false,
 )
 
 class TranslateViewModel(
@@ -54,8 +64,10 @@ class TranslateViewModel(
     private val pipeline: SpeechTranslationPipeline,
     private val route: MutableStateFlow<TranscriptionRoute>,
     private val models: ModelInstaller,
+    private val speed: DeviceSpeed,
     sourceLanguages: List<Language>,
     targetLanguages: List<Language>,
+    private val thresholds: FallbackThresholds = FallbackThresholds(),
     private val maxRecordingMs: Long = 30_000,
     /** A clock that only moves forward, in milliseconds. Replaced in tests. */
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
@@ -63,7 +75,7 @@ class TranslateViewModel(
 
     private val _state = MutableStateFlow(
         TranslateUiState(
-            onDevice = route.value == TranscriptionRoute.ON_DEVICE,
+            route = route.value,
             sourceLanguages = sourceLanguages,
             targetLanguages = targetLanguages,
             model = models.state.value,
@@ -79,6 +91,24 @@ class TranslateViewModel(
         viewModelScope.launch {
             models.state.collect { model -> _state.update { it.copy(model = model) } }
         }
+        viewModelScope.launch {
+            speed.realTimeFactor.collect { factor ->
+                _state.update {
+                    it.copy(
+                        deviceSpeed = factor,
+                        deviceTooSlow = factor != null && factor > thresholds.maxRealTimeFactor,
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
+            speed.measuring.collect { measuring -> _state.update { it.copy(measuringSpeed = measuring) } }
+        }
+    }
+
+    fun onMeasureSpeedClicked() {
+        if (_state.value.measuringSpeed) return
+        viewModelScope.launch { speed.measureAgain() }
     }
 
     /** Starts, or after a failure continues, the download of the speech model. */
@@ -103,11 +133,11 @@ class TranslateViewModel(
         }
     }
 
-    /** The switch: transcribe on this device, or on the server. */
-    fun onRouteChanged(onDevice: Boolean) {
+    /** The choice of route: automatic, this device, or the server. */
+    fun onRouteSelected(selected: TranscriptionRoute) {
         if (_state.value.phase != Phase.IDLE) return
-        route.value = if (onDevice) TranscriptionRoute.ON_DEVICE else TranscriptionRoute.CLOUD
-        _state.update { it.copy(onDevice = onDevice) }
+        route.value = selected
+        _state.update { it.copy(route = selected) }
     }
 
     fun onSourceSelected(language: Language) {
@@ -139,6 +169,7 @@ class TranslateViewModel(
                 text = "",
                 translation = "",
                 details = null,
+                routing = null,
                 error = null,
             )
         }
@@ -189,6 +220,7 @@ class TranslateViewModel(
                     status = "Transcribed",
                     text = event.transcript.text,
                     details = describe(event.transcript, audioMs, elapsedMs = now() - startedAt),
+                    routing = event.transcript.note?.explanation(),
                 )
                 PipelineEvent.DownloadingLanguages -> it.copy(status = "Downloading language pack")
                 PipelineEvent.Translating -> it.copy(status = "Translating")
@@ -244,12 +276,23 @@ class TranslateViewModel(
                     pipeline = container.pipeline,
                     route = container.route,
                     models = container.models,
+                    speed = container.speed,
                     sourceLanguages = container.sourceLanguages,
                     targetLanguages = container.targetLanguages,
+                    thresholds = container.thresholds,
                 )
             }
         }
     }
+}
+
+private fun RoutingNote.explanation(): String = when (this) {
+    RoutingNote.NO_MODEL -> "Sent to the server: there is no speech model on this device"
+    RoutingNote.SLOW_DEVICE -> "Sent to the server: this device is too slow for the model"
+    RoutingNote.LOW_CONFIDENCE -> "Sent to the server: this device was not confident in its own result"
+    RoutingNote.NO_SPEECH_ON_DEVICE -> "Sent to the server: this device heard sound but found no words"
+    RoutingNote.ON_DEVICE_FAILED -> "Sent to the server: the model on this device failed"
+    RoutingNote.CLOUD_UNAVAILABLE -> "This device's result was kept: the server could not be reached"
 }
 
 private fun TranscriptionStage.label(): String = when (this) {

@@ -16,10 +16,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.model.ModelState
+import com.example.ptranslate.core.stt.TranscriptionRoute
 import com.example.ptranslate.ui.theme.PtranslateTheme
 import java.util.Locale
 
@@ -60,7 +62,8 @@ fun TranslateScreen(
                 PackageManager.PERMISSION_GRANTED
             if (granted) viewModel.onRecordClicked() else askForMicrophone.launch(Manifest.permission.RECORD_AUDIO)
         },
-        onRouteChange = viewModel::onRouteChanged,
+        onRouteSelect = viewModel::onRouteSelected,
+        onMeasureSpeedClick = viewModel::onMeasureSpeedClicked,
         onSourceSelect = viewModel::onSourceSelected,
         onTargetSelect = viewModel::onTargetSelected,
         onDownloadModelClick = viewModel::onDownloadModelClicked,
@@ -73,7 +76,8 @@ fun TranslateScreen(
 private fun TranslateContent(
     state: TranslateUiState,
     onRecordClick: () -> Unit,
-    onRouteChange: (onDevice: Boolean) -> Unit,
+    onRouteSelect: (TranscriptionRoute) -> Unit,
+    onMeasureSpeedClick: () -> Unit,
     onSourceSelect: (Language) -> Unit,
     onTargetSelect: (Language) -> Unit,
     onDownloadModelClick: () -> Unit,
@@ -92,16 +96,14 @@ private fun TranslateContent(
             LanguagePicker("From", state.source, state.sourceLanguages, enabled = idle, onSelect = onSourceSelect)
             LanguagePicker("To", state.target, state.targetLanguages, enabled = idle, onSelect = onTargetSelect)
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Switch(checked = state.onDevice, onCheckedChange = onRouteChange, enabled = idle)
-            Text(if (state.onDevice) "Transcribe on this device" else "Transcribe on the server")
-        }
-        // Only relevant when transcribing here; the server needs no model.
-        if (state.onDevice) {
+        RoutePicker(state.route, enabled = idle, onSelect = onRouteSelect)
+
+        // The model and its speed only matter when this device may be used.
+        if (state.route != TranscriptionRoute.CLOUD) {
             ModelStatus(state.model, onDownloadClick = onDownloadModelClick)
+            if (state.model is ModelState.Ready) {
+                DeviceSpeedStatus(state, enabled = idle, onMeasureClick = onMeasureSpeedClick)
+            }
         }
         Button(onClick = onRecordClick, enabled = state.phase != Phase.WORKING) {
             Text(if (state.phase == Phase.RECORDING) "Stop" else "Record")
@@ -121,8 +123,65 @@ private fun TranslateContent(
         state.details?.let {
             Text(text = it, style = MaterialTheme.typography.bodySmall)
         }
+        state.routing?.let {
+            Text(text = it, style = MaterialTheme.typography.bodySmall)
+        }
         state.error?.let {
             Text(text = it, color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+/** The three routes, with one line saying what the chosen one does. */
+@Composable
+private fun RoutePicker(selected: TranscriptionRoute, enabled: Boolean, onSelect: (TranscriptionRoute) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TranscriptionRoute.entries.forEach { route ->
+                FilterChip(
+                    selected = route == selected,
+                    onClick = { onSelect(route) },
+                    enabled = enabled,
+                    label = { Text(route.label()) },
+                )
+            }
+        }
+        Text(text = selected.description(), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+private fun TranscriptionRoute.label(): String = when (this) {
+    TranscriptionRoute.AUTO -> "Automatic"
+    TranscriptionRoute.ON_DEVICE -> "This device"
+    TranscriptionRoute.CLOUD -> "Server"
+}
+
+// The automatic route can upload audio without asking each time, so it says so.
+private fun TranscriptionRoute.description(): String = when (this) {
+    TranscriptionRoute.AUTO ->
+        "Transcribes on this device when it can. Otherwise your recording is sent to the server."
+    TranscriptionRoute.ON_DEVICE -> "Transcribes on this device only. Nothing is uploaded."
+    TranscriptionRoute.CLOUD -> "Every recording is sent to the server."
+}
+
+/** How fast this device runs the model, and what that means for routing. */
+@Composable
+private fun DeviceSpeedStatus(state: TranslateUiState, enabled: Boolean, onMeasureClick: () -> Unit) {
+    val speed = state.deviceSpeed
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = when {
+                state.measuringSpeed -> "Measuring this device's speed"
+                speed == null -> "This device's speed has not been measured"
+                state.deviceTooSlow && state.route == TranscriptionRoute.AUTO ->
+                    String.format(Locale.US, "Speed: %.2fx real time. Too slow, so the server is used", speed)
+                else -> String.format(Locale.US, "Speed: %.2fx real time", speed)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onMeasureClick, enabled = enabled && !state.measuringSpeed) {
+            Text("Measure again")
         }
     }
 }
@@ -213,10 +272,13 @@ private fun TranslateContentPreview() {
                 text = "Good morning, how are you?",
                 translation = "Buenos días, ¿cómo estás?",
                 details = "On device, 1.2 s for 4.0 s of audio (0.30x real time), confidence 0.87",
-                model = ModelState.Downloading(bytes = 23L * 1024 * 1024, total = 57L * 1024 * 1024),
+                routing = "Sent to the server: this device was not confident in its own result",
+                model = ModelState.Ready(java.io.File("model.bin")),
+                deviceSpeed = 0.35f,
             ),
             onRecordClick = {},
-            onRouteChange = {},
+            onRouteSelect = {},
+            onMeasureSpeedClick = {},
             onSourceSelect = {},
             onTargetSelect = {},
             onDownloadModelClick = {},

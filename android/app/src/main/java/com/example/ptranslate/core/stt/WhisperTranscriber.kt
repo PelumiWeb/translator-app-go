@@ -62,6 +62,14 @@ class WhisperTranscriber(
         )
     }
 
+    /**
+     * Loads the model now instead of on the first transcription, so that a
+     * timing taken afterwards measures transcribing and not loading.
+     */
+    suspend fun load() {
+        withContext(dispatcher) { loadedContext() }
+    }
+
     /** Frees the model's memory. The next transcription loads it again. */
     suspend fun close() = withContext(dispatcher) {
         context?.close()

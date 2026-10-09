@@ -243,7 +243,7 @@ and continues from where it left off.
 
 ---
 
-## [~] Milestone 6: Fallback policy
+## [x] Milestone 6: Fallback policy
 
 **Demo**: three cases side by side. No model: goes to the cloud. Benchmark
 marked slow: goes to the cloud. Mumbled audio: runs on device, confidence is
@@ -264,10 +264,19 @@ low, goes to the cloud, and the screen says which path produced the result.
 - The screen still offers only device or server; `AUTO` reaches it in 6.2
 - Verify: `make android-test`
 
-**Checkpoint 6.2: benchmark and screen**
-- Measure the device's speed after the model is installed, and remember it
-- Three-way choice on screen: automatic, this device, server
-- Each result says where it came from and why
+**Checkpoint 6.2: benchmark and screen** (done)
+- `DeviceBenchmark`: once a model is installed, times it on a bundled 11
+  second clip of speech, with model loading left out, and stores the result
+  per model
+- Three-way choice on screen (automatic, this device, server), each with one
+  line saying what it does with the recording; automatic is the default
+- The device's speed on screen, with "Measure again"
+- Each result says why it was routed as it was, when that needs saying
+- `wavToPcm`, for reading the bundled clip
+- Verified on the emulator: no model goes to the server; a device marked
+  slow goes to the server; both say why. The low-confidence case needs real
+  speech and is covered by the JVM tests only
+- Verify: `make android-install`, download the model, record on "Automatic"
 
 ---
 

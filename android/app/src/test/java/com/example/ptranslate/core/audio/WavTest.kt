@@ -2,6 +2,7 @@ package com.example.ptranslate.core.audio
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.ByteBuffer
@@ -83,6 +84,38 @@ class WavTest {
         // A constant 3277 is a tenth of full scale, which is -20 dB.
         assertEquals(-20.0, PcmAudio(ShortArray(16_000) { 3277 }).levelDb(), 0.01)
         assertEquals(-40.0, PcmAudio(ShortArray(16_000) { 328 }).levelDb(), 0.02)
+    }
+
+    @Test
+    fun `a decoded WAV has the samples it was written with`() {
+        val original = PcmAudio(shortArrayOf(0, 1, -1, 300, Short.MAX_VALUE, Short.MIN_VALUE))
+
+        val decoded = wavToPcm(original.toWav())
+
+        assertEquals(original.samples.toList(), decoded.samples.toList())
+        assertEquals(16_000, decoded.sampleRate)
+    }
+
+    // Real files often carry a metadata chunk before the samples, so the
+    // samples do not start at byte 44. The bundled benchmark clip is one.
+    @Test
+    fun `finds the samples after a metadata chunk`() {
+        val plain = PcmAudio(shortArrayOf(10, 20, 30)).toWav()
+        val list = "LIST".toByteArray() + byteArrayOf(5, 0, 0, 0) + "INFOx".toByteArray() + byteArrayOf(0) // 5 bytes, padded to 6
+        val withMetadata = plain.copyOfRange(0, 36) + list + plain.copyOfRange(36, plain.size)
+
+        assertEquals(listOf<Short>(10, 20, 30), wavToPcm(withMetadata).samples.toList())
+    }
+
+    @Test
+    fun `rejects files that are not 16-bit mono PCM`() {
+        val stereo = PcmAudio(shortArrayOf(1, 2)).toWav().also { it[22] = 2 }
+        val truncated = PcmAudio(ShortArray(100)).toWav().copyOf(60)
+
+        assertThrows(IllegalArgumentException::class.java) { wavToPcm("this is not audio".toByteArray()) }
+        assertThrows(IllegalArgumentException::class.java) { wavToPcm(stereo) }
+        assertThrows(IllegalArgumentException::class.java) { wavToPcm(truncated) }
+        assertThrows(IllegalArgumentException::class.java) { wavToPcm(ByteArray(0)) }
     }
 
     private fun ByteArray.ascii(offset: Int) = String(this, offset, 4, Charsets.US_ASCII)

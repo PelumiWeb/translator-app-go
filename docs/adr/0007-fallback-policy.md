@@ -59,6 +59,18 @@ The numbers live in one object, `FallbackThresholds`, and the whole policy in
 one class, `RoutingTranscriber`, behind the same `Transcriber` interface as the
 two engines. Nothing else in the app knows a decision was made.
 
+**Measuring speed.** Once a model is installed, the app transcribes a bundled
+11 second clip of clear speech and stores time taken divided by clip length,
+per model. Loading the model is done first and not counted. The figure is
+shown on screen with a button to measure again.
+
+One thing this number hides: Whisper processes audio in fixed 30 second
+windows, so most of its cost does not shrink with a shorter recording. A phone
+that takes 4 seconds for the 11 second clip takes nearly as long for a 3
+second phrase. The real-time factor is therefore measured on a clip of a
+realistic length, and a limit of 1.0 on it means "about ten seconds for a
+typical utterance at worst", not "never slower than the speech".
+
 ## Alternatives considered
 
 **Always both, take the better one.** Best accuracy, and no thresholds to

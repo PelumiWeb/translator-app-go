@@ -9,6 +9,8 @@ import com.example.ptranslate.core.model.ModelException
 import com.example.ptranslate.core.model.ModelInstaller
 import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
+import com.example.ptranslate.core.stt.DeviceSpeed
+import com.example.ptranslate.core.stt.RoutingNote
 import com.example.ptranslate.core.stt.Transcriber
 import com.example.ptranslate.core.stt.Transcript
 import com.example.ptranslate.core.stt.TranscriptEvent
@@ -63,7 +65,7 @@ class TranslateViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
 
-    private val route = MutableStateFlow(TranscriptionRoute.ON_DEVICE)
+    private val route = MutableStateFlow(TranscriptionRoute.AUTO)
     private var clockMs = 0L
 
     private val translator = FakeTranslator()
@@ -85,12 +87,26 @@ class TranslateViewModelTest {
 
     private val models = FakeModels()
 
+    private class FakeSpeed : DeviceSpeed {
+        override val realTimeFactor = MutableStateFlow<Float?>(null)
+        override val measuring = MutableStateFlow(false)
+        var measurements = 0
+
+        override suspend fun measureAgain() {
+            measurements++
+            realTimeFactor.value = 0.5f
+        }
+    }
+
+    private val speed = FakeSpeed()
+
     private fun newViewModel(recorder: AudioRecorder, transcriber: Transcriber) =
         TranslateViewModel(
             recorder = recorder,
             pipeline = SpeechTranslationPipeline(transcriber, translator),
             route = route,
             models = models,
+            speed = speed,
             sourceLanguages = listOf(Language("en"), Language("es")),
             targetLanguages = listOf(Language("en"), Language("es"), Language("fr")),
             now = { clockMs },
@@ -238,18 +254,92 @@ class TranslateViewModelTest {
     }
 
     @Test
-    fun `the switch changes the route, but not during a recording`() = runTest(dispatcher) {
+    fun `the route can be chosen, but not during a recording`() = runTest(dispatcher) {
         val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
-        assertTrue(viewModel.state.value.onDevice)
+        assertEquals(TranscriptionRoute.AUTO, viewModel.state.value.route)
 
-        viewModel.onRouteChanged(onDevice = false)
+        viewModel.onRouteSelected(TranscriptionRoute.CLOUD)
         assertEquals(TranscriptionRoute.CLOUD, route.value)
-        assertEquals(false, viewModel.state.value.onDevice)
+        assertEquals(TranscriptionRoute.CLOUD, viewModel.state.value.route)
 
         viewModel.onRecordClicked() // now recording
-        viewModel.onRouteChanged(onDevice = true)
+        viewModel.onRouteSelected(TranscriptionRoute.ON_DEVICE)
         assertEquals(TranscriptionRoute.CLOUD, route.value)
-        assertEquals(false, viewModel.state.value.onDevice)
+        assertEquals(TranscriptionRoute.CLOUD, viewModel.state.value.route)
+    }
+
+    @Test
+    fun `says why a result was sent to the server`() = runTest(dispatcher) {
+        val transcriber = FakeTranscriber()
+        val viewModel = newViewModel(FakeRecorder(), transcriber)
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+        transcriber.events.send(
+            TranscriptEvent.Final(
+                Transcript("hello", confidence = null, Transcript.Source.CLOUD, RoutingNote.LOW_CONFIDENCE),
+            ),
+        )
+        transcriber.events.close()
+        runCurrent()
+
+        assertEquals(
+            "Sent to the server: this device was not confident in its own result",
+            viewModel.state.value.routing,
+        )
+
+        // The explanation belongs to that result and goes with it.
+        viewModel.onRecordClicked()
+        assertNull(viewModel.state.value.routing)
+    }
+
+    @Test
+    fun `a result that took the first choice needs no explanation`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), saying("good morning"))
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+
+        assertNull(viewModel.state.value.routing)
+    }
+
+    @Test
+    fun `shows the device's speed and whether it is too slow`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
+        runCurrent()
+        assertNull(viewModel.state.value.deviceSpeed)
+        assertEquals(false, viewModel.state.value.deviceTooSlow)
+
+        speed.realTimeFactor.value = 0.4f
+        runCurrent()
+        assertEquals(0.4f, viewModel.state.value.deviceSpeed)
+        assertEquals(false, viewModel.state.value.deviceTooSlow)
+
+        speed.realTimeFactor.value = 1.7f // over the default limit of 1.0
+        runCurrent()
+        assertEquals(true, viewModel.state.value.deviceTooSlow)
+
+        speed.measuring.value = true
+        runCurrent()
+        assertEquals(true, viewModel.state.value.measuringSpeed)
+    }
+
+    @Test
+    fun `measure again asks for a new measurement, once at a time`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
+
+        viewModel.onMeasureSpeedClicked()
+        runCurrent()
+        assertEquals(1, speed.measurements)
+        assertEquals(0.5f, viewModel.state.value.deviceSpeed)
+
+        speed.measuring.value = true
+        runCurrent()
+        viewModel.onMeasureSpeedClicked()
+        runCurrent()
+        assertEquals(1, speed.measurements)
     }
 
     @Test

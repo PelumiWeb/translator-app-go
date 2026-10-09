@@ -165,6 +165,10 @@ The cloud is a fallback, not a requirement. If it cannot be reached, a
 low-confidence device result is kept, and a device judged too slow is used
 after all. Each transcript carries a note saying how it was routed.
 
+The device's speed is measured by `DeviceBenchmark` once a model is installed:
+it times the model on a bundled 11 second clip and stores the result per
+model.
+
 The thresholds are provisional and live in one object, `FallbackThresholds`.
 ADR 0007 has the reasoning and what still needs measuring.
 
