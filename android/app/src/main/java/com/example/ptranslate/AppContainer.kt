@@ -64,7 +64,14 @@ class AppContainer(context: Context) {
     val targetLanguages: List<Language> = translator.supportedLanguages
 
     val pipeline = SpeechTranslationPipeline(
-        transcriber = RoutingTranscriber(onDevice = whisper, cloud = RemoteTranscriber(backend), route = route),
+        transcriber = RoutingTranscriber(
+            onDevice = whisper,
+            cloud = RemoteTranscriber(backend),
+            route = route,
+            modelReady = { models.state.value is ModelState.Ready },
+            // Not measured yet; the benchmark arrives in checkpoint 6.2.
+            realTimeFactor = { null },
+        ),
         translator = translator,
     )
 }

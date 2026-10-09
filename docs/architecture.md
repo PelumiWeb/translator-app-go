@@ -148,19 +148,25 @@ ML Kit's native library adds about 16 MB to the APK.
 
 ### 2.6 Fallback policy
 
-`RoutingTranscriber` decides per recording. The three triggers from the spec,
-made concrete:
+`RoutingTranscriber` has three routes: `ON_DEVICE`, `CLOUD`, and `AUTO`, which
+decides per recording.
 
 | Trigger | Definition | Checked |
 | --- | --- | --- |
-| Model missing | `ModelManager` has no verified model on disk | before transcribing |
-| Device too slow | real-time factor (processing time / audio length) above 1.0 on a short benchmark clip run once after the model is installed, result stored | before transcribing |
-| Low confidence | mean token probability of the result below 0.6, or Whisper's no-speech probability above 0.6 | after transcribing |
+| Model missing | the model manager has no verified model | before transcribing |
+| Device too slow | measured real-time factor (time taken / audio length) above 1.0 | before transcribing |
+| Low confidence | mean token probability of the result below 0.6 | after transcribing |
+| No words found | the model's no-speech probability above 0.6, or an empty result | after transcribing |
+| Model failed | the on-device transcriber raised an error | after transcribing |
 
-The thresholds are starting points and live in one config object.
+A silent recording is rejected before any of this and is never uploaded.
 
-If the network is unavailable the fallback cannot run. The app then shows the
-on-device result marked as low confidence, or an error if there is no result.
+The cloud is a fallback, not a requirement. If it cannot be reached, a
+low-confidence device result is kept, and a device judged too slow is used
+after all. Each transcript carries a note saying how it was routed.
+
+The thresholds are provisional and live in one object, `FallbackThresholds`.
+ADR 0007 has the reasoning and what still needs measuring.
 
 ### 2.7 Model manager
 

@@ -243,18 +243,31 @@ and continues from where it left off.
 
 ---
 
-## [ ] Milestone 6: Fallback policy
+## [~] Milestone 6: Fallback policy
 
 **Demo**: three cases side by side. No model: goes to the cloud. Benchmark
 marked slow: goes to the cloud. Mumbled audio: runs on device, confidence is
 low, goes to the cloud, and the screen says which path produced the result.
 
-- `RoutingTranscriber`, benchmark after model install, thresholds in one place
-- UI shows the source of each result and why
-- Tests for the policy with fake transcribers
+**Checkpoint 6.1: the policy** (done)
+- `TranscriptionRoute.AUTO` in `RoutingTranscriber`: device first, cloud when
+  there is no model, the device is too slow, or the device's result is poor
+- The cloud is a fallback, not a requirement: an unreachable cloud leaves the
+  device's result in place, marked as such
+- A doubtful device result is shown as a draft while the cloud works
+- `Transcript.note` records how a result was routed
+- `SilentAudioException` and `NoSpeechException`, so silence is never
+  uploaded while "sound but no words" is given to the cloud
+- Thresholds in one object, `FallbackThresholds`; provisional, see ADR 0007
+- 18 JVM tests with scripted fake transcribers
 - ADR 0007
+- The screen still offers only device or server; `AUTO` reaches it in 6.2
+- Verify: `make android-test`
 
-Checkpoints: (6.1) policy and tests, (6.2) benchmark and UI.
+**Checkpoint 6.2: benchmark and screen**
+- Measure the device's speed after the model is installed, and remember it
+- Three-way choice on screen: automatic, this device, server
+- Each result says where it came from and why
 
 ---
 

@@ -37,7 +37,7 @@ class WhisperTranscriber(
             // A different message from "no speech", with the level, so a dead
             // microphone can be told apart from words the model did not catch.
             val level = audio.levelDb().roundToInt()
-            throw TranscriptionException("The recording was silent ($level dB). Check the microphone")
+            throw SilentAudioException("The recording was silent ($level dB). Check the microphone")
         }
 
         emit(TranscriptEvent.StageChanged(TranscriptionStage.PROCESSING))
@@ -53,7 +53,7 @@ class WhisperTranscriber(
         // (noise, music): the model's own no-speech estimate.
         val noSpeech = (result.noSpeechProbability ?: 0f) > NO_SPEECH_THRESHOLD
         if (noSpeech || result.text.isEmpty() || result.text in SILENCE_MARKERS) {
-            throw TranscriptionException(NO_SPEECH)
+            throw NoSpeechException(NO_SPEECH)
         }
         emit(
             TranscriptEvent.Final(
