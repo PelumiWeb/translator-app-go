@@ -27,10 +27,10 @@ work, runs it through a cloud provider, and streams progress back.
       +-------------- job_events <--------------+
 ```
 
-The aim of the product goes one stage further than this diagram: the translated
-text is spoken aloud, in the voice of whoever spoke, for every user. That stage is not designed
-yet; it is planned as milestones 8 and 9 and will sit after `Translator` behind
-a `SpeechSynthesizer` interface.
+The pipeline goes one stage further than this diagram: the translated text is
+spoken aloud through a `SpeechSynthesizer` (section 2.9). Today that is one of
+the phone's own voices. The aim is the voice of whoever spoke, for every user;
+that is milestone 9 and will be a second implementation of the same interface.
 
 Two things to notice:
 
@@ -211,6 +211,22 @@ The backend URL is a build config field, `http://localhost:8080` for now;
 `adb reverse` forwards it to the dev machine. Debug builds allow cleartext HTTP
 to `localhost` and `10.0.2.2` through a debug-only network security config;
 release builds do not.
+
+### 2.9 Speech output
+
+```kotlin
+interface SpeechSynthesizer {
+    suspend fun speak(text: String, language: Language)   // returns when finished or stopped
+    fun stop()
+}
+```
+
+`AndroidSpeechSynthesizer` uses the platform's `TextToSpeech`: a stock voice
+per language, supplied and downloaded by the phone's speech engine. The
+pipeline emits the translation, then speaks it. If it cannot be spoken, the
+text stays on screen with the reason; the run is not a failure. A voice that is
+still downloading on first use is retried a few times. ADR 0008 has the
+reasoning.
 
 ## 3. Server
 
@@ -460,7 +476,9 @@ Written in the milestone where the decision is implemented.
 | 0005 | Model distribution: manifest, resume, checksum | 4 |
 | 0006 | `LISTEN/NOTIFY` as the cross-process event bus | 5 |
 | 0007 | Fallback policy and thresholds | 6 |
-| 0008 | Cloud transcription provider | 7 |
+| 0008 | Speech output with the phone's voices (written) | 8 |
+| 0009 | Cloud transcription provider | 7 |
+| 0010 | Voice-cloning engine | 9 |
 
 ## 7. Known limits
 

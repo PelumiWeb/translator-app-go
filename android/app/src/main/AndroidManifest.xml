@@ -5,6 +5,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!--
+      Since Android 11 an app can only see other apps it declares an interest
+      in. Without this, the phone's text-to-speech engine is invisible to us
+      and speaking fails as if no engine were installed.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:name=".PtranslateApp"
         android:allowBackup="true"

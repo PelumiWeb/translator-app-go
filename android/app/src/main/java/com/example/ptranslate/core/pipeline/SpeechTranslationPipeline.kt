@@ -2,6 +2,8 @@ package com.example.ptranslate.core.pipeline
 
 import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.audio.PcmAudio
+import com.example.ptranslate.core.speech.SpeechException
+import com.example.ptranslate.core.speech.SpeechSynthesizer
 import com.example.ptranslate.core.stt.Transcriber
 import com.example.ptranslate.core.stt.Transcript
 import com.example.ptranslate.core.stt.TranscriptEvent
@@ -12,20 +14,31 @@ import kotlinx.coroutines.flow.flow
 
 /**
  * Everything that happens to a recording after it is made: transcribe it,
- * then translate the transcript. This is the entry point any front end uses:
- * the app's screen today, a keyboard later.
+ * translate the transcript, and say the translation aloud. This is the entry
+ * point any front end uses: the app's screen today, a keyboard later.
  */
 class SpeechTranslationPipeline(
     private val transcriber: Transcriber,
     private val translator: Translator,
+    private val synthesizer: SpeechSynthesizer,
 ) {
 
     /**
-     * A cold flow that ends after [PipelineEvent.Translated]. It fails with
-     * TranscriptionException or TranslationException; when translation fails
-     * the transcript has already been emitted, so it is not lost.
+     * A cold flow that ends once the translation has been spoken, or after
+     * [PipelineEvent.Translated] when [speak] is false, as a keyboard would
+     * want.
+     *
+     * It fails with TranscriptionException or TranslationException; when
+     * translation fails the transcript has already been emitted, so it is not
+     * lost. A failure to speak is not a failure of the run: the text is
+     * already delivered, so it is reported as [PipelineEvent.SpeechFailed].
      */
-    fun process(audio: PcmAudio, source: Language, target: Language): Flow<PipelineEvent> = flow {
+    fun process(
+        audio: PcmAudio,
+        source: Language,
+        target: Language,
+        speak: Boolean = true,
+    ): Flow<PipelineEvent> = flow {
         var transcript: Transcript? = null
         transcriber.transcribe(audio, source).collect { event ->
             when (event) {
@@ -50,7 +63,17 @@ class SpeechTranslationPipeline(
             translator.prepare(source, target)
         }
         emit(PipelineEvent.Translating)
-        emit(PipelineEvent.Translated(translator.translate(text, source, target)))
+        val translation = translator.translate(text, source, target)
+        emit(PipelineEvent.Translated(translation))
+
+        if (!speak) return@flow
+        emit(PipelineEvent.Speaking)
+        try {
+            synthesizer.speak(translation, target)
+            emit(PipelineEvent.Spoken)
+        } catch (e: SpeechException) {
+            emit(PipelineEvent.SpeechFailed(e.message ?: "The translation could not be spoken"))
+        }
     }
 }
 
@@ -63,4 +86,13 @@ sealed interface PipelineEvent {
     data object DownloadingLanguages : PipelineEvent
     data object Translating : PipelineEvent
     data class Translated(val text: String) : PipelineEvent
+
+    /** The translation is being said aloud. */
+    data object Speaking : PipelineEvent
+
+    /** It has been said, or was stopped part way. */
+    data object Spoken : PipelineEvent
+
+    /** The text is fine but could not be spoken, e.g. no voice for the language. */
+    data class SpeechFailed(val reason: String) : PipelineEvent
 }

@@ -11,6 +11,8 @@ import com.example.ptranslate.core.model.ModelManager
 import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.net.BackendClient
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
+import com.example.ptranslate.core.speech.AndroidSpeechSynthesizer
+import com.example.ptranslate.core.speech.SpeechSynthesizer
 import com.example.ptranslate.core.stt.DeviceBenchmark
 import com.example.ptranslate.core.stt.DeviceSpeed
 import com.example.ptranslate.core.stt.FallbackThresholds
@@ -95,6 +97,9 @@ class AppContainer(context: Context) {
     val recorder: AudioRecorder = AndroidAudioRecorder()
     private val translator: Translator = MlKitTranslator()
 
+    /** Says translations aloud in one of the phone's own voices. */
+    val synthesizer: SpeechSynthesizer = AndroidSpeechSynthesizer(context)
+
     /** A language can be spoken only if Whisper transcribes it and ML Kit translates from it. */
     val sourceLanguages: List<Language> = translator.supportedLanguages.filter(WhisperLanguages::supports)
     val targetLanguages: List<Language> = translator.supportedLanguages
@@ -109,6 +114,7 @@ class AppContainer(context: Context) {
             thresholds = thresholds,
         ),
         translator = translator,
+        synthesizer = synthesizer,
     )
 }
 

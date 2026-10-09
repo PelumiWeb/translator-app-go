@@ -294,18 +294,32 @@ Checkpoints: (7.1) provider, (7.2) UI, (7.3) README and CI.
 
 ---
 
-## [ ] Milestone 8: Speak the translation
+## [~] Milestone 8: Speak the translation
 
 Added on 2026-10-07. The aim of the product is speech-to-speech
 interpretation: a person says something in one language and hears it in
 another, in their own voice. Milestones 8 and 9 get there in two steps.
 
+Done before milestone 7 at the owner's request (2026-10-09): it needs no new
+dependency and makes the app speech-to-speech.
+
 **Demo**: speak, and the phone says the translation aloud.
 
-- `SpeechSynthesizer` interface after `Translator` in the pipeline
-- An implementation on Android's built-in `TextToSpeech`: a stock voice, no new
-  dependency, works offline
-- Play, stop and replay on screen
+**Checkpoint 8.1: the phone speaks** (done)
+- `SpeechSynthesizer` interface, and `AndroidSpeechSynthesizer` on the
+  platform's `TextToSpeech`: a stock voice, no new dependency
+- The pipeline speaks the translation after emitting it; `speak = false` for
+  callers that only want text
+- Failing to speak does not fail the run: the text stays, with the reason
+- A voice that is still downloading is retried before the user is told
+- Nothing is spoken when both languages are the same
+- JVM tests with a fake synthesizer; device tests on the real engine
+- ADR 0008
+- Verify: `make android-install`, record with a target language other than
+  the source, and listen
+
+**Checkpoint 8.2: controls**
+- Stop speaking, speak again, and a switch to keep the app silent
 
 ---
 

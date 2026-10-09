@@ -1,5 +1,6 @@
 package com.example.ptranslate.ui
 
+import com.example.ptranslate.core.FakeSynthesizer
 import com.example.ptranslate.core.FakeTranslator
 import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.audio.AudioRecorder
@@ -9,6 +10,7 @@ import com.example.ptranslate.core.model.ModelException
 import com.example.ptranslate.core.model.ModelInstaller
 import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
+import com.example.ptranslate.core.speech.SpeechException
 import com.example.ptranslate.core.stt.DeviceSpeed
 import com.example.ptranslate.core.stt.RoutingNote
 import com.example.ptranslate.core.stt.Transcriber
@@ -18,6 +20,7 @@ import com.example.ptranslate.core.stt.TranscriptionException
 import com.example.ptranslate.core.stt.TranscriptionRoute
 import com.example.ptranslate.core.stt.TranscriptionStage
 import com.example.ptranslate.core.translate.TranslationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -69,6 +72,7 @@ class TranslateViewModelTest {
     private var clockMs = 0L
 
     private val translator = FakeTranslator()
+    private val synthesizer = FakeSynthesizer()
 
     private class FakeModels : ModelInstaller {
         override val state = MutableStateFlow<ModelState>(ModelState.Missing)
@@ -103,7 +107,7 @@ class TranslateViewModelTest {
     private fun newViewModel(recorder: AudioRecorder, transcriber: Transcriber) =
         TranslateViewModel(
             recorder = recorder,
-            pipeline = SpeechTranslationPipeline(transcriber, translator),
+            pipeline = SpeechTranslationPipeline(transcriber, translator, synthesizer),
             route = route,
             models = models,
             speed = speed,
@@ -355,6 +359,43 @@ class TranslateViewModelTest {
         assertEquals("good morning", state.text)
         assertEquals("[en>fr] good morning", state.translation)
         assertEquals("Done", state.status)
+        assertEquals(Phase.IDLE, state.phase)
+    }
+
+    @Test
+    fun `speaks the translation, and shows that it is speaking`() = runTest(dispatcher) {
+        synthesizer.hold = CompletableDeferred() // keep it talking until told otherwise
+        val viewModel = newViewModel(FakeRecorder(), saying("good morning"))
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+
+        assertEquals(listOf("es: [en>es] good morning"), synthesizer.spoken)
+        assertEquals("Speaking", viewModel.state.value.status)
+        assertEquals("[en>es] good morning", viewModel.state.value.translation)
+        assertEquals(Phase.WORKING, viewModel.state.value.phase)
+
+        synthesizer.hold?.complete(Unit) // it finishes
+        runCurrent()
+
+        assertEquals("Done", viewModel.state.value.status)
+        assertEquals(Phase.IDLE, viewModel.state.value.phase)
+    }
+
+    @Test
+    fun `a translation that cannot be spoken stays on screen with the reason`() = runTest(dispatcher) {
+        synthesizer.failure = SpeechException("This phone has no voice for Spanish")
+        val viewModel = newViewModel(FakeRecorder(), saying("good morning"))
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+
+        val state = viewModel.state.value
+        assertEquals("[en>es] good morning", state.translation)
+        assertEquals("Done", state.status)
+        assertEquals("This phone has no voice for Spanish", state.error)
         assertEquals(Phase.IDLE, state.phase)
     }
 

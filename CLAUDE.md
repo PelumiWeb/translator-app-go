@@ -55,7 +55,8 @@ core/stt         Transcriber interface and its implementations
 core/translate   Translator interface and its implementations
 core/model       model manifest, download with resume, SHA-256 check
 core/net         backend client: upload, SSE
-core/pipeline    record -> transcribe -> translate, the reusable entry point
+core/speech      SpeechSynthesizer interface and its implementations
+core/pipeline    transcribe -> translate -> speak, the reusable entry point
 ui/              Compose screens and ViewModels
 ```
 
@@ -85,8 +86,9 @@ migrations/          plain SQL, embedded in the binary
   object graph. No DI framework.
 - Coroutines and `Flow` for async work. No `GlobalScope`. Blocking and native
   calls run on an injected dispatcher so tests can replace it.
-- `Transcriber` and `Translator` are the seams. UI and pipeline code depend on
-  the interfaces, never on whisper.cpp or ML Kit types.
+- `Transcriber`, `Translator` and `SpeechSynthesizer` are the seams. UI and
+  pipeline code depend on the interfaces, never on whisper.cpp, ML Kit or
+  Android text-to-speech types.
 - JNI surface stays small: one Kotlin class owns the native handle and is the
   only caller of `external` functions.
 

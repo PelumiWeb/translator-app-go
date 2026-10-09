@@ -230,6 +230,10 @@ class TranslateViewModel(
                     status = "Done",
                     translation = if (translating) event.text else "",
                 )
+                PipelineEvent.Speaking -> it.copy(status = "Speaking")
+                PipelineEvent.Spoken -> it.copy(status = "Done")
+                // The translation is on screen; only the voice is missing.
+                is PipelineEvent.SpeechFailed -> it.copy(status = "Done", error = event.reason)
             }
         }
     }
@@ -257,7 +261,9 @@ class TranslateViewModel(
 
     private fun finish(error: String?) {
         _state.update {
-            it.copy(phase = Phase.IDLE, status = if (error == null) it.status else "Failed", error = error)
+            // With no new error, one already on screen stays: a result can be
+            // complete and still carry a note, such as "could not be spoken".
+            it.copy(phase = Phase.IDLE, status = if (error == null) it.status else "Failed", error = error ?: it.error)
         }
     }
 
