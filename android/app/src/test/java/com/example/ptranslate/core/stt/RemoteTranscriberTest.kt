@@ -8,8 +8,10 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -30,7 +32,11 @@ class RemoteTranscriberTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        transcriber = RemoteTranscriber(BackendClient(server.url("/").toString(), OkHttpClient()))
+        transcriber = RemoteTranscriber(
+            BackendClient(server.url("/").toString(), OkHttpClient()),
+            maxAttempts = 3,
+            retryDelayMs = { 0 }, // no waiting in tests
+        )
     }
 
     @After
@@ -47,6 +53,7 @@ class RemoteTranscriberTest {
         )
     }
 
+    /** A stream that sends [body] and then closes, as the real server does. */
     private fun enqueueEventStream(body: String) {
         server.enqueue(
             MockResponse()
@@ -55,38 +62,27 @@ class RemoteTranscriberTest {
         )
     }
 
+    private fun sse(seq: Int, type: String, data: String = "{}") = "id: $seq\nevent: $type\ndata: $data\n\n"
+
+    private fun transcribe(language: Language = Language.ENGLISH): List<TranscriptEvent> =
+        runBlocking { transcriber.transcribe(audio, language).toList() }
+
+    private fun transcribeFails(): TranscriptionException =
+        assertThrows(TranscriptionException::class.java) { transcribe() }
+
+    private val final = TranscriptEvent.Final(Transcript("hello world", confidence = null, Transcript.Source.CLOUD))
+
     @Test
-    fun `maps the job's events to transcript events`() = runBlocking {
+    fun `maps the job's events to transcript events`() {
         enqueueJobAccepted()
         enqueueEventStream(
-            """
-            |id: 1
-            |event: queued
-            |data: {}
-            |
-            |id: 2
-            |event: processing
-            |data: {"attempt": 1}
-            |
-            |: keep-alive
-            |
-            |id: 3
-            |event: partial
-            |data: {"text": "hello"}
-            |
-            |id: 4
-            |event: partial
-            |data: {"text": "hello world"}
-            |
-            |id: 5
-            |event: done
-            |data: {"text": "hello world", "language": "en"}
-            |
-            |
-            """.trimMargin(),
+            sse(1, "queued") +
+                sse(2, "processing", """{"attempt": 1}""") +
+                ": keep-alive\n\n" +
+                sse(3, "partial", """{"text": "hello"}""") +
+                sse(4, "partial", """{"text": "hello world"}""") +
+                sse(5, "done", """{"text": "hello world", "language": "en"}"""),
         )
-
-        val events = transcriber.transcribe(audio, Language.ENGLISH).toList()
 
         assertEquals(
             listOf(
@@ -95,18 +91,18 @@ class RemoteTranscriberTest {
                 TranscriptEvent.StageChanged(TranscriptionStage.PROCESSING),
                 TranscriptEvent.Partial("hello"),
                 TranscriptEvent.Partial("hello world"),
-                TranscriptEvent.Final(Transcript("hello world", confidence = null, Transcript.Source.CLOUD)),
+                final,
             ),
-            events,
+            transcribe(),
         )
     }
 
     @Test
-    fun `uploads the audio as a WAV file with the source language`() = runBlocking {
+    fun `uploads the audio as a WAV file with the source language`() {
         enqueueJobAccepted()
-        enqueueEventStream("id: 1\nevent: done\ndata: {\"text\": \"ok\"}\n\n")
+        enqueueEventStream(sse(1, "done", """{"text": "ok"}"""))
 
-        transcriber.transcribe(audio, Language("yo")).toList()
+        transcribe(Language("yo"))
 
         val upload = server.takeRequest()
         assertEquals("POST", upload.method)
@@ -120,71 +116,202 @@ class RemoteTranscriberTest {
         val stream = server.takeRequest()
         assertEquals("GET", stream.method)
         assertEquals("/v1/jobs/job-1/events", stream.path)
+        assertNull("a first connection has nothing to resume from", stream.getHeader("Last-Event-ID"))
     }
 
     @Test
-    fun `skips event types it does not know`() = runBlocking {
+    fun `skips event types it does not know`() {
         enqueueJobAccepted()
-        enqueueEventStream(
-            "id: 1\nevent: something-new\ndata: {\"x\": 1}\n\n" +
-                "id: 2\nevent: done\ndata: {\"text\": \"ok\"}\n\n",
-        )
+        enqueueEventStream(sse(1, "something-new", """{"x": 1}""") + sse(2, "done", """{"text": "ok"}"""))
 
-        val events = transcriber.transcribe(audio, Language.ENGLISH).toList()
+        val events = transcribe()
 
         assertEquals(2, events.size) // UPLOADING and the final transcript
         assertTrue(events.last() is TranscriptEvent.Final)
     }
 
+    // --- reconnecting ---
+
     @Test
-    fun `fails with the server's message when the job fails`() {
+    fun `reconnects from the last event it received and carries on`() {
         enqueueJobAccepted()
+        // The connection drops after three events...
+        enqueueEventStream(sse(1, "queued") + sse(2, "processing") + sse(3, "partial", """{"text": "hello"}"""))
+        // ...and the second connection continues from the fourth.
         enqueueEventStream(
-            "id: 1\nevent: queued\ndata: {}\n\n" +
-                "id: 2\nevent: error\ndata: {\"message\": \"provider exploded\"}\n\n",
+            sse(4, "partial", """{"text": "hello world"}""") +
+                sse(5, "done", """{"text": "hello world", "language": "en"}"""),
         )
 
-        val error = assertThrows(TranscriptionException::class.java) {
-            runBlocking { transcriber.transcribe(audio, Language.ENGLISH).toList() }
-        }
+        val events = transcribe()
 
-        assertEquals("provider exploded", error.message)
+        assertEquals(
+            listOf(
+                TranscriptEvent.StageChanged(TranscriptionStage.UPLOADING),
+                TranscriptEvent.StageChanged(TranscriptionStage.QUEUED),
+                TranscriptEvent.StageChanged(TranscriptionStage.PROCESSING),
+                TranscriptEvent.Partial("hello"),
+                TranscriptEvent.StageChanged(TranscriptionStage.RECONNECTING),
+                TranscriptEvent.Partial("hello world"),
+                final,
+            ),
+            events,
+        )
+        server.takeRequest() // the upload
+        server.takeRequest() // the first stream
+        assertEquals("3", server.takeRequest().getHeader("Last-Event-ID"))
     }
 
     @Test
-    fun `fails with the server's message when the upload is rejected`() {
+    fun `shows nothing twice if the server replays events it already sent`() {
+        enqueueJobAccepted()
+        enqueueEventStream(sse(1, "queued") + sse(2, "partial", """{"text": "hello"}"""))
+        // A server that ignores Last-Event-ID and starts from the beginning.
+        enqueueEventStream(
+            sse(1, "queued") + sse(2, "partial", """{"text": "hello"}""") +
+                sse(3, "done", """{"text": "hello world", "language": "en"}"""),
+        )
+
+        val events = transcribe()
+
+        assertEquals(
+            listOf(
+                TranscriptEvent.StageChanged(TranscriptionStage.UPLOADING),
+                TranscriptEvent.StageChanged(TranscriptionStage.QUEUED),
+                TranscriptEvent.Partial("hello"),
+                TranscriptEvent.StageChanged(TranscriptionStage.RECONNECTING),
+                final,
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun `reconnects when the connection is cut in the middle of the stream`() {
+        enqueueJobAccepted()
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody(sse(1, "queued") + sse(2, "processing"))
+                .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY),
+        )
+        enqueueEventStream(sse(1, "queued") + sse(2, "processing") + sse(3, "done", """{"text": "hello world"}"""))
+
+        val events = transcribe()
+
+        assertEquals(final, events.last())
+        assertEquals(1, events.count { it is TranscriptEvent.Final })
+    }
+
+    @Test
+    fun `gives up after reconnecting several times without any progress`() {
+        enqueueJobAccepted()
+        enqueueEventStream(sse(1, "queued"))
+        enqueueEventStream("") // maxAttempts is 3: two more tries, both empty
+        enqueueEventStream("")
+
+        val error = transcribeFails()
+
+        assertEquals("The connection to the server was lost", error.message)
+        assertEquals(4, server.requestCount) // one upload and three streams
+    }
+
+    @Test
+    fun `keeps going as long as each reconnect brings something new`() {
+        enqueueJobAccepted()
+        // Five connections of one event each: more than maxAttempts, but none
+        // of them a failure without progress.
+        enqueueEventStream(sse(1, "queued"))
+        enqueueEventStream(sse(2, "processing"))
+        enqueueEventStream(sse(3, "partial", """{"text": "hello"}"""))
+        enqueueEventStream(sse(4, "partial", """{"text": "hello world"}"""))
+        enqueueEventStream(sse(5, "done", """{"text": "hello world"}"""))
+
+        assertEquals(final, transcribe().last())
+    }
+
+    @Test
+    fun `does not reconnect when the job itself failed`() {
+        enqueueJobAccepted()
+        enqueueEventStream(sse(1, "queued") + sse(2, "error", """{"message": "provider exploded"}"""))
+
+        val error = transcribeFails()
+
+        assertEquals("provider exploded", error.message)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `does not reconnect when the server says the job does not exist`() {
+        enqueueJobAccepted()
+        server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":{"code":"job_not_found","message":"no such job"}}"""))
+
+        val error = transcribeFails()
+
+        assertEquals("The server answered 404", error.message)
+        assertEquals(2, server.requestCount)
+    }
+
+    // --- uploading ---
+
+    @Test
+    fun `retries an upload whose response was lost, with the same idempotency key`() {
+        // The server receives the request, then the connection dies before
+        // any response: the client cannot know whether a job was created.
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST))
+        enqueueJobAccepted()
+        enqueueEventStream(sse(1, "done", """{"text": "hello world"}"""))
+
+        assertEquals(final, transcribe().last())
+
+        val firstKey = server.takeRequest().getHeader("Idempotency-Key")
+        val secondKey = server.takeRequest().getHeader("Idempotency-Key")
+        assertTrue("a key is sent", !firstKey.isNullOrBlank())
+        assertEquals("both attempts carry the same key", firstKey, secondKey)
+    }
+
+    @Test
+    fun `uses a new idempotency key for each recording`() {
+        repeat(2) {
+            enqueueJobAccepted()
+            enqueueEventStream(sse(1, "done", """{"text": "ok"}"""))
+            transcribe()
+        }
+
+        val firstKey = server.takeRequest().getHeader("Idempotency-Key")
+        server.takeRequest() // first stream
+        val secondKey = server.takeRequest().getHeader("Idempotency-Key")
+        assertTrue(firstKey != secondKey)
+    }
+
+    @Test
+    fun `retries an upload after a server fault`() {
+        server.enqueue(MockResponse().setResponseCode(503))
+        enqueueJobAccepted()
+        enqueueEventStream(sse(1, "done", """{"text": "hello world"}"""))
+
+        assertEquals(final, transcribe().last())
+    }
+
+    @Test
+    fun `does not retry an upload the server refused`() {
         server.enqueue(
             MockResponse()
                 .setResponseCode(400)
                 .setBody("""{"error":{"code":"unsupported_audio","message":"audio must be a WAV file"}}"""),
         )
 
-        val error = assertThrows(TranscriptionException::class.java) {
-            runBlocking { transcriber.transcribe(audio, Language.ENGLISH).toList() }
-        }
+        val error = transcribeFails()
 
         assertEquals("audio must be a WAV file", error.message)
-    }
-
-    @Test
-    fun `fails when the stream ends before the transcript arrives`() {
-        enqueueJobAccepted()
-        enqueueEventStream("id: 1\nevent: queued\ndata: {}\n\n")
-
-        val error = assertThrows(TranscriptionException::class.java) {
-            runBlocking { transcriber.transcribe(audio, Language.ENGLISH).toList() }
-        }
-
-        assertEquals("The connection closed before the transcript arrived", error.message)
+        assertEquals(1, server.requestCount)
     }
 
     @Test
     fun `fails when the server cannot be reached`() {
         server.shutdown()
 
-        val error = assertThrows(TranscriptionException::class.java) {
-            runBlocking { transcriber.transcribe(audio, Language.ENGLISH).toList() }
-        }
+        val error = transcribeFails()
 
         assertTrue(error.message.orEmpty().startsWith("Could not reach the server"))
     }

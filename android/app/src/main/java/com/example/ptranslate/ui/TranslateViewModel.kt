@@ -256,4 +256,5 @@ private fun TranscriptionStage.label(): String = when (this) {
     TranscriptionStage.UPLOADING -> "Uploading"
     TranscriptionStage.QUEUED -> "Queued"
     TranscriptionStage.PROCESSING -> "Transcribing"
+    TranscriptionStage.RECONNECTING -> "Connection lost. Reconnecting"
 }

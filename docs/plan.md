@@ -181,7 +181,7 @@ the file on the server: the app rejects it.
 
 ---
 
-## [~] Milestone 5: Queue hardening
+## [x] Milestone 5: Queue hardening
 
 **Demo**: the fake provider fails twice then succeeds; the job retries with
 growing delays and completes. Kill a worker mid-job; the job is picked up
@@ -226,10 +226,20 @@ and continues from where it left off.
 - Verify: `make server-test-race`; or run `make server-run-api` and
   `make server-run-worker` in two terminals, then `make sample-job`
 
-**Checkpoint 5.4: client reconnect and idempotent uploads**
-- The Android client reconnects a dropped stream with `Last-Event-ID`
-- `Idempotency-Key` on `POST /v1/jobs`, so a retried upload does not create a
-  second job
+**Checkpoint 5.4: client reconnect and idempotent uploads** (done)
+- Server: `Idempotency-Key` on `POST /v1/jobs`. One job per key, enforced by a
+  unique index; a repeat returns the existing job and its current status
+- Android: the upload is retried on a connection failure or a 5xx, always
+  with the same key
+- Android: a stream that ends before the job does is reconnected with
+  `Last-Event-ID`; it gives up after five tries in a row that bring nothing new
+- The screen shows "Connection lost. Reconnecting" and keeps the words already
+  received
+- Tests: one job from sixteen simultaneous uploads with one key; reconnect,
+  replayed events, a cut connection, giving up, and upload retries against
+  `MockWebServer`
+- Verify: `make server-test-race` and `make android-test`; or start a
+  transcription on the server route and restart the server during it
 
 ---
 

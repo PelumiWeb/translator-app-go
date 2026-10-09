@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+
+	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 )
 
 // formMemory is how much of an upload is kept in RAM while it is parsed.
@@ -16,6 +18,10 @@ const formMemory = 1 << 20 // 1 MB
 // junk out of the database; the provider has the final say.
 var languageTag = regexp.MustCompile(`^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$`)
 
+// An idempotency key is chosen by the client, typically a UUID: up to 128
+// visible ASCII characters.
+var idempotencyKeyPattern = regexp.MustCompile(`^[\x21-\x7E]{1,128}$`)
+
 type createJobResponse struct {
 	ID        string `json:"id"`
 	Status    string `json:"status"`
@@ -25,10 +31,19 @@ type createJobResponse struct {
 // handleCreateJob accepts multipart/form-data with an "audio" file (WAV) and
 // a "source_lang" field. It stores the audio, enqueues a job, and answers
 // 202 Accepted without waiting for the transcription.
+//
+// An optional Idempotency-Key header makes the request safe to send again:
+// every request with the same key gets the same job.
 func (a *API) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	// Cap the body before anything reads it. Past the limit, reads fail and
 	// the connection is closed, so a huge upload cannot fill the disk.
 	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUploadBytes)
+
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	if idempotencyKey != "" && !idempotencyKeyPattern.MatchString(idempotencyKey) {
+		writeError(w, http.StatusBadRequest, "invalid_idempotency_key", "Idempotency-Key must be 1 to 128 visible ASCII characters")
+		return
+	}
 
 	if err := r.ParseMultipartForm(formMemory); err != nil {
 		// errors.As looks through wrapped errors for one of this type.
@@ -69,24 +84,40 @@ func (a *API) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := a.Jobs.Enqueue(r.Context(), sourceLang, key)
+	id, created, err := a.Jobs.EnqueueOnce(r.Context(), sourceLang, key, idempotencyKey)
 	if err != nil {
 		a.Logger.Error("enqueueing job", "error", err)
-		// No job refers to the audio, so nothing would ever clean it up.
-		if err := a.Audio.Delete(key); err != nil {
-			a.Logger.Warn("deleting orphaned audio", "error", err)
-		}
+		a.deleteAudio(key) // no job refers to it, so nothing else would clean it up
 		writeError(w, http.StatusInternalServerError, "internal", "could not create the job")
 		return
 	}
-	a.Wake()
 
-	a.Logger.Info("job enqueued", "job_id", id, "source_lang", sourceLang)
+	status := queue.StatusQueued
+	if created {
+		a.Wake()
+		a.Logger.Info("job enqueued", "job_id", id, "source_lang", sourceLang)
+	} else {
+		// A repeat of a request that already created its job. That job has
+		// its own copy of the audio, so this one is surplus, and the job may
+		// have moved on from "queued" by now.
+		a.deleteAudio(key)
+		if current, err := a.Jobs.Status(r.Context(), id); err == nil {
+			status = current
+		}
+		a.Logger.Info("repeated upload matched an existing job", "job_id", id)
+	}
+
 	writeJSON(w, http.StatusAccepted, createJobResponse{
 		ID:        id,
-		Status:    "queued",
+		Status:    status,
 		EventsURL: "/v1/jobs/" + id + "/events",
 	})
+}
+
+func (a *API) deleteAudio(key string) {
+	if err := a.Audio.Delete(key); err != nil {
+		a.Logger.Warn("deleting unused audio", "error", err)
+	}
 }
 
 // isWAV checks the 12-byte RIFF/WAVE signature, then rewinds so the next

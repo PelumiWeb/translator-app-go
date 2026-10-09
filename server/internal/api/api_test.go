@@ -35,17 +35,25 @@ type fakeJobs struct {
 	onEvents func()
 
 	mu       sync.Mutex
-	enqueued []string // "lang key" per Enqueue call
+	enqueued []string        // "lang key" per job created
+	keys     map[string]bool // idempotency keys seen
 }
 
-func (f *fakeJobs) Enqueue(_ context.Context, sourceLang, audioKey string) (string, error) {
+func (f *fakeJobs) EnqueueOnce(_ context.Context, sourceLang, audioKey, idempotencyKey string) (string, bool, error) {
 	if f.enqueueErr != nil {
-		return "", f.enqueueErr
+		return "", false, f.enqueueErr
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if idempotencyKey != "" && f.keys[idempotencyKey] {
+		return testJobID, false, nil
+	}
+	if f.keys == nil {
+		f.keys = map[string]bool{}
+	}
+	f.keys[idempotencyKey] = true
 	f.enqueued = append(f.enqueued, sourceLang+" "+audioKey)
-	return testJobID, nil
+	return testJobID, true, nil
 }
 
 func (f *fakeJobs) Status(context.Context, string) (string, error) {

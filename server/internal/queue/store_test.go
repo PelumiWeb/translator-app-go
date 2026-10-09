@@ -389,6 +389,104 @@ func TestExtendLeasePushesTheExpiryOut(t *testing.T) {
 	}
 }
 
+func TestEnqueueOnceCreatesOneJobPerKey(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+	ctx := context.Background()
+
+	first, created, err := store.EnqueueOnce(ctx, "en", "first.wav", "key-1")
+	if err != nil || !created {
+		t.Fatalf("first EnqueueOnce = %q, %v, %v; want a new job", first, created, err)
+	}
+	repeat, created, err := store.EnqueueOnce(ctx, "en", "second-copy.wav", "key-1")
+	if err != nil {
+		t.Fatalf("repeat EnqueueOnce: %v", err)
+	}
+	if created || repeat != first {
+		t.Errorf("repeat = %q, created %v; want the first job %q and created false", repeat, created, first)
+	}
+
+	other, created, err := store.EnqueueOnce(ctx, "en", "other.wav", "key-2")
+	if err != nil || !created || other == first {
+		t.Errorf("a different key = %q, %v, %v; want a new, different job", other, created, err)
+	}
+
+	// The repeat must not have added a second "queued" event to the job.
+	events, err := store.Events(ctx, first, 0)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	if got := eventTypes(events); !slices.Equal(got, []string{"queued"}) {
+		t.Errorf("events = %v, want [queued]", got)
+	}
+	// And the job keeps the audio it was created with.
+	var audioPath string
+	if err := db.QueryRow(ctx, "SELECT audio_path FROM jobs WHERE id = $1", first).Scan(&audioPath); err != nil {
+		t.Fatalf("reading job: %v", err)
+	}
+	if audioPath != "first.wav" {
+		t.Errorf("audio_path = %q, want first.wav", audioPath)
+	}
+}
+
+func TestEnqueueOnceWithoutAKeyAlwaysCreates(t *testing.T) {
+	store := NewStore(testdb.New(t))
+	ctx := context.Background()
+
+	a, createdA, errA := store.EnqueueOnce(ctx, "en", "a.wav", "")
+	b, createdB, errB := store.EnqueueOnce(ctx, "en", "b.wav", "")
+
+	if errA != nil || errB != nil || !createdA || !createdB || a == b {
+		t.Errorf("got %q (%v, %v) and %q (%v, %v); want two different new jobs", a, createdA, errA, b, createdB, errB)
+	}
+}
+
+// Two attempts with one key arriving at the same instant: the unique index,
+// not luck, must leave exactly one job.
+func TestEnqueueOnceUnderConcurrencyCreatesOneJob(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+	ctx := context.Background()
+
+	const attempts = 16
+	ids := make([]string, attempts)
+	createdCount := 0
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for i := range attempts {
+		wg.Go(func() {
+			id, created, err := store.EnqueueOnce(ctx, "en", "clip.wav", "same-key")
+			if err != nil {
+				t.Errorf("EnqueueOnce: %v", err)
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			ids[i] = id
+			if created {
+				createdCount++
+			}
+		})
+	}
+	wg.Wait()
+
+	if createdCount != 1 {
+		t.Errorf("%d attempts reported creating the job, want exactly 1", createdCount)
+	}
+	for _, id := range ids {
+		if id != ids[0] {
+			t.Fatalf("attempts got different jobs: %v", ids)
+		}
+	}
+	var rows int
+	if err := db.QueryRow(ctx, "SELECT count(*) FROM jobs").Scan(&rows); err != nil {
+		t.Fatalf("counting jobs: %v", err)
+	}
+	if rows != 1 {
+		t.Errorf("%d jobs in the table, want 1", rows)
+	}
+}
+
 func TestStatus(t *testing.T) {
 	store := NewStore(testdb.New(t))
 	ctx := context.Background()

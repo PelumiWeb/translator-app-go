@@ -30,7 +30,16 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class BackendException(message: String, cause: Throwable? = null) : IOException(message, cause)
+/**
+ * @param retryable whether trying again could succeed. True for a connection
+ *   problem or a server fault; false when the server understood the request
+ *   and refused it, since sending the same thing again gets the same answer.
+ */
+class BackendException(
+    message: String,
+    cause: Throwable? = null,
+    val retryable: Boolean = false,
+) : IOException(message, cause)
 
 /** One entry in a job's event stream, already parsed. */
 sealed interface JobEvent {
@@ -39,7 +48,17 @@ sealed interface JobEvent {
     data class Partial(val text: String) : JobEvent
     data class Done(val text: String, val language: String) : JobEvent
     data class Failed(val message: String) : JobEvent
+
+    /** A type this version of the app does not know. Its number still counts. */
+    data object Unknown : JobEvent
 }
+
+/**
+ * An event with its position in the job's history. [seq] counts 1, 2, 3 ...
+ * and is what a reconnecting client sends back so the server can continue
+ * from the right place.
+ */
+data class JobUpdate(val seq: Int, val event: JobEvent)
 
 /** One model the backend offers, as listed in its manifest. */
 @Serializable
@@ -73,18 +92,31 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Uploads the audio and returns the new job's id. */
-    suspend fun createJob(wav: ByteArray, sourceLang: Language): String {
+    /**
+     * Uploads the audio and returns the job's id.
+     *
+     * [idempotencyKey] identifies this upload across attempts. If a response
+     * is lost and the upload is sent again with the same key, the server
+     * returns the job it already created instead of making a second one.
+     */
+    suspend fun createJob(wav: ByteArray, sourceLang: Language, idempotencyKey: String): String {
         val form = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("source_lang", sourceLang.tag)
             .addFormDataPart("audio", "audio.wav", wav.toRequestBody("audio/wav".toMediaType()))
             .build()
-        val request = Request.Builder().url(url("/v1/jobs")).post(form).build()
+        val request = Request.Builder()
+            .url(url("/v1/jobs"))
+            .header("Idempotency-Key", idempotencyKey)
+            .post(form)
+            .build()
 
         val result = http.newCall(request).awaitResult()
         if (!result.isSuccessful) {
-            throw BackendException(errorMessage(result.body) ?: "The server answered ${result.code}")
+            throw BackendException(
+                errorMessage(result.body) ?: "The server answered ${result.code}",
+                retryable = result.code >= 500,
+            )
         }
         return try {
             json.decodeFromString<CreateJobResponse>(result.body).id
@@ -142,14 +174,22 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
     /**
      * Follows a job's events until the server closes the stream. Cancelling
      * the collector closes the connection.
+     *
+     * [afterSeq] is the number of the last event already received, or 0 for
+     * the whole history. It is sent as Last-Event-ID, the standard header for
+     * resuming an event stream.
      */
-    fun jobEvents(jobId: String): Flow<JobEvent> = callbackFlow {
-        val request = Request.Builder().url(url("/v1/jobs/$jobId/events")).build()
+    fun jobEvents(jobId: String, afterSeq: Int = 0): Flow<JobUpdate> = callbackFlow {
+        val request = Request.Builder().url(url("/v1/jobs/$jobId/events")).apply {
+            if (afterSeq > 0) header("Last-Event-ID", afterSeq.toString())
+        }.build()
 
         val listener = object : EventSourceListener() {
             override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                // Every event the server sends carries its number as the id.
+                val seq = id?.toIntOrNull() ?: return
                 try {
-                    parseEvent(type, data)?.let { trySend(it) }
+                    trySend(JobUpdate(seq, parseEvent(type, data)))
                 } catch (e: SerializationException) {
                     close(BackendException("The server sent an unreadable $type event", e))
                 }
@@ -160,11 +200,13 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
             }
 
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
-                val reason = when {
-                    response != null && !response.isSuccessful -> "the server answered ${response.code}"
-                    else -> t?.message ?: "the connection was lost"
+                if (response != null && !response.isSuccessful) {
+                    // The server answered and said no, e.g. 404 for an unknown job.
+                    close(BackendException("The server answered ${response.code}", t, retryable = response.code >= 500))
+                } else {
+                    val reason = t?.message ?: "the connection was lost"
+                    close(BackendException("Event stream failed: $reason", t, retryable = true))
                 }
-                close(BackendException("Event stream failed: $reason", t))
             }
         }
 
@@ -175,13 +217,13 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
         // wait, so nothing may be dropped if the collector is briefly slow.
         .buffer(Channel.UNLIMITED)
 
-    private fun parseEvent(type: String?, data: String): JobEvent? = when (type) {
+    private fun parseEvent(type: String?, data: String): JobEvent = when (type) {
         "queued" -> JobEvent.Queued
         "processing" -> JobEvent.Processing
         "partial" -> JobEvent.Partial(json.decodeFromString<TextPayload>(data).text)
         "done" -> json.decodeFromString<DonePayload>(data).let { JobEvent.Done(it.text, it.language) }
         "error" -> JobEvent.Failed(json.decodeFromString<MessagePayload>(data).message)
-        else -> null // an event type added later; older apps skip it
+        else -> JobEvent.Unknown // a type added later; older apps skip it
     }
 
     private fun errorMessage(body: String): String? =
@@ -205,7 +247,9 @@ private suspend fun Call.awaitResult(): HttpResult = suspendCancellableCoroutine
 
     enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
-            continuation.resumeWithException(BackendException("Could not reach the server: ${e.message}", e))
+            continuation.resumeWithException(
+                BackendException("Could not reach the server: ${e.message}", e, retryable = true),
+            )
         }
 
         override fun onResponse(call: Call, response: Response) {
@@ -215,7 +259,9 @@ private suspend fun Call.awaitResult(): HttpResult = suspendCancellableCoroutine
             val result = try {
                 response.use { HttpResult(it.code, it.body?.string().orEmpty()) }
             } catch (e: IOException) {
-                continuation.resumeWithException(BackendException("Could not read the server's response", e))
+                continuation.resumeWithException(
+                    BackendException("Could not read the server's response", e, retryable = true),
+                )
                 return
             }
             continuation.resume(result)

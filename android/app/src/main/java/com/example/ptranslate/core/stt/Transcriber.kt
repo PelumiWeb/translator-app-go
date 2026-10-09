@@ -25,7 +25,7 @@ sealed interface TranscriptEvent {
     data class Final(val transcript: Transcript) : TranscriptEvent
 }
 
-enum class TranscriptionStage { UPLOADING, QUEUED, PROCESSING }
+enum class TranscriptionStage { UPLOADING, QUEUED, PROCESSING, RECONNECTING }
 
 data class Transcript(
     val text: String,

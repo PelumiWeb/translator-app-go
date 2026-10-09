@@ -190,6 +190,13 @@ OkHttp for upload, download, and SSE (`okhttp-sse`). `BackendClient` is the
 only class that knows the backend's URLs and JSON. The stream uses a client
 with no read timeout, since an event stream is silent between events.
 
+`RemoteTranscriber` expects the connection to fail. It retries an upload on a
+connection error or a 5xx, with one idempotency key for all attempts. If the
+event stream ends before the job does, it reconnects with `Last-Event-ID` and
+the server continues from the next event. It gives up after five consecutive
+tries that bring nothing new, and never retries when the server refused the
+request or the job itself failed.
+
 The backend URL is a build config field, `http://localhost:8080` for now;
 `adb reverse` forwards it to the dev machine. Debug builds allow cleartext HTTP
 to `localhost` and `10.0.2.2` through a debug-only network security config;
@@ -223,6 +230,12 @@ id: 4
 event: done
 data: {"text":"hello world","language":"en"}
 ```
+
+An optional `Idempotency-Key` header makes the upload safe to repeat. A phone
+whose connection drops after sending cannot know whether the job was created;
+it sends the same request again with the same key and gets the same job back.
+A unique index on the key guarantees one job even if both attempts arrive
+together.
 
 Event types: `queued`, `processing`, `partial`, `done`, `error`. The stream
 closes after `done` or `error`. A comment line is sent every 15 seconds to keep

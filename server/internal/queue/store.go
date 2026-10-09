@@ -68,27 +68,47 @@ func NewStore(pool *pgxpool.Pool) *Store {
 
 // Enqueue adds a job and its first event, and returns the job id.
 func (s *Store) Enqueue(ctx context.Context, sourceLang, audioKey string) (string, error) {
-	var id string
+	id, _, err := s.EnqueueOnce(ctx, sourceLang, audioKey, "")
+	return id, err
+}
+
+// EnqueueOnce adds a job unless one was already created with the same
+// idempotency key, in which case it returns that job's id and created is
+// false. An empty key means "always create".
+//
+// This is what makes a retried upload safe. The check and the insert are one
+// statement backed by a unique index, so two attempts arriving together
+// cannot both create a job; checking first and inserting second could.
+func (s *Store) EnqueueOnce(ctx context.Context, sourceLang, audioKey, idempotencyKey string) (id string, created bool, err error) {
 	// BeginFunc commits if the function returns nil and rolls back if it
 	// returns an error, so the job and its "queued" event exist together or
 	// not at all.
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		// NULLIF stores an empty key as NULL, which the unique index ignores.
 		err := tx.QueryRow(ctx, `
-			INSERT INTO jobs (status, source_lang, audio_path)
-			VALUES ('queued', $1, $2)
+			INSERT INTO jobs (status, source_lang, audio_path, idempotency_key)
+			VALUES ('queued', $1, $2, NULLIF($3, ''))
+			ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
 			RETURNING id`,
-			sourceLang, audioKey,
+			sourceLang, audioKey, idempotencyKey,
 		).Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The insert was skipped: a job with this key exists. If another
+			// attempt was inserting it at this very moment, ON CONFLICT
+			// waited for it to commit, so this read finds it.
+			return tx.QueryRow(ctx, "SELECT id FROM jobs WHERE idempotency_key = $1", idempotencyKey).Scan(&id)
+		}
 		if err != nil {
 			return err
 		}
+		created = true
 		_, err = insertEvent(ctx, tx, id, EventQueued, struct{}{})
 		return err
 	})
 	if err != nil {
-		return "", fmt.Errorf("enqueueing job: %w", err)
+		return "", false, fmt.Errorf("enqueueing job: %w", err)
 	}
-	return id, nil
+	return id, created, nil
 }
 
 // Claim takes the oldest ready job for the caller, or returns ErrNoJobs.

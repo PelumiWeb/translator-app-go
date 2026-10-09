@@ -161,3 +161,69 @@ func TestCreateJobDeletesAudioWhenEnqueueFails(t *testing.T) {
 		t.Errorf("blobs = %v, deleted = %v; want the stored audio deleted", audio.keys(), audio.deleted)
 	}
 }
+
+// The client's first attempt reached the server but its response was lost,
+// so the client sends the same upload again with the same key.
+func TestCreateJobWithTheSameIdempotencyKeyReturnsTheSameJob(t *testing.T) {
+	a := newTestAPI()
+	jobs := &fakeJobs{status: "processing"}
+	audio := &fakeAudio{}
+	woken := 0
+	a.Jobs, a.Audio, a.Wake = jobs, audio, func() { woken++ }
+
+	send := func() createJobResponse {
+		t.Helper()
+		req := uploadRequest(t, "en", wavBytes(100))
+		req.Header.Set("Idempotency-Key", "6f1c2b9e-attempt")
+		rec := httptest.NewRecorder()
+		a.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("status = %d, want 202; body: %s", rec.Code, rec.Body)
+		}
+		var resp createJobResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decoding response: %v", err)
+		}
+		return resp
+	}
+
+	first := send()
+	second := send()
+
+	if first.ID != second.ID {
+		t.Errorf("the repeat got job %s, want the first job %s", second.ID, first.ID)
+	}
+	if len(jobs.enqueued) != 1 {
+		t.Errorf("%d jobs were created, want 1", len(jobs.enqueued))
+	}
+	if woken != 1 {
+		t.Errorf("Wake called %d times, want 1: a repeat brings no new work", woken)
+	}
+	// The repeat's copy of the audio is surplus and must not pile up.
+	if len(audio.keys()) != 1 || len(audio.deleted) != 1 {
+		t.Errorf("stored blobs = %v, deleted = %v; want one kept and the repeat's deleted", audio.keys(), audio.deleted)
+	}
+	if first.Status != "queued" || second.Status != "processing" {
+		t.Errorf("statuses = %q then %q; the repeat should report where the job is now", first.Status, second.Status)
+	}
+}
+
+func TestCreateJobRejectsAMalformedIdempotencyKey(t *testing.T) {
+	for _, key := range []string{"has a space", strings.Repeat("k", 129), "tab\there"} {
+		a := newTestAPI()
+		jobs := &fakeJobs{}
+		a.Jobs = jobs
+
+		req := uploadRequest(t, "en", wavBytes(10))
+		req.Header.Set("Idempotency-Key", key)
+		rec := httptest.NewRecorder()
+		a.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("key %q: status = %d, want 400", key, rec.Code)
+		}
+		if len(jobs.enqueued) != 0 {
+			t.Errorf("key %q: a job was created", key)
+		}
+	}
+}

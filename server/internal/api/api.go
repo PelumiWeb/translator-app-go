@@ -24,7 +24,7 @@ type Pinger interface {
 }
 
 type JobStore interface {
-	Enqueue(ctx context.Context, sourceLang, audioKey string) (id string, err error)
+	EnqueueOnce(ctx context.Context, sourceLang, audioKey, idempotencyKey string) (id string, created bool, err error)
 	Status(ctx context.Context, jobID string) (string, error)
 	Events(ctx context.Context, jobID string, afterSeq int) ([]queue.Event, error)
 }
