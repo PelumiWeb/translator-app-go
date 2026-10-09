@@ -55,6 +55,11 @@ class WhisperTranscriber(
         if (noSpeech || result.text.isEmpty() || result.text in SILENCE_MARKERS) {
             throw NoSpeechException(NO_SPEECH)
         }
+        // The third guard: Whisper stuck in a loop. Its confidence is high
+        // for such output, so this is checked on the text itself.
+        if (looksLikeRepetitionLoop(result.text)) {
+            throw GarbledTranscriptException("The speech could not be made out. Please try again")
+        }
         emit(
             TranscriptEvent.Final(
                 Transcript(result.text, confidence = result.meanTokenProbability, Transcript.Source.ON_DEVICE),

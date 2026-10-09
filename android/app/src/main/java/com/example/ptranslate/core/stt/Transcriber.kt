@@ -52,6 +52,9 @@ enum class RoutingNote {
     /** Sent to the cloud: the device heard sound but no words. */
     NO_SPEECH_ON_DEVICE,
 
+    /** Sent to the cloud: the device produced repeated nonsense instead of a transcript. */
+    GARBLED_ON_DEVICE,
+
     /** Sent to the cloud: the on-device model failed to run. */
     ON_DEVICE_FAILED,
 
@@ -63,6 +66,13 @@ open class TranscriptionException(message: String, cause: Throwable? = null) : E
 
 /** Nothing was recorded: a muted or missing microphone. No transcriber can do better. */
 class SilentAudioException(message: String) : TranscriptionException(message)
+
+/**
+ * The transcriber produced text, but it is not a transcript: the same phrase
+ * over and over. Showing, translating or speaking it would be worse than
+ * saying nothing. Another transcriber might do better.
+ */
+class GarbledTranscriptException(message: String) : TranscriptionException(message)
 
 /** There was sound, but this transcriber found no words in it. Another one might. */
 class NoSpeechException(message: String) : TranscriptionException(message)

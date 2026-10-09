@@ -39,7 +39,7 @@ data class FallbackThresholds(
  * 1. There is no model on the device.
  * 2. The device is too slow, by [realTimeFactor].
  * 3. The device tried and the result is poor: low confidence, no words found,
- *    or the model failed.
+ *    repeated nonsense, or the model failed.
  *
  * The cloud is a fallback, not a requirement. Whenever it cannot be reached
  * and the device has, or can produce, a result, that result is used.
@@ -99,6 +99,7 @@ class RoutingTranscriber(
         val result = local
         val reason = when {
             localFailure is NoSpeechException -> RoutingNote.NO_SPEECH_ON_DEVICE
+            localFailure is GarbledTranscriptException -> RoutingNote.GARBLED_ON_DEVICE
             localFailure != null || result == null -> RoutingNote.ON_DEVICE_FAILED
             // No confidence figure counts as confident: there is nothing to doubt it with.
             (result.confidence ?: 1f) >= thresholds.minConfidence -> {

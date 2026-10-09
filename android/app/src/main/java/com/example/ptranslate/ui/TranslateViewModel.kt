@@ -297,6 +297,7 @@ private fun RoutingNote.explanation(): String = when (this) {
     RoutingNote.SLOW_DEVICE -> "Sent to the server: this device is too slow for the model"
     RoutingNote.LOW_CONFIDENCE -> "Sent to the server: this device was not confident in its own result"
     RoutingNote.NO_SPEECH_ON_DEVICE -> "Sent to the server: this device heard sound but found no words"
+    RoutingNote.GARBLED_ON_DEVICE -> "Sent to the server: this device could not make out the speech"
     RoutingNote.ON_DEVICE_FAILED -> "Sent to the server: the model on this device failed"
     RoutingNote.CLOUD_UNAVAILABLE -> "This device's result was kept: the server could not be reached"
 }

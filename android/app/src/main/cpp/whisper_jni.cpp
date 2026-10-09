@@ -83,11 +83,15 @@ Java_com_example_ptranslate_core_stt_WhisperContext_nativeTranscribe(
     params.translate = false;      // keep the spoken language; ML Kit translates
     params.no_context = true;      // each recording stands alone
     params.no_timestamps = true;   // not shown anywhere, and skipping them is faster
-    // By default a low-confidence result is decoded again, up to five times,
-    // at rising "temperature". On a phone that turns a bad recording into a
-    // very long wait. One pass only: a weak result is reported as weak, and
-    // the app can send the audio to the backend instead.
-    params.temperature_inc = 0.0f;
+    // When a result looks degenerate (the same token over and over, or very
+    // unlikely text), whisper.cpp decodes that segment again at a higher
+    // "temperature", which adds randomness and usually breaks the loop. The
+    // default step of 0.2 allows five retries, which on a phone can turn one
+    // bad recording into a very long wait. A step of 0.4 allows two.
+    //
+    // Zero, meaning no retries, was tried first and was a mistake: it let
+    // repetition loops ("I, I, I, I, ...") through as if they were speech.
+    params.temperature_inc = 0.4f;
     params.print_realtime = false;
     params.print_progress = false;
     params.print_timestamps = false;

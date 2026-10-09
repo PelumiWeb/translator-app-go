@@ -201,6 +201,27 @@ class RoutingTranscriberTest {
     }
 
     @Test
+    fun `a garbled device result is discarded and the cloud is asked`() {
+        device.failure = GarbledTranscriptException("The speech could not be made out. Please try again")
+
+        val all = events()
+
+        assertEquals(RoutingNote.GARBLED_ON_DEVICE, (all.last() as TranscriptEvent.Final).transcript.note)
+        // Unlike a low-confidence result, the nonsense is never shown as a draft.
+        assertEquals(0, all.count { it is TranscriptEvent.Partial })
+    }
+
+    @Test
+    fun `a garbled result with no cloud asks the user to try again`() {
+        device.failure = GarbledTranscriptException("The speech could not be made out. Please try again")
+        cloud.failure = TranscriptionException("Could not reach the server")
+
+        val error = assertThrows(GarbledTranscriptException::class.java) { events() }
+
+        assertEquals("The speech could not be made out. Please try again", error.message)
+    }
+
+    @Test
     fun `a model that fails to run falls back to the cloud`() {
         device.failure = TranscriptionException("The on-device model failed to run")
 

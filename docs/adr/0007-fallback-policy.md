@@ -32,6 +32,7 @@ manual routes stay, for demonstrations and for testing each path alone.
 | --- | --- |
 | The result is not confident | mean token probability below 0.6 |
 | Sound but no words | the model's no-speech probability above 0.6, or an empty result |
+| Repeated nonsense | the text compresses by more than 2.4 times (a repetition loop) |
 | The model failed to run | the transcriber raised an error |
 
 A recording that is silent (below about -50 dB) is rejected before any model
@@ -105,7 +106,10 @@ The two thresholds were chosen without measurements.
 
 - **0.6 for confidence** is a guess. Mean token probability is a weak signal:
   Whisper can be confidently wrong, and hesitant on a perfectly good
-  transcript of unusual words. The right value is the one that best separates
+  transcript of unusual words. This is no longer hypothetical: on 2026-10-09 a
+  recording came back as one word repeated about a hundred times with a
+  confidence of 0.87. A separate check on the text now catches that case, and
+  it is a warning against leaning on confidence for anything else. The right value is the one that best separates
   good from bad transcripts on real recordings in the languages that matter,
   and it may differ by language.
 - **1.0 for the real-time factor** means "no slower than the speech itself".

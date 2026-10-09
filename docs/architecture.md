@@ -157,6 +157,7 @@ decides per recording.
 | Device too slow | measured real-time factor (time taken / audio length) above 1.0 | before transcribing |
 | Low confidence | mean token probability of the result below 0.6 | after transcribing |
 | No words found | the model's no-speech probability above 0.6, or an empty result | after transcribing |
+| Repeated nonsense | the text is a repetition loop, measured by how far it compresses | after transcribing |
 | Model failed | the on-device transcriber raised an error | after transcribing |
 
 A silent recording is rejected before any of this and is never uploaded.

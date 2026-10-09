@@ -55,22 +55,36 @@ this is the simplest signal it does provide. Whether it separates good from bad
 transcripts well enough is checked in milestone 6, where the fallback threshold
 is set.
 
-**One decoding pass.** whisper.cpp's default is to decode a low-confidence
-result again, up to five times, at rising temperature. That is switched off
-(`temperature_inc = 0`). On a phone the retries turn a poor recording into a
-wait several times longer, and a weak result has a better remedy here: the
-backend.
+**Limited retries.** When a result looks degenerate, whisper.cpp decodes that
+segment again at a higher temperature, by default up to five times. The step
+is raised from 0.2 to 0.4 (`temperature_inc`), which allows two retries: enough
+to break most loops without turning one bad recording into a very long wait.
 
-**Silence.** Given silence, Whisper does not return an empty transcript; it
-invents a plausible sentence. Two guards in `WhisperTranscriber` report "no
-speech" instead:
+Retries were first switched off altogether, to bound latency. That was a
+mistake, corrected on 2026-10-09 after a real recording came back as
+"I, I, I, I, ..." about a hundred times, with a reported confidence of 0.87,
+and was translated and read aloud. The retry is the mechanism that catches such
+repetition loops.
 
-1. Before the model runs, a loudness check (`PcmAudio.isSilent`, root mean
-   square below about -50 dB). It costs a millisecond and catches a muted or
-   missing microphone.
-2. After the model runs, its own no-speech probability for the first segment,
-   above 0.6, the threshold OpenAI's reference implementation uses. This
-   catches audio that is loud enough but is not speech.
+**Three guards against output that is not a transcript.** Whisper does not
+fail by returning nothing; it returns something plausible-looking. Each guard
+in `WhisperTranscriber` covers a different way of doing that:
+
+1. *Silence.* Before the model runs, a loudness check (`PcmAudio.isSilent`,
+   root mean square below about -50 dB). It costs a millisecond and catches a
+   muted or missing microphone, where Whisper would otherwise invent a
+   sentence.
+2. *Sound that is not speech.* After the model runs, its own no-speech
+   probability for the first segment, above 0.6, the threshold OpenAI's
+   reference implementation uses.
+3. *Repetition loops.* The text is compressed; if it shrinks to less than
+   1/2.4 of its size it is one phrase repeated, not speech. The limit is again
+   the reference implementation's. This check is independent of the model's
+   confidence, which is high for looped output: each repeated token is, given
+   the ones before it, exactly what the model expects next.
+
+A result that fails the third guard is discarded, not shown as a draft. On the
+automatic route the recording then goes to the server.
 
 **Model.** Multilingual `base`, quantised to `q5_1`: 57 MB. On the emulator it
 transcribes an 11 second clip in under 4 seconds including loading the model.

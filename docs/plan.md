@@ -318,12 +318,23 @@ dependency and makes the app speech-to-speech.
 - Verify: `make android-install`, record with a target language other than
   the source, and listen
 
-**Checkpoint 8.2: controls**
+**Fix after 8.1** (2026-10-09)
+- A recording came back as "I, I, I, ..." repeated about a hundred times and
+  was translated and read aloud. Whisper's retry is back on, limited to two;
+  a check on the text itself now rejects repetition loops before they are
+  shown, translated or spoken; on the automatic route they go to the server
+
+**Checkpoint 8.2: controls** (deferred)
 - Stop speaking, speak again, and a switch to keep the app silent
+- Deferred on 2026-10-09: the owner asked for the speaker's own voice
+  (milestone 9) next
 
 ---
 
-## [ ] Milestone 9: Speak it in the user's own voice
+## [~] Milestone 9: Speak it in the user's own voice
+
+Next, at the owner's request (2026-10-09), ahead of milestone 7 and
+checkpoint 8.2.
 
 Added on 2026-10-07. The second step: the spoken translation sounds like the
 person who spoke. This is for every user of the app, each in their own voice,
