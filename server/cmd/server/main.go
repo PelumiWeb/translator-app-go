@@ -1,15 +1,17 @@
-// Command server runs the voice translation backend: the HTTP API and the
-// job workers, in one process.
+// Command server runs the voice translation backend: the HTTP API, the job
+// workers, or both (the default). See the -role flag.
 package main
 
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -40,7 +42,29 @@ func main() {
 	}
 }
 
+// role says which parts of the server this process runs. Running the API and
+// the workers as separate processes lets each be scaled and restarted on its
+// own; "all" keeps development to a single command.
+type role string
+
+const (
+	roleAll    role = "all"
+	roleAPI    role = "api"
+	roleWorker role = "worker"
+)
+
+func (r role) runsAPI() bool     { return r == roleAll || r == roleAPI }
+func (r role) runsWorkers() bool { return r == roleAll || r == roleWorker }
+
 func run(logger *slog.Logger) error {
+	roleFlag := flag.String("role", string(roleAll), "what to run: all, api or worker")
+	flag.Parse()
+	role := role(*roleFlag)
+	if !role.runsAPI() && !role.runsWorkers() {
+		return fmt.Errorf("unknown -role %q: want all, api or worker", *roleFlag)
+	}
+	logger = logger.With("role", string(role))
+
 	cfg := config.Load()
 
 	// ctx is cancelled on Ctrl-C or SIGTERM. Everything long-running takes
@@ -81,26 +105,56 @@ func run(logger *slog.Logger) error {
 		WordDelay:    300 * time.Millisecond,
 		FailAttempts: cfg.FakeFailAttempts,
 	}
-	// The bus connects the two halves of the process: workers record events
-	// through the store, and the store announces them to the SSE handlers.
-	bus := queue.NewBus()
-	store := queue.NewStore(pool, bus)
+	store := queue.NewStore(pool)
 
-	workers := queue.NewPool(store, transcriber, audio, logger, queue.Config{
-		Workers:       cfg.Workers,
-		PollInterval:  time.Second,
-		Lease:         cfg.JobLease,
-		ShutdownGrace: shutdownTimeout,
-		SweepInterval: cfg.SweepInterval,
-	})
-
-	// Closed when the workers have stopped, so run can wait for them.
-	workersDone := make(chan struct{})
-	go func() {
-		defer close(workersDone)
-		logger.Info("workers started", "count", cfg.Workers)
-		workers.Run(ctx)
+	// Everything started below runs until ctx is cancelled. On any way out
+	// of this function, cancel it and wait for all of it to finish.
+	var background sync.WaitGroup
+	defer func() {
+		stop()
+		background.Wait()
 	}()
+
+	// wake nudges an idle worker when a job is enqueued. With no workers in
+	// this process it does nothing, and the other process's workers find the
+	// job on their next poll, at most a second later.
+	wake := func() {}
+
+	if role.runsWorkers() {
+		workers := queue.NewPool(store, transcriber, audio, logger, queue.Config{
+			Workers:       cfg.Workers,
+			PollInterval:  time.Second,
+			Lease:         cfg.JobLease,
+			ShutdownGrace: shutdownTimeout,
+			SweepInterval: cfg.SweepInterval,
+		})
+		wake = workers.Wake
+		background.Go(func() {
+			logger.Info("workers started", "count", cfg.Workers)
+			workers.Run(ctx)
+		})
+	}
+
+	if !role.runsAPI() {
+		<-ctx.Done()
+		logger.Info("shutdown signal received")
+		background.Wait()
+		logger.Info("worker stopped cleanly")
+		return nil
+	}
+
+	// Events travel from whoever records them to this process through
+	// Postgres: the store announces each one with NOTIFY, the listener hears
+	// it and hands it to the bus, and the bus feeds the open SSE streams.
+	// The same path is used when the workers are in this process.
+	bus := queue.NewBus()
+	listener := queue.NewListener(pool, store, bus, logger)
+	background.Go(func() { listener.Run(ctx) })
+	select {
+	case <-listener.Ready(): // do not serve streams before events can be heard
+	case <-ctx.Done():
+		return nil
+	}
 
 	handlers := &api.API{
 		Logger:         logger,
@@ -109,7 +163,7 @@ func run(logger *slog.Logger) error {
 		Events:         bus,
 		Audio:          audio,
 		Models:         catalog,
-		Wake:           workers.Wake,
+		Wake:           wake,
 		Stopping:       ctx.Done(),
 		MaxUploadBytes: maxUploadBytes,
 		Heartbeat:      15 * time.Second,
@@ -136,8 +190,6 @@ func run(logger *slog.Logger) error {
 	select {
 	case err := <-serveErr:
 		// Returned before any shutdown was requested, e.g. the port is taken.
-		stop() // cancels ctx, which stops the workers
-		<-workersDone
 		return fmt.Errorf("http server: %w", err)
 	case <-ctx.Done():
 		logger.Info("shutdown signal received")
@@ -161,7 +213,7 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("http server: %w", err)
 	}
 
-	<-workersDone
+	background.Wait()
 
 	logger.Info("server stopped cleanly")
 	return nil

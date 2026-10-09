@@ -1,6 +1,8 @@
 # ADR 0002: Job events are persisted and replayed over SSE
 
-Status: accepted, 2026-10-04
+Status: accepted, 2026-10-04. The in-process delivery described here was
+replaced by Postgres `LISTEN/NOTIFY` in ADR 0006; persistence and replay are
+unchanged.
 
 ## Context
 

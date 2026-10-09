@@ -57,6 +57,15 @@ db-reset: ## Drop and recreate the dev database (deletes all local jobs)
 server-run: ## Run the Go server on :8080 (applies migrations on start)
 	cd server && go run ./cmd/server
 
+# The two halves as separate processes. Run each in its own terminal.
+.PHONY: server-run-api
+server-run-api: ## Run only the HTTP API (pair with server-run-worker)
+	cd server && go run ./cmd/server -role api
+
+.PHONY: server-run-worker
+server-run-worker: ## Run only the job workers (pair with server-run-api)
+	cd server && go run ./cmd/server -role worker
+
 .PHONY: server-run-flaky
 server-run-flaky: ## Run the server with a provider that fails each job twice, to watch retries
 	cd server && FAKE_FAIL_ATTEMPTS=2 go run ./cmd/server

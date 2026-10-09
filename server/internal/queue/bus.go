@@ -6,9 +6,9 @@ import "sync"
 // behind by before it is cut off.
 const subscriberBuffer = 64
 
-// Bus passes job events from the workers to the SSE handlers inside one
-// process. It holds nothing: the job_events table is the record, and the bus
-// only tells listeners that something new was written.
+// Bus hands job events to the SSE handlers in this process. It holds nothing:
+// the job_events table is the record, and the bus only passes on what the
+// Listener heard was written. One Bus serves all the streams of one process.
 type Bus struct {
 	mu   sync.Mutex
 	subs map[string]map[chan Event]struct{} // job id -> set of subscribers
@@ -18,8 +18,12 @@ func NewBus() *Bus {
 	return &Bus{subs: make(map[string]map[chan Event]struct{})}
 }
 
-// Subscribe returns a channel of future events for one job, and a function
-// that ends the subscription. The channel is closed when the subscription
+// Subscribe returns a channel of events for one job, and a function that ends
+// the subscription.
+//
+// The first events may be ones recorded just before the call, still on their
+// way from the database. A subscriber that also reads the job's history must
+// skip what it already has, by seq. The channel is closed when the subscription
 // ends, whichever side ends it. Calling unsubscribe more than once is fine.
 func (b *Bus) Subscribe(jobID string) (events <-chan Event, unsubscribe func()) {
 	ch := make(chan Event, subscriberBuffer)
@@ -52,6 +56,36 @@ func (b *Bus) Publish(e Event) {
 			// would leave a silent gap, so the subscription is ended
 			// instead. The client reconnects and replays from the table.
 			b.remove(e.JobID, ch)
+		}
+	}
+}
+
+// HasSubscribers reports whether anyone in this process is following the job.
+func (b *Bus) HasSubscribers(jobID string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.subs[jobID]) > 0
+}
+
+// Disconnect ends every subscription to one job. Its streams close, and the
+// clients reconnect and replay from the table. Used when an event for the job
+// could not be delivered: ending the stream is honest, skipping an event is not.
+func (b *Bus) Disconnect(jobID string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for ch := range b.subs[jobID] {
+		b.remove(jobID, ch)
+	}
+}
+
+// DisconnectAll ends every subscription, for when events may have been missed
+// for any job.
+func (b *Bus) DisconnectAll() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for jobID, subscribers := range b.subs {
+		for ch := range subscribers {
+			b.remove(jobID, ch)
 		}
 	}
 }

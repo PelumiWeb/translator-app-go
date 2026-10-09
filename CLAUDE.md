@@ -67,7 +67,7 @@ Server layout:
 ```
 cmd/server           main: wiring, config, graceful shutdown
 internal/api         HTTP handlers, SSE
-internal/queue       job store (Postgres), worker pool
+internal/queue       job store (Postgres), worker pool, event listener and bus
 internal/provider    Provider interface, fake provider
 internal/models      manifest and model file serving
 internal/storage     audio blob storage
@@ -122,6 +122,7 @@ folder in Android Studio.
 | `make db-up` / `make db-down` | start / stop Postgres, create the dev and test databases |
 | `make db-psql` | open `psql` on the dev database |
 | `make server-run` | run the Go server (applies migrations on start) |
+| `make server-run-api` / `make server-run-worker` | the API and the workers as two processes, one terminal each |
 | `make server-run-flaky` | the same, with a fake provider that fails each job twice, to watch retries |
 | `make server-test` | Go tests; queue tests need `make db-up` first |
 | `make server-test-race` | the same with the race detector, each test run 3 times |

@@ -214,10 +214,17 @@ and continues from where it left off.
 - ADR 0001 addendum
 - Verify: `make server-test-race`
 
-**Checkpoint 5.3: `LISTEN/NOTIFY` event bus**
-- Events reach SSE clients when the API and the workers are separate
-  processes; flags to run each on its own
+**Checkpoint 5.3: `LISTEN/NOTIFY` event bus** (done)
+- The store announces each event with `pg_notify` inside the transaction that
+  records it
+- `Listener`: a dedicated connection that hears announcements and feeds the
+  local bus; on a dropped connection it ends open streams, then reconnects
+- `-role all|api|worker`, and `make server-run-api` / `make server-run-worker`
+- Tests: delivery through Postgres, nothing heard from a rolled-back change,
+  recovery after the listener's connection is killed
 - ADR 0006
+- Verify: `make server-test-race`; or run `make server-run-api` and
+  `make server-run-worker` in two terminals, then `make sample-job`
 
 **Checkpoint 5.4: client reconnect and idempotent uploads**
 - The Android client reconnects a dropped stream with `Last-Event-ID`

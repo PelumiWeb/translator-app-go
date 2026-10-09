@@ -64,3 +64,62 @@ func TestBusCutsOffSubscriberThatFallsBehind(t *testing.T) {
 		t.Errorf("received %d events before the cut-off, want %d", received, subscriberBuffer)
 	}
 }
+
+func TestBusHasSubscribers(t *testing.T) {
+	bus := NewBus()
+	if bus.HasSubscribers("job") {
+		t.Error("a new bus reports subscribers")
+	}
+
+	_, unsubscribe := bus.Subscribe("job")
+	if !bus.HasSubscribers("job") || bus.HasSubscribers("other") {
+		t.Error("HasSubscribers does not match the one subscription to job")
+	}
+
+	unsubscribe()
+	if bus.HasSubscribers("job") {
+		t.Error("still reports subscribers after the last one left")
+	}
+}
+
+func TestBusDisconnectEndsOnlyThatJobsSubscriptions(t *testing.T) {
+	bus := NewBus()
+	first, unsubFirst := bus.Subscribe("job-a")
+	second, unsubSecond := bus.Subscribe("job-a")
+	other, unsubOther := bus.Subscribe("job-b")
+	defer unsubOther()
+
+	bus.Disconnect("job-a")
+
+	for name, ch := range map[string]<-chan Event{"first": first, "second": second} {
+		if _, ok := <-ch; ok {
+			t.Errorf("the %s subscription to job-a is still open", name)
+		}
+	}
+	// Unsubscribing after a disconnect must not close the channel twice.
+	unsubFirst()
+	unsubSecond()
+
+	bus.Publish(Event{JobID: "job-b", Seq: 1})
+	if got, ok := <-other; !ok || got.Seq != 1 {
+		t.Error("the subscription to job-b was disturbed")
+	}
+}
+
+func TestBusDisconnectAll(t *testing.T) {
+	bus := NewBus()
+	a, _ := bus.Subscribe("job-a")
+	b, _ := bus.Subscribe("job-b")
+
+	bus.DisconnectAll()
+
+	if _, ok := <-a; ok {
+		t.Error("job-a subscription still open")
+	}
+	if _, ok := <-b; ok {
+		t.Error("job-b subscription still open")
+	}
+	if len(bus.subs) != 0 {
+		t.Errorf("bus still tracks %d jobs", len(bus.subs))
+	}
+}

@@ -54,29 +54,21 @@ type Event struct {
 	Payload json.RawMessage
 }
 
-// Publisher is told about each event once it is safely in the database.
-type Publisher interface {
-	Publish(Event)
-}
+// eventsChannel is the Postgres NOTIFY channel on which every new event is
+// announced. See Listener.
+const eventsChannel = "job_events"
 
 type Store struct {
-	pool   *pgxpool.Pool
-	events Publisher
+	pool *pgxpool.Pool
 }
 
-// NewStore returns a store that announces every event it records on events.
-//
-// The rule throughout is "commit, then publish". An event is never announced
-// before its transaction has committed, so a listener can never hear about
-// something that is then rolled back.
-func NewStore(pool *pgxpool.Pool, events Publisher) *Store {
-	return &Store{pool: pool, events: events}
+func NewStore(pool *pgxpool.Pool) *Store {
+	return &Store{pool: pool}
 }
 
 // Enqueue adds a job and its first event, and returns the job id.
 func (s *Store) Enqueue(ctx context.Context, sourceLang, audioKey string) (string, error) {
 	var id string
-	var event Event
 	// BeginFunc commits if the function returns nil and rolls back if it
 	// returns an error, so the job and its "queued" event exist together or
 	// not at all.
@@ -90,13 +82,12 @@ func (s *Store) Enqueue(ctx context.Context, sourceLang, audioKey string) (strin
 		if err != nil {
 			return err
 		}
-		event, err = insertEvent(ctx, tx, id, EventQueued, struct{}{})
+		_, err = insertEvent(ctx, tx, id, EventQueued, struct{}{})
 		return err
 	})
 	if err != nil {
 		return "", fmt.Errorf("enqueueing job: %w", err)
 	}
-	s.events.Publish(event)
 	return id, nil
 }
 
@@ -111,7 +102,6 @@ func (s *Store) Enqueue(ctx context.Context, sourceLang, audioKey string) (strin
 // connection is held while the provider runs.
 func (s *Store) Claim(ctx context.Context, lease time.Duration) (Job, error) {
 	var job Job
-	var event Event
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
 			UPDATE jobs
@@ -132,7 +122,7 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (Job, error) {
 		if err != nil {
 			return err
 		}
-		event, err = insertEvent(ctx, tx, job.ID, EventProcessing, map[string]int{"attempt": job.Attempt})
+		_, err = insertEvent(ctx, tx, job.ID, EventProcessing, map[string]int{"attempt": job.Attempt})
 		return err
 	})
 	// UPDATE ... RETURNING that matched nothing yields no row.
@@ -142,7 +132,6 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (Job, error) {
 	if err != nil {
 		return Job{}, fmt.Errorf("claiming job: %w", err)
 	}
-	s.events.Publish(event)
 	return job, nil
 }
 
@@ -152,7 +141,6 @@ func (s *Store) AppendEvent(ctx context.Context, jobID, eventType string, payloa
 	if err != nil {
 		return Event{}, fmt.Errorf("appending %s event: %w", eventType, err)
 	}
-	s.events.Publish(event)
 	return event, nil
 }
 
@@ -227,7 +215,6 @@ func (s *Store) Release(ctx context.Context, job Job) error {
 func (s *Store) finish(ctx context.Context, job Job, update string, extra []any, eventType string, payload any) error {
 	args := append([]any{job.ID, job.Attempt}, extra...)
 
-	var event Event
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, update, args...)
 		if err != nil {
@@ -237,13 +224,12 @@ func (s *Store) finish(ctx context.Context, job Job, update string, extra []any,
 		if tag.RowsAffected() == 0 {
 			return ErrNotProcessing
 		}
-		event, err = insertEvent(ctx, tx, job.ID, eventType, payload)
+		_, err = insertEvent(ctx, tx, job.ID, eventType, payload)
 		return err
 	})
 	if err != nil {
 		return fmt.Errorf("recording %s for job %s: %w", eventType, job.ID, err)
 	}
-	s.events.Publish(event)
 	return nil
 }
 
@@ -284,7 +270,7 @@ func (s *Store) RequeueExpired(ctx context.Context) (int, error) {
 		Status string
 	}
 
-	var events []Event
+	var count int
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			UPDATE jobs
@@ -309,26 +295,22 @@ func (s *Store) RequeueExpired(ctx context.Context) (int, error) {
 		}
 
 		for _, job := range jobs {
-			var event Event
 			if job.Status == StatusQueued {
-				event, err = insertEvent(ctx, tx, job.ID, EventQueued, map[string]string{"reason": "lease_expired"})
+				_, err = insertEvent(ctx, tx, job.ID, EventQueued, map[string]string{"reason": "lease_expired"})
 			} else {
-				event, err = insertEvent(ctx, tx, job.ID, EventError, map[string]string{"message": leaseExpiredMessage})
+				_, err = insertEvent(ctx, tx, job.ID, EventError, map[string]string{"message": leaseExpiredMessage})
 			}
 			if err != nil {
 				return err
 			}
-			events = append(events, event)
 		}
+		count = len(jobs)
 		return nil
 	})
 	if err != nil {
 		return 0, fmt.Errorf("requeueing expired jobs: %w", err)
 	}
-	for _, event := range events {
-		s.events.Publish(event)
-	}
-	return len(events), nil
+	return count, nil
 }
 
 // Status returns a job's current status, or ErrJobNotFound.
@@ -365,12 +347,44 @@ func (s *Store) Events(ctx context.Context, jobID string, afterSeq int) ([]Event
 	return events, nil
 }
 
+// Event returns one event of a job, or ErrJobNotFound if there is none with
+// that seq.
+func (s *Store) Event(ctx context.Context, jobID string, seq int) (Event, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT job_id, seq, type, payload
+		FROM job_events
+		WHERE job_id = $1 AND seq = $2`,
+		jobID, seq,
+	)
+	if err != nil {
+		return Event{}, fmt.Errorf("reading event: %w", err)
+	}
+	event, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[Event])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Event{}, ErrJobNotFound
+	}
+	if err != nil {
+		return Event{}, fmt.Errorf("reading event: %w", err)
+	}
+	return event, nil
+}
+
 // querier is satisfied by both *pgxpool.Pool and pgx.Tx, so insertEvent can
 // run on its own or as part of a larger transaction.
 type querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
+// insertEvent records an event and announces it, in one statement.
+//
+// pg_notify is part of the transaction it runs in: Postgres delivers the
+// notification when that transaction commits, and never if it rolls back. So
+// a listener cannot hear about an event that does not exist, and "commit,
+// then publish" is enforced by the database instead of by careful code.
+//
+// The notification carries only "<job id> <seq>". The table is the record;
+// the notification just says where to look. That also keeps it far below
+// Postgres's 8000 byte limit for a notification, whatever the payload size.
 func insertEvent(ctx context.Context, q querier, jobID, eventType string, payload any) (Event, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -378,21 +392,25 @@ func insertEvent(ctx context.Context, q querier, jobID, eventType string, payloa
 	}
 
 	event := Event{JobID: jobID, Type: eventType}
+	var notified bool // pg_notify returns nothing; this only gives Scan a place to put it
 	// The next seq is computed in the same statement as the insert. Only
 	// one worker owns a job at a time, so two writers do not race for the
 	// same number; if they ever did, the primary key would reject one.
 	//
 	// The payload is read back because jsonb storage reformats JSON (spacing
-	// and key order). Publishing the stored form means a client sees the
-	// same bytes whether an event reaches it live or from a replay.
+	// and key order), so every reader sees the same bytes.
 	err = q.QueryRow(ctx, `
-		INSERT INTO job_events (job_id, seq, type, payload)
-		SELECT $1, COALESCE(MAX(seq), 0) + 1, $2, $3
-		FROM job_events
-		WHERE job_id = $1
-		RETURNING seq, payload`,
-		jobID, eventType, body,
-	).Scan(&event.Seq, &event.Payload)
+		WITH inserted AS (
+			INSERT INTO job_events (job_id, seq, type, payload)
+			SELECT $1, COALESCE(MAX(seq), 0) + 1, $2, $3
+			FROM job_events
+			WHERE job_id = $1
+			RETURNING job_id, seq, payload
+		)
+		SELECT seq, payload, pg_notify($4, job_id::text || ' ' || seq::text)::text IS NOT NULL
+		FROM inserted`,
+		jobID, eventType, body, eventsChannel,
+	).Scan(&event.Seq, &event.Payload, &notified)
 	if err != nil {
 		return Event{}, err
 	}

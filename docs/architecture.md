@@ -197,8 +197,9 @@ release builds do not.
 
 ## 3. Server
 
-Go, one binary that runs the HTTP API and the worker pool in the same process.
-Postgres is the only external service.
+Go, one binary. By default it runs the HTTP API and the worker pool in the
+same process; with `-role api` or `-role worker` it runs one of them, so they
+can be separate processes. Postgres is the only external service.
 
 ### 3.1 Endpoints
 
@@ -324,12 +325,17 @@ everyone else, because uncommitted changes are invisible to other connections.
 
 ### 3.4 Events and SSE
 
-The worker and the SSE handler are different goroutines, and later may be
-different processes, so events go through the database rather than straight
-from one to the other.
+The worker and the SSE handler are different goroutines and may be different
+processes, so events go through the database rather than straight from one to
+the other.
 
-1. The worker appends each event to `job_events`.
-2. It then publishes the event on an `EventBus`.
+1. Whoever records an event inserts it into `job_events` and, in the same
+   statement, announces it with `pg_notify('job_events', '<job id> <seq>')`.
+   Postgres delivers the announcement when the transaction commits.
+2. Each process that serves streams runs a `Listener` on a dedicated
+   connection. It hears every announcement, and for jobs that have a
+   subscriber in its process it loads the event and puts it on the local
+   `Bus`.
 3. The SSE handler subscribes to the bus first, then reads the job's existing
    events from the table (after `Last-Event-ID` if the client sent one), writes
    them, and then writes live events, dropping any whose `seq` it already sent.
@@ -338,10 +344,12 @@ Subscribing before reading closes the gap in which an event could be missed. It
 also covers the common case of a client connecting after the job has already
 finished, and reconnects after a dropped connection.
 
-`EventBus` starts as an in-process implementation (a map of job id to
-subscriber channels). That is correct for one server process. Milestone 5
-replaces it with Postgres `LISTEN/NOTIFY` so it works across processes; the
-interface does not change.
+If the listener loses its connection, announcements made meanwhile are gone.
+It therefore ends every open stream before reconnecting; clients reconnect and
+replay from the table. ADR 0002 and ADR 0006 have the reasoning.
+
+The server runs in one of three roles, chosen with `-role`: `all` (default),
+`api` (HTTP and the listener), or `worker` (the pool and the sweeper).
 
 ### 3.5 Provider
 

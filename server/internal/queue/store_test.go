@@ -17,7 +17,7 @@ import (
 const testLease = time.Minute
 
 func TestClaimOnEmptyQueue(t *testing.T) {
-	store := NewStore(testdb.New(t), NewBus())
+	store := NewStore(testdb.New(t))
 
 	_, err := store.Claim(context.Background(), testLease)
 	if !errors.Is(err, ErrNoJobs) {
@@ -27,7 +27,7 @@ func TestClaimOnEmptyQueue(t *testing.T) {
 
 func TestClaimMarksJobAsProcessing(t *testing.T) {
 	pool := testdb.New(t)
-	store := NewStore(pool, NewBus())
+	store := NewStore(pool)
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -63,7 +63,7 @@ func TestClaimMarksJobAsProcessing(t *testing.T) {
 // The property SKIP LOCKED exists for: many workers claiming at the same
 // time each get a different job, and every job is handed out exactly once.
 func TestClaimConcurrentWorkersNeverShareAJob(t *testing.T) {
-	store := NewStore(testdb.New(t), NewBus())
+	store := NewStore(testdb.New(t))
 	ctx := context.Background()
 
 	const jobs, workers = 60, 8
@@ -110,7 +110,7 @@ func TestClaimConcurrentWorkersNeverShareAJob(t *testing.T) {
 }
 
 func TestFinishRequiresProcessingJob(t *testing.T) {
-	store := NewStore(testdb.New(t), NewBus())
+	store := NewStore(testdb.New(t))
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -135,7 +135,7 @@ func TestFinishRequiresProcessingJob(t *testing.T) {
 
 func TestRetryDelaysTheJob(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -212,7 +212,7 @@ func expireLease(t *testing.T, db *pgxpool.Pool, id string) {
 
 func TestRequeueExpiredReturnsAbandonedJobsToTheQueue(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	ctx := context.Background()
 
 	abandoned, err := store.Enqueue(ctx, "en", "a.wav")
@@ -274,7 +274,7 @@ func TestRequeueExpiredReturnsAbandonedJobsToTheQueue(t *testing.T) {
 // A job that keeps killing its workers must not be handed out forever.
 func TestRequeueExpiredFailsAJobThatIsOutOfAttempts(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "poison.wav")
@@ -311,7 +311,7 @@ func TestRequeueExpiredFailsAJobThatIsOutOfAttempts(t *testing.T) {
 // is given to worker B, then A wakes up and tries to finish it.
 func TestAStaleWorkerCannotTouchAJobThatWasTakenOver(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -363,7 +363,7 @@ func TestAStaleWorkerCannotTouchAJobThatWasTakenOver(t *testing.T) {
 
 func TestExtendLeasePushesTheExpiryOut(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -390,7 +390,7 @@ func TestExtendLeasePushesTheExpiryOut(t *testing.T) {
 }
 
 func TestStatus(t *testing.T) {
-	store := NewStore(testdb.New(t), NewBus())
+	store := NewStore(testdb.New(t))
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -404,52 +404,6 @@ func TestStatus(t *testing.T) {
 	const unknown = "00000000-0000-0000-0000-000000000000"
 	if _, err := store.Status(ctx, unknown); !errors.Is(err, ErrJobNotFound) {
 		t.Errorf("Status of unknown job: error = %v, want ErrJobNotFound", err)
-	}
-}
-
-// Events reach the bus only after their transaction has committed.
-func TestStorePublishesRecordedEvents(t *testing.T) {
-	bus := NewBus()
-	store := NewStore(testdb.New(t), bus)
-	ctx := context.Background()
-
-	id, err := store.Enqueue(ctx, "en", "clip.wav")
-	if err != nil {
-		t.Fatalf("Enqueue: %v", err)
-	}
-	live, unsubscribe := bus.Subscribe(id)
-	defer unsubscribe()
-
-	job, err := store.Claim(ctx, testLease)
-	if err != nil {
-		t.Fatalf("Claim: %v", err)
-	}
-	if err := store.Complete(ctx, job, "hello", "en"); err != nil {
-		t.Fatalf("Complete: %v", err)
-	}
-	// A rejected change must publish nothing.
-	if err := store.Complete(ctx, job, "again", "en"); !errors.Is(err, ErrNotProcessing) {
-		t.Fatalf("second Complete error = %v, want ErrNotProcessing", err)
-	}
-	unsubscribe() // closes live, which ends the loop below
-
-	var got []Event
-	for e := range live {
-		got = append(got, e)
-	}
-	if types := eventTypes(got); len(types) != 2 || types[0] != EventProcessing || types[1] != EventDone {
-		t.Errorf("published %v, want [processing done]", types)
-	}
-
-	// What was published must be byte-for-byte what a replay returns.
-	stored, err := store.Events(ctx, id, 1)
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	for i := range got {
-		if string(got[i].Payload) != string(stored[i].Payload) {
-			t.Errorf("event %d: published payload %s, stored payload %s", got[i].Seq, got[i].Payload, stored[i].Payload)
-		}
 	}
 }
 

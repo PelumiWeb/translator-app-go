@@ -131,7 +131,7 @@ func waitForStatus(t *testing.T, db *pgxpool.Pool, id, want string) jobRow {
 
 func TestPoolProcessesJobToDone(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	audio := &fakeAudio{}
 	ctx := context.Background()
 
@@ -180,7 +180,7 @@ func TestPoolProcessesJobToDone(t *testing.T) {
 // minute would, and the job still ends up done.
 func TestPoolRetriesTemporaryFailures(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	audio := &fakeAudio{}
 	ctx := context.Background()
 
@@ -220,7 +220,7 @@ func TestPoolRetriesTemporaryFailures(t *testing.T) {
 
 func TestPoolGivesUpAfterMaxAttempts(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	audio := &fakeAudio{}
 	ctx := context.Background()
 
@@ -253,7 +253,7 @@ func TestPoolGivesUpAfterMaxAttempts(t *testing.T) {
 
 func TestPoolDoesNotRetryPermanentFailures(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -284,7 +284,7 @@ func TestPoolDoesNotRetryPermanentFailures(t *testing.T) {
 // Audio that cannot be opened will not appear on a later attempt either.
 func TestPoolDoesNotRetryWhenTheAudioIsMissing(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 
 	id, err := store.Enqueue(context.Background(), "en", "gone.wav")
 	if err != nil {
@@ -308,7 +308,7 @@ func (missingAudio) Delete(string) error { return nil }
 // A job that finishes inside the grace period is not interrupted.
 func TestPoolShutdownLetsRunningJobFinish(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 
 	started := make(chan struct{})
 	finish := make(chan struct{})
@@ -342,7 +342,7 @@ func TestPoolShutdownLetsRunningJobFinish(t *testing.T) {
 // untouched, ready for the next server start.
 func TestPoolShutdownReleasesJobAfterGrace(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	audio := &fakeAudio{}
 
 	started := make(chan struct{})
@@ -383,7 +383,7 @@ func TestPoolShutdownReleasesJobAfterGrace(t *testing.T) {
 // the test itself: it claims and then does nothing.
 func TestPoolRecoversAJobFromAWorkerThatDied(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	ctx := context.Background()
 
 	id, err := store.Enqueue(ctx, "en", "clip.wav")
@@ -413,7 +413,7 @@ func TestPoolRecoversAJobFromAWorkerThatDied(t *testing.T) {
 // the heartbeat keeps the lease alive, so the sweeper never sees it as dead.
 func TestPoolKeepsTheLeaseOfALongJobAlive(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 
 	var calls atomic.Int32
 	slow := providerFunc(func(ctx context.Context, _ func(string)) (provider.Result, error) {
@@ -449,7 +449,7 @@ func TestPoolKeepsTheLeaseOfALongJobAlive(t *testing.T) {
 // alone: no status change, no event, and the audio stays for the new owner.
 func TestPoolAbandonsAJobItNoLongerOwns(t *testing.T) {
 	db := testdb.New(t)
-	store := NewStore(db, NewBus())
+	store := NewStore(db)
 	audio := &fakeAudio{}
 	ctx := context.Background()
 
