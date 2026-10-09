@@ -48,6 +48,27 @@ class TranscriptChecksTest {
         }
     }
 
+    // "[Music]" reached the screen as a transcript before this check existed.
+    @Test
+    fun `text that is only labels for sounds has no words in it`() {
+        for (text in listOf("[Music]", "[BLANK_AUDIO]", "(applause)", " [Music] ", "[Music] [Applause]", "(wind blowing) [Music]", "[ Silence ]")) {
+            assertTrue("labels only: $text", isOnlySoundLabels(text))
+        }
+    }
+
+    @Test
+    fun `speech is kept even when it has a label or brackets in it`() {
+        for (text in listOf(
+            "Hello [laughs] there",
+            "Good morning.",
+            "[Music] Good morning everyone",
+            "It costs five dollars (about four euros).",
+            "",
+        )) {
+            assertFalse("has words: $text", isOnlySoundLabels(text))
+        }
+    }
+
     @Test
     fun `an empty transcript is not a loop`() {
         assertFalse(looksLikeRepetitionLoop(""))

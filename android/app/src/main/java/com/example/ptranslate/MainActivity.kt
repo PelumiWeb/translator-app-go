@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
-import com.example.ptranslate.ui.TranslateScreen
+import com.example.ptranslate.ui.AppRoot
 import com.example.ptranslate.ui.theme.PtranslateTheme
 
 class MainActivity : ComponentActivity() {
@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             PtranslateTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    TranslateScreen(modifier = Modifier.padding(innerPadding))
+                    AppRoot(modifier = Modifier.padding(innerPadding))
                 }
             }
         }

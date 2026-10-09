@@ -362,10 +362,20 @@ is spoken in that voice.
 - Verify: `make server-test-race`; or `make server-run`, then
   `make sample-speech`
 
-**Checkpoint 9.2: onboarding on Android**
-- A screen to record the voice sample, with what it is used for stated
-  plainly; re-record and delete
-- The sample kept in the app's private storage
+**Checkpoint 9.2: onboarding on Android** (done)
+- A "Record your voice" screen, shown on first launch: what the recording is
+  for and what happens to it, a passage to read (about 20 seconds), a timer
+  and progress while recording, then listen, record again, or keep
+- A recording under 10 seconds, or a silent one, cannot be kept, and says why
+- "Not now" uses the phone's voice and does not ask again; the main screen
+  shows whether a voice is recorded, with a button to record or change it
+- A saved voice can be replaced or deleted from the phone
+- `VoiceSampleStore`: one WAV file in the app's private files
+- `AudioPlayer`, used here to listen back and in 9.3 to play the server's
+  speech
+- JVM tests for the rules, the store and the screen's logic
+- Nothing is uploaded yet: the sample is only recorded and kept
+- Verify: `make android-install`, then tap "Record" beside "Your voice"
 
 **Checkpoint 9.3: the app speaks through the server**
 - A second `SpeechSynthesizer` that uploads the sample and the translation,
@@ -378,6 +388,9 @@ is spoken in that voice.
   voice-cloning model. Free and nothing to install; slow, shared, and liable
   to change, and the test recordings go to a public demo. For trying the flow,
   not for real users
+- The onboarding screen's description of what happens to the recording must
+  change with this: it currently says the server uses it once and deletes it,
+  which stops being the whole truth when a third party's demo receives it
 - ADR for the voice-cloning engine
 
 Later, not planned in detail:

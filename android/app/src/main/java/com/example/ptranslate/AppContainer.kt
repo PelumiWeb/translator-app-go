@@ -3,7 +3,9 @@ package com.example.ptranslate
 import android.app.Application
 import android.content.Context
 import com.example.ptranslate.core.Language
+import com.example.ptranslate.core.audio.AndroidAudioPlayer
 import com.example.ptranslate.core.audio.AndroidAudioRecorder
+import com.example.ptranslate.core.audio.AudioPlayer
 import com.example.ptranslate.core.audio.AudioRecorder
 import com.example.ptranslate.core.audio.wavToPcm
 import com.example.ptranslate.core.model.ModelInstaller
@@ -23,6 +25,10 @@ import com.example.ptranslate.core.stt.TranscriptionRoute
 import com.example.ptranslate.core.stt.WhisperLanguages
 import com.example.ptranslate.core.stt.WhisperTranscriber
 import com.example.ptranslate.core.translate.MlKitTranslator
+import com.example.ptranslate.core.voice.FileVoiceSampleStore
+import com.example.ptranslate.core.voice.SharedPreferencesVoiceSetup
+import com.example.ptranslate.core.voice.VoiceSampleStore
+import com.example.ptranslate.core.voice.VoiceSetupPreference
 import com.example.ptranslate.core.translate.Translator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +49,10 @@ import java.util.concurrent.Executors
  */
 class AppContainer(context: Context) {
     private val backend = BackendClient(BuildConfig.BACKEND_URL, OkHttpClient())
+
+    // Small settings that must outlive the app process. Declared first:
+    // properties are initialised top to bottom, and several below use it.
+    private val preferences = context.getSharedPreferences("device", Context.MODE_PRIVATE)
 
     // One thread, because a Whisper context must not be used concurrently.
     // Whisper spreads the work over several cores itself (see threads below).
@@ -80,7 +90,7 @@ class AppContainer(context: Context) {
         },
         prepare = { whisper.load() },
         transcribe = { audio -> whisper.transcribe(audio, Language.ENGLISH).collect() },
-        store = SharedPreferencesSpeedStore(context.getSharedPreferences("device", Context.MODE_PRIVATE)),
+        store = SharedPreferencesSpeedStore(preferences),
     )
     val speed: DeviceSpeed = benchmark
 
@@ -95,6 +105,11 @@ class AppContainer(context: Context) {
     }
 
     val recorder: AudioRecorder = AndroidAudioRecorder()
+    val player: AudioPlayer = AndroidAudioPlayer()
+
+    /** The recording of the user's voice, in the app's private files. */
+    val voice: VoiceSampleStore = FileVoiceSampleStore(File(context.filesDir, "voice"), Dispatchers.IO)
+    val voiceSetup: VoiceSetupPreference = SharedPreferencesVoiceSetup(preferences)
     private val translator: Translator = MlKitTranslator()
 
     /** Says translations aloud in one of the phone's own voices. */

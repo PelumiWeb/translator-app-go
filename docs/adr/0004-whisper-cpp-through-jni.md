@@ -77,6 +77,14 @@ in `WhisperTranscriber` covers a different way of doing that:
 2. *Sound that is not speech.* After the model runs, its own no-speech
    probability for the first segment, above 0.6, the threshold OpenAI's
    reference implementation uses.
+   The same guard treats a transcript made only of sound labels, such as
+   "[Music]" or "(applause)", as no speech. Whisper was trained on subtitles
+   and writes these for sounds that are not words.
+
+   whisper.cpp can be told not to write such labels (`suppress_nst`). That was
+   tried on 2026-10-09 and removed the same day: the labels are how the model
+   says "this is not speech", and with them forbidden it invented a sentence
+   for three seconds of hiss. The labels are allowed and discarded afterwards.
 3. *Repetition loops.* The text is compressed; if it shrinks to less than
    1/2.4 of its size it is one phrase repeated, not speech. The limit is again
    the reference implementation's. This check is independent of the model's

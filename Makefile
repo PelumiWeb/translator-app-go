@@ -113,6 +113,12 @@ android-test: ## Run the Android JVM unit tests
 device-proxy: ## Let the connected device reach the local server
 	adb reverse tcp:8080 tcp:8080
 
+# The emulator records silence unless told to use the Mac's microphone, and
+# it forgets that every time it starts. Run this after starting the emulator.
+.PHONY: emulator-mic
+emulator-mic: ## Let the emulator hear the Mac's microphone (needed after every emulator start)
+	adb emu avd hostmicon
+
 .PHONY: android-install
 android-install: device-proxy ## Install the debug build on the connected device and open it
 	cd android && ./gradlew :app:installDebug

@@ -41,8 +41,15 @@ import com.example.ptranslate.core.stt.TranscriptionRoute
 import com.example.ptranslate.ui.theme.PtranslateTheme
 import java.util.Locale
 
+/**
+ * @param savedVoiceMs length of the user's saved voice recording, or null if
+ *   they have not made one.
+ * @param onVoiceClick opens the screen where it is recorded or changed.
+ */
 @Composable
 fun TranslateScreen(
+    savedVoiceMs: Long?,
+    onVoiceClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: TranslateViewModel = viewModel(factory = TranslateViewModel.Factory),
 ) {
@@ -67,6 +74,8 @@ fun TranslateScreen(
         onSourceSelect = viewModel::onSourceSelected,
         onTargetSelect = viewModel::onTargetSelected,
         onDownloadModelClick = viewModel::onDownloadModelClicked,
+        savedVoiceMs = savedVoiceMs,
+        onVoiceClick = onVoiceClick,
         modifier = modifier,
     )
 }
@@ -81,6 +90,8 @@ private fun TranslateContent(
     onSourceSelect: (Language) -> Unit,
     onTargetSelect: (Language) -> Unit,
     onDownloadModelClick: () -> Unit,
+    savedVoiceMs: Long?,
+    onVoiceClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val idle = state.phase == Phase.IDLE
@@ -95,6 +106,20 @@ private fun TranslateContent(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             LanguagePicker("From", state.source, state.sourceLanguages, enabled = idle, onSelect = onSourceSelect)
             LanguagePicker("To", state.target, state.targetLanguages, enabled = idle, onSelect = onTargetSelect)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = if (savedVoiceMs == null) {
+                    "Your voice is not recorded. Translations use the phone's voice"
+                } else {
+                    "Your voice is recorded (${savedVoiceMs / 1000} s)"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onVoiceClick, enabled = idle) {
+                Text(if (savedVoiceMs == null) "Record" else "Change")
+            }
         }
         RoutePicker(state.route, enabled = idle, onSelect = onRouteSelect)
 
@@ -282,6 +307,8 @@ private fun TranslateContentPreview() {
             onSourceSelect = {},
             onTargetSelect = {},
             onDownloadModelClick = {},
+            savedVoiceMs = 21_000,
+            onVoiceClick = {},
         )
     }
 }

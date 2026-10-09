@@ -83,6 +83,12 @@ Java_com_example_ptranslate_core_stt_WhisperContext_nativeTranscribe(
     params.translate = false;      // keep the spoken language; ML Kit translates
     params.no_context = true;      // each recording stands alone
     params.no_timestamps = true;   // not shown anywhere, and skipping them is faster
+    // suppress_nst is deliberately left off. It stops the model writing
+    // labels such as "[Music]" for sounds that are not speech, which sounds
+    // desirable, but those labels are how it says "this is not speech". With
+    // them forbidden it invents a sentence instead: three seconds of hiss
+    // came back as a confident English sentence. The labels are recognised
+    // and discarded on the Kotlin side (isOnlySoundLabels).
     // When a result looks degenerate (the same token over and over, or very
     // unlikely text), whisper.cpp decodes that segment again at a higher
     // "temperature", which adds randomness and usually breaks the loop. The

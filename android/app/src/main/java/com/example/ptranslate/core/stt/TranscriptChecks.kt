@@ -41,3 +41,17 @@ internal fun compressionRatio(text: String): Float {
  */
 internal fun looksLikeRepetitionLoop(text: String): Boolean =
     compressionRatio(text) > MAX_COMPRESSION_RATIO
+
+// One or more labels in square or round brackets, and nothing else.
+private val ONLY_SOUND_LABELS = Regex("""^(\s*(\[[^\]]*]|\([^)]*\))\s*)+$""")
+
+/**
+ * Whether a transcript contains no words, only Whisper's labels for other
+ * sounds: "[Music]", "[BLANK_AUDIO]", "(applause)". The model was trained on
+ * subtitles, which are full of these, and writes them when it hears something
+ * that is not speech. They are not something the speaker said.
+ *
+ * A label inside real speech ("Hello [laughs] there") does not count: there
+ * are words to keep.
+ */
+internal fun isOnlySoundLabels(text: String): Boolean = ONLY_SOUND_LABELS.matches(text)

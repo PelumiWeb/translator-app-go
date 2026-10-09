@@ -52,7 +52,7 @@ class WhisperTranscriber(
         // The second guard, for audio that is loud enough but is not speech
         // (noise, music): the model's own no-speech estimate.
         val noSpeech = (result.noSpeechProbability ?: 0f) > NO_SPEECH_THRESHOLD
-        if (noSpeech || result.text.isEmpty() || result.text in SILENCE_MARKERS) {
+        if (noSpeech || result.text.isEmpty() || isOnlySoundLabels(result.text)) {
             throw NoSpeechException(NO_SPEECH)
         }
         // The third guard: Whisper stuck in a loop. Its confidence is high
@@ -93,8 +93,5 @@ class WhisperTranscriber(
 
         // The threshold OpenAI's reference implementation uses.
         const val NO_SPEECH_THRESHOLD = 0.6f
-
-        // What Whisper writes instead of words when it hears none.
-        val SILENCE_MARKERS = setOf("[BLANK_AUDIO]", "[ Silence ]", "(silence)")
     }
 }

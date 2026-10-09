@@ -229,6 +229,25 @@ text stays on screen with the reason; the run is not a failure. A voice that is
 still downloading on first use is retried a few times. ADR 0008 has the
 reasoning.
 
+### 2.10 The user's voice
+
+To speak translations in the user's own voice, the app needs a sample of it.
+The user records one once, by reading a passage of about 20 seconds on a
+"Record your voice" screen shown at first launch.
+
+- `VoiceSampleStore` keeps it as one WAV file in the app's private files. It
+  is not uploaded when recorded. It will be sent with each request to speak
+  (checkpoint 9.3) and the server deletes it when that job ends.
+- `VoiceSampleRules` refuses a recording that is silent or under 10 seconds,
+  with the reason in words.
+- The user can replace it or delete it at any time. Declining is remembered,
+  so the app asks once.
+- One voice per phone: there are no accounts, so the sample belongs to the
+  device. A guest's words would be spoken in the owner's voice.
+
+The app has two screens and no navigation library: `AppRoot` shows one or the
+other from a single boolean.
+
 ## 3. Server
 
 Go, one binary. By default it runs the HTTP API and the worker pool in the

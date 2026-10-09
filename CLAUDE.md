@@ -50,12 +50,13 @@ Makefile   common commands for both sides
 Android package layout (inside `:app`):
 
 ```
-core/audio       microphone capture, 16 kHz mono PCM, WAV encoding
+core/audio       microphone capture and playback, 16 kHz mono PCM, WAV
 core/stt         Transcriber interface and its implementations
 core/translate   Translator interface and its implementations
 core/model       model manifest, download with resume, SHA-256 check
 core/net         backend client: upload, SSE
 core/speech      SpeechSynthesizer interface and its implementations
+core/voice       the user's recorded voice sample: storage and rules
 core/pipeline    transcribe -> translate -> speak, the reusable entry point
 ui/              Compose screens and ViewModels
 ```
@@ -135,6 +136,7 @@ folder in Android Studio.
 | `make android-test` | JVM unit tests |
 | `make android-install` | install the debug build on the connected device and open it |
 | `make device-proxy` | `adb reverse tcp:8080 tcp:8080`; run by `android-install` |
+| `make emulator-mic` | let the emulator hear the Mac's microphone; it forgets on every start |
 | `make android-device-test` | tests that need a device (native code); uninstalls the app afterwards |
 | `make model-download` | download the Whisper model into `server/data/models/` (57 MB, git-ignored) |
 | `make android-push-model` | copy the model to the device for the device tests; the app itself downloads its model from the server |
