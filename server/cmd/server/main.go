@@ -89,8 +89,9 @@ func run(logger *slog.Logger) error {
 	workers := queue.NewPool(store, transcriber, audio, logger, queue.Config{
 		Workers:       cfg.Workers,
 		PollInterval:  time.Second,
-		Lease:         2 * time.Minute,
+		Lease:         cfg.JobLease,
 		ShutdownGrace: shutdownTimeout,
+		SweepInterval: cfg.SweepInterval,
 	})
 
 	// Closed when the workers have stopped, so run can wait for them.

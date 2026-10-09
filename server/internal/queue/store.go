@@ -156,40 +156,51 @@ func (s *Store) AppendEvent(ctx context.Context, jobID, eventType string, payloa
 	return event, nil
 }
 
-// Complete marks a processing job as done and stores its transcript.
-func (s *Store) Complete(ctx context.Context, jobID, text, language string) error {
-	return s.finish(ctx, jobID, `
+// The methods below end or extend one attempt at a job. Each takes the Job
+// that Claim returned and only acts if that attempt still owns the job:
+//
+//	WHERE id = $1 AND status = 'processing' AND attempts = $2
+//
+// The attempt number works as a fencing token. If a worker stalls, its lease
+// runs out, and the job is handed to another worker, the job's attempts
+// column moves on. When the first worker wakes up and tries to write, its old
+// number no longer matches and nothing happens. Checking the status alone
+// would not be enough: the job is 'processing' again, for someone else.
+
+// Complete marks the job as done and stores its transcript.
+func (s *Store) Complete(ctx context.Context, job Job, text, language string) error {
+	return s.finish(ctx, job, `
 		UPDATE jobs
-		SET status = 'done', result_text = $2, locked_until = NULL, updated_at = now()
-		WHERE id = $1 AND status = 'processing'`,
-		[]any{jobID, text},
+		SET status = 'done', result_text = $3, locked_until = NULL, updated_at = now()
+		WHERE id = $1 AND status = 'processing' AND attempts = $2`,
+		[]any{text},
 		EventDone, map[string]string{"text": text, "language": language},
 	)
 }
 
-// Fail marks a processing job as failed for good.
-func (s *Store) Fail(ctx context.Context, jobID, message string) error {
-	return s.finish(ctx, jobID, `
+// Fail marks the job as failed for good.
+func (s *Store) Fail(ctx context.Context, job Job, message string) error {
+	return s.finish(ctx, job, `
 		UPDATE jobs
-		SET status = 'failed', last_error = $2, locked_until = NULL, updated_at = now()
-		WHERE id = $1 AND status = 'processing'`,
-		[]any{jobID, message},
+		SET status = 'failed', last_error = $3, locked_until = NULL, updated_at = now()
+		WHERE id = $1 AND status = 'processing' AND attempts = $2`,
+		[]any{message},
 		EventError, map[string]string{"message": message},
 	)
 }
 
-// Retry puts a processing job back in the queue to run again after delay.
-// The attempt it just used still counts.
+// Retry puts the job back in the queue to run again after delay. The attempt
+// it just used still counts.
 //
 // The event is "queued", not "error": to a client following the job, "error"
 // means it is over, and this job is not.
-func (s *Store) Retry(ctx context.Context, jobID, message string, delay time.Duration) error {
-	return s.finish(ctx, jobID, `
+func (s *Store) Retry(ctx context.Context, job Job, message string, delay time.Duration) error {
+	return s.finish(ctx, job, `
 		UPDATE jobs
-		SET status = 'queued', run_at = now() + $3::interval, last_error = $2,
+		SET status = 'queued', run_at = now() + $4::interval, last_error = $3,
 		    locked_until = NULL, updated_at = now()
-		WHERE id = $1 AND status = 'processing'`,
-		[]any{jobID, message, delay},
+		WHERE id = $1 AND status = 'processing' AND attempts = $2`,
+		[]any{message, delay},
 		EventQueued, map[string]any{
 			"reason":      "retry",
 			"error":       message,
@@ -198,39 +209,126 @@ func (s *Store) Retry(ctx context.Context, jobID, message string, delay time.Dur
 	)
 }
 
-// Release puts a processing job back in the queue without counting the
-// attempt. Used when the server shuts down in the middle of a job.
-func (s *Store) Release(ctx context.Context, jobID string) error {
-	return s.finish(ctx, jobID, `
+// Release puts the job back in the queue without counting the attempt. Used
+// when the server shuts down in the middle of a job.
+func (s *Store) Release(ctx context.Context, job Job) error {
+	return s.finish(ctx, job, `
 		UPDATE jobs
 		SET status = 'queued', attempts = attempts - 1, locked_until = NULL, updated_at = now()
-		WHERE id = $1 AND status = 'processing'`,
-		[]any{jobID},
+		WHERE id = $1 AND status = 'processing' AND attempts = $2`,
+		nil,
 		EventQueued, map[string]string{"reason": "requeued"},
 	)
 }
 
-// finish runs a status change and records its event in one transaction.
-func (s *Store) finish(ctx context.Context, jobID, update string, args []any, eventType string, payload any) error {
+// finish runs a status change and records its event in one transaction. The
+// update's first two parameters are always the job id and the attempt; extra
+// holds the rest, from $3 on.
+func (s *Store) finish(ctx context.Context, job Job, update string, extra []any, eventType string, payload any) error {
+	args := append([]any{job.ID, job.Attempt}, extra...)
+
 	var event Event
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, update, args...)
 		if err != nil {
 			return err
 		}
-		// The WHERE clause requires status = 'processing'. No row changed
-		// means this worker no longer owns the job.
+		// No row changed means this attempt no longer owns the job.
 		if tag.RowsAffected() == 0 {
 			return ErrNotProcessing
 		}
-		event, err = insertEvent(ctx, tx, jobID, eventType, payload)
+		event, err = insertEvent(ctx, tx, job.ID, eventType, payload)
 		return err
 	})
 	if err != nil {
-		return fmt.Errorf("recording %s for job %s: %w", eventType, jobID, err)
+		return fmt.Errorf("recording %s for job %s: %w", eventType, job.ID, err)
 	}
 	s.events.Publish(event)
 	return nil
+}
+
+// ExtendLease pushes the job's lease out to lease from now. A worker calls it
+// regularly while it works, as a heartbeat: "still here, still on it". It
+// returns ErrNotProcessing if this attempt no longer owns the job.
+func (s *Store) ExtendLease(ctx context.Context, job Job, lease time.Duration) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE jobs
+		SET locked_until = now() + $3::interval, updated_at = now()
+		WHERE id = $1 AND status = 'processing' AND attempts = $2`,
+		job.ID, job.Attempt, lease,
+	)
+	if err != nil {
+		return fmt.Errorf("extending lease of job %s: %w", job.ID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotProcessing
+	}
+	return nil
+}
+
+// leaseExpiredMessage is stored as the job's last_error when its worker
+// went silent.
+const leaseExpiredMessage = "the worker stopped before finishing the job"
+
+// RequeueExpired finds jobs whose worker has stopped renewing its lease,
+// which means it crashed or hung, and puts them back in the queue. It
+// returns how many jobs it touched.
+//
+// The lost attempt counts. Otherwise a job that crashes every worker that
+// touches it would be handed out forever; this way it fails after
+// max_attempts like any other.
+func (s *Store) RequeueExpired(ctx context.Context) (int, error) {
+	// One row of the UPDATE's RETURNING clause.
+	type expired struct {
+		ID     string
+		Status string
+	}
+
+	var events []Event
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			UPDATE jobs
+			SET status = CASE WHEN attempts < max_attempts THEN 'queued' ELSE 'failed' END,
+			    run_at = now(),
+			    last_error = $1,
+			    locked_until = NULL,
+			    updated_at = now()
+			WHERE status = 'processing' AND locked_until < now()
+			RETURNING id, status`,
+			leaseExpiredMessage,
+		)
+		if err != nil {
+			return err
+		}
+		// CollectRows reads every row and closes the result. That has to
+		// happen before the inserts below: a connection can only run one
+		// query at a time.
+		jobs, err := pgx.CollectRows(rows, pgx.RowToStructByPos[expired])
+		if err != nil {
+			return err
+		}
+
+		for _, job := range jobs {
+			var event Event
+			if job.Status == StatusQueued {
+				event, err = insertEvent(ctx, tx, job.ID, EventQueued, map[string]string{"reason": "lease_expired"})
+			} else {
+				event, err = insertEvent(ctx, tx, job.ID, EventError, map[string]string{"message": leaseExpiredMessage})
+			}
+			if err != nil {
+				return err
+			}
+			events = append(events, event)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("requeueing expired jobs: %w", err)
+	}
+	for _, event := range events {
+		s.events.Publish(event)
+	}
+	return len(events), nil
 }
 
 // Status returns a job's current status, or ErrJobNotFound.

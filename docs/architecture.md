@@ -311,8 +311,12 @@ everyone else, because uncommitted changes are invisible to other connections.
   with jitter (2 s, 4 s, 8 s ... capped at a minute, each moved by up to 20%).
   The retry is recorded as a `queued` event carrying the error and the delay.
   Out of attempts, or a permanent error: `failed`, and an `error` event.
-- **Crashed workers**: a job whose `locked_until` has passed is put back to
-  `queued` by a periodic sweep.
+- **Crashed workers**: a running worker renews its lease as a heartbeat. A
+  job whose lease has run out therefore has no live worker, and a periodic
+  sweep puts it back to `queued`. The lost attempt counts.
+- **Stale workers**: every write a worker makes requires the attempt number
+  it claimed (`AND attempts = $2`). A worker that stalled and lost its job to
+  another cannot overwrite it.
 - **Graceful shutdown**: on SIGINT or SIGTERM, stop accepting HTTP requests,
   stop claiming jobs, let in-flight jobs finish for up to 30 seconds, then
   cancel their contexts. A cancelled job is released back to `queued` without
@@ -367,7 +371,7 @@ implementation. Audio is deleted when its job reaches `done` or `failed`.
 ### 3.7 Configuration and logging
 
 Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
-`WORKERS`, `AUDIO_DIR`, `MODELS_DIR`). Structured logs with `log/slog`, with
+`WORKERS`, `AUDIO_DIR`, `MODELS_DIR`, `JOB_LEASE`, `SWEEP_INTERVAL`). Structured logs with `log/slog`, with
 the job id on every line that concerns a job.
 
 ## 4. Testing

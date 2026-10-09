@@ -201,9 +201,18 @@ and continues from where it left off.
 - Verify: `make server-test`; or `make server-run-flaky`, then
   `make sample-job` in another terminal
 
-**Checkpoint 5.2: lease expiry sweep**
-- A job left in `processing` by a worker that died is put back in the queue
-  once its lease has run out
+**Checkpoint 5.2: lease expiry sweep** (done)
+- Heartbeat: a worker renews its lease every third of its length while a job
+  runs, so a long job is not mistaken for a dead worker
+- Sweeper: jobs whose lease has run out go back to `queued`, or to `failed`
+  if they are out of attempts
+- Fencing: every write by a worker requires the attempt number it claimed, so
+  a worker that stalled and lost its job cannot overwrite the new owner
+- `JOB_LEASE` and `SWEEP_INTERVAL` settings
+- Tests: recovery from a dead worker, a long job keeps its lease, a stale
+  worker is refused on every kind of write and stops quietly
+- ADR 0001 addendum
+- Verify: `make server-test-race`
 
 **Checkpoint 5.3: `LISTEN/NOTIFY` event bus**
 - Events reach SSE clients when the API and the workers are separate

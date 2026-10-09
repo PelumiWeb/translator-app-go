@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
@@ -12,6 +13,11 @@ type Config struct {
 	AudioDir    string
 	ModelsDir   string
 	Workers     int
+
+	// JobLease is how long a worker may go without a heartbeat before its
+	// job is given to another. SweepInterval is how often that is checked.
+	JobLease      time.Duration
+	SweepInterval time.Duration
 
 	// FakeFailAttempts makes the fake provider fail the first N attempts of
 	// every job, to watch retries happen. 0 in normal use.
@@ -30,6 +36,9 @@ func Load() Config {
 		ModelsDir:   env("MODELS_DIR", "data/models"),
 		Workers:     envInt("WORKERS", 4),
 
+		JobLease:      envDuration("JOB_LEASE", 2*time.Minute),
+		SweepInterval: envDuration("SWEEP_INTERVAL", 30*time.Second),
+
 		FakeFailAttempts: envInt("FAKE_FAIL_ATTEMPTS", 0),
 	}
 }
@@ -40,6 +49,15 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+// envDuration reads a value such as "30s" or "2m".
+func envDuration(key string, fallback time.Duration) time.Duration {
+	d, err := time.ParseDuration(os.Getenv(key))
+	if err != nil || d <= 0 {
+		return fallback
+	}
+	return d
 }
 
 func env(key, fallback string) string {

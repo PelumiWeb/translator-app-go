@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/PelumiWeb/translator-app-go/server/internal/testdb"
 )
 
@@ -117,7 +119,7 @@ func TestFinishRequiresProcessingJob(t *testing.T) {
 	}
 
 	// Still queued: nobody claimed it, so nobody may complete it.
-	if err := store.Complete(ctx, id, "text", "en"); !errors.Is(err, ErrNotProcessing) {
+	if err := store.Complete(ctx, Job{ID: id, Attempt: 1}, "text", "en"); !errors.Is(err, ErrNotProcessing) {
 		t.Errorf("Complete error = %v, want ErrNotProcessing", err)
 	}
 
@@ -140,11 +142,12 @@ func TestRetryDelaysTheJob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
-	if _, err := store.Claim(ctx, testLease); err != nil {
+	claimed, err := store.Claim(ctx, testLease)
+	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
 
-	if err := store.Retry(ctx, id, "provider timed out", time.Hour); err != nil {
+	if err := store.Retry(ctx, claimed, "provider timed out", time.Hour); err != nil {
 		t.Fatalf("Retry: %v", err)
 	}
 
@@ -198,6 +201,194 @@ func TestRetryDelaysTheJob(t *testing.T) {
 	}
 }
 
+// expireLease makes a claimed job look as if its worker went silent long ago.
+func expireLease(t *testing.T, db *pgxpool.Pool, id string) {
+	t.Helper()
+	_, err := db.Exec(context.Background(), "UPDATE jobs SET locked_until = now() - interval '1 second' WHERE id = $1", id)
+	if err != nil {
+		t.Fatalf("expiring lease: %v", err)
+	}
+}
+
+func TestRequeueExpiredReturnsAbandonedJobsToTheQueue(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+	ctx := context.Background()
+
+	abandoned, err := store.Enqueue(ctx, "en", "a.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if _, err := store.Claim(ctx, testLease); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	expireLease(t, db, abandoned)
+
+	// A second job whose worker is alive: its lease has not run out.
+	healthy, err := store.Enqueue(ctx, "en", "b.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if _, err := store.Claim(ctx, testLease); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	n, err := store.RequeueExpired(ctx)
+	if err != nil {
+		t.Fatalf("RequeueExpired: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("requeued %d jobs, want 1", n)
+	}
+	if status, _ := store.Status(ctx, healthy); status != StatusProcessing {
+		t.Errorf("the healthy job is now %q, want it left processing", status)
+	}
+
+	// The abandoned job can be claimed again, as attempt 2.
+	job, err := store.Claim(ctx, testLease)
+	if err != nil {
+		t.Fatalf("Claim after requeue: %v", err)
+	}
+	if job.ID != abandoned || job.Attempt != 2 {
+		t.Errorf("claimed %s attempt %d, want %s attempt 2", job.ID, job.Attempt, abandoned)
+	}
+
+	events, err := store.Events(ctx, abandoned, 0)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	want := []string{"queued", "processing", "queued", "processing"}
+	if got := eventTypes(events); !slices.Equal(got, want) {
+		t.Errorf("event types = %v, want %v", got, want)
+	}
+	if got := string(events[2].Payload); got != `{"reason": "lease_expired"}` {
+		t.Errorf("requeue event payload = %s", got)
+	}
+
+	// Running it again finds nothing left to do.
+	if n, err := store.RequeueExpired(ctx); err != nil || n != 0 {
+		t.Errorf("second RequeueExpired = %d, %v; want 0, nil", n, err)
+	}
+}
+
+// A job that keeps killing its workers must not be handed out forever.
+func TestRequeueExpiredFailsAJobThatIsOutOfAttempts(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+	ctx := context.Background()
+
+	id, err := store.Enqueue(ctx, "en", "poison.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	// Three workers in a row take it and die: the default max_attempts.
+	for attempt := 1; attempt <= 3; attempt++ {
+		if _, err := store.Claim(ctx, testLease); err != nil {
+			t.Fatalf("Claim %d: %v", attempt, err)
+		}
+		expireLease(t, db, id)
+		if _, err := store.RequeueExpired(ctx); err != nil {
+			t.Fatalf("RequeueExpired %d: %v", attempt, err)
+		}
+	}
+
+	if status, _ := store.Status(ctx, id); status != StatusFailed {
+		t.Errorf("status = %q, want failed", status)
+	}
+	if _, err := store.Claim(ctx, testLease); !errors.Is(err, ErrNoJobs) {
+		t.Errorf("a failed job was handed out again: %v", err)
+	}
+	events, err := store.Events(ctx, id, 0)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	if last := events[len(events)-1]; last.Type != EventError {
+		t.Errorf("last event = %s, want error", last.Type)
+	}
+}
+
+// The scenario the attempt number guards against: worker A stalls, the job
+// is given to worker B, then A wakes up and tries to finish it.
+func TestAStaleWorkerCannotTouchAJobThatWasTakenOver(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+	ctx := context.Background()
+
+	id, err := store.Enqueue(ctx, "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	workerA, err := store.Claim(ctx, testLease)
+	if err != nil {
+		t.Fatalf("Claim A: %v", err)
+	}
+	expireLease(t, db, id)
+	if _, err := store.RequeueExpired(ctx); err != nil {
+		t.Fatalf("RequeueExpired: %v", err)
+	}
+	workerB, err := store.Claim(ctx, testLease)
+	if err != nil {
+		t.Fatalf("Claim B: %v", err)
+	}
+
+	// Every way A could write is refused.
+	stale := map[string]error{
+		"Complete":    store.Complete(ctx, workerA, "A's stale transcript", "en"),
+		"Fail":        store.Fail(ctx, workerA, "A gave up"),
+		"Retry":       store.Retry(ctx, workerA, "A wants a retry", time.Second),
+		"Release":     store.Release(ctx, workerA),
+		"ExtendLease": store.ExtendLease(ctx, workerA, testLease),
+	}
+	for name, err := range stale {
+		if !errors.Is(err, ErrNotProcessing) {
+			t.Errorf("stale worker's %s: error = %v, want ErrNotProcessing", name, err)
+		}
+	}
+
+	// B is unaffected and finishes normally.
+	if err := store.ExtendLease(ctx, workerB, testLease); err != nil {
+		t.Errorf("B's ExtendLease: %v", err)
+	}
+	if err := store.Complete(ctx, workerB, "B's transcript", "en"); err != nil {
+		t.Fatalf("B's Complete: %v", err)
+	}
+	var result string
+	if err := db.QueryRow(ctx, "SELECT result_text FROM jobs WHERE id = $1", id).Scan(&result); err != nil {
+		t.Fatalf("reading result: %v", err)
+	}
+	if result != "B's transcript" {
+		t.Errorf("result = %q, want B's", result)
+	}
+}
+
+func TestExtendLeasePushesTheExpiryOut(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+	ctx := context.Background()
+
+	id, err := store.Enqueue(ctx, "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	job, err := store.Claim(ctx, time.Second)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+
+	if err := store.ExtendLease(ctx, job, time.Hour); err != nil {
+		t.Fatalf("ExtendLease: %v", err)
+	}
+
+	var farOff bool
+	err = db.QueryRow(ctx, "SELECT locked_until > now() + interval '59 minutes' FROM jobs WHERE id = $1", id).Scan(&farOff)
+	if err != nil {
+		t.Fatalf("reading lease: %v", err)
+	}
+	if !farOff {
+		t.Error("the lease was not extended to about an hour from now")
+	}
+}
+
 func TestStatus(t *testing.T) {
 	store := NewStore(testdb.New(t), NewBus())
 	ctx := context.Background()
@@ -229,14 +420,15 @@ func TestStorePublishesRecordedEvents(t *testing.T) {
 	live, unsubscribe := bus.Subscribe(id)
 	defer unsubscribe()
 
-	if _, err := store.Claim(ctx, testLease); err != nil {
+	job, err := store.Claim(ctx, testLease)
+	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
-	if err := store.Complete(ctx, id, "hello", "en"); err != nil {
+	if err := store.Complete(ctx, job, "hello", "en"); err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
 	// A rejected change must publish nothing.
-	if err := store.Complete(ctx, id, "again", "en"); !errors.Is(err, ErrNotProcessing) {
+	if err := store.Complete(ctx, job, "again", "en"); !errors.Is(err, ErrNotProcessing) {
 		t.Fatalf("second Complete error = %v, want ErrNotProcessing", err)
 	}
 	unsubscribe() // closes live, which ends the loop below

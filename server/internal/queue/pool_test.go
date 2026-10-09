@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -56,14 +57,18 @@ func (a *fakeAudio) deletedKeys() []string {
 // it and waits for Run to return.
 func startPool(t *testing.T, store *Store, p provider.Provider, audio AudioStore, grace time.Duration) (stop func()) {
 	t.Helper()
-	pool := NewPool(store, p, audio, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{
-		Workers:       2,
-		PollInterval:  10 * time.Millisecond,
-		Lease:         testLease,
-		ShutdownGrace: grace,
-		// Retries almost at once, so tests of retrying finish in milliseconds.
-		Backoff: func(int) time.Duration { return 5 * time.Millisecond },
-	})
+	return startPoolWith(t, store, p, audio, Config{Lease: testLease, ShutdownGrace: grace})
+}
+
+// startPoolWith is startPool for tests that need their own lease or sweep
+// timing. It fills in the settings every test shares.
+func startPoolWith(t *testing.T, store *Store, p provider.Provider, audio AudioStore, cfg Config) (stop func()) {
+	t.Helper()
+	cfg.Workers = 2
+	cfg.PollInterval = 10 * time.Millisecond
+	// Retries almost at once, so tests of retrying finish in milliseconds.
+	cfg.Backoff = func(int) time.Duration { return 5 * time.Millisecond }
+	pool := NewPool(store, p, audio, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan struct{})
@@ -371,5 +376,128 @@ func TestPoolShutdownReleasesJobAfterGrace(t *testing.T) {
 	wantTypes := []string{"queued", "processing", "queued"}
 	if got := eventTypes(events); !slices.Equal(got, wantTypes) {
 		t.Errorf("event types = %v, want %v", got, wantTypes)
+	}
+}
+
+// A worker claims a job and is never heard from again. Here that worker is
+// the test itself: it claims and then does nothing.
+func TestPoolRecoversAJobFromAWorkerThatDied(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+	ctx := context.Background()
+
+	id, err := store.Enqueue(ctx, "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if _, err := store.Claim(ctx, 50*time.Millisecond); err != nil {
+		t.Fatalf("Claim by the worker that will die: %v", err)
+	}
+
+	startPoolWith(t, store, fake.Provider{Text: "rescued"}, &fakeAudio{}, Config{
+		Lease:         testLease,
+		ShutdownGrace: time.Second,
+		SweepInterval: 20 * time.Millisecond,
+	})
+
+	row := waitForStatus(t, db, id, "done")
+	if row.Attempts != 2 {
+		t.Errorf("attempts = %d, want 2: the lost attempt and the rescue", row.Attempts)
+	}
+	if row.ResultText == nil || *row.ResultText != "rescued" {
+		t.Errorf("result_text = %v", row.ResultText)
+	}
+}
+
+// A job that takes several times longer than the lease must still run once:
+// the heartbeat keeps the lease alive, so the sweeper never sees it as dead.
+func TestPoolKeepsTheLeaseOfALongJobAlive(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+
+	var calls atomic.Int32
+	slow := providerFunc(func(ctx context.Context, _ func(string)) (provider.Result, error) {
+		calls.Add(1)
+		select {
+		case <-time.After(600 * time.Millisecond): // four leases long
+			return provider.Result{Text: "slow but steady", Language: "en"}, nil
+		case <-ctx.Done():
+			return provider.Result{}, ctx.Err()
+		}
+	})
+
+	id, err := store.Enqueue(context.Background(), "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	startPoolWith(t, store, slow, &fakeAudio{}, Config{
+		Lease:         150 * time.Millisecond,
+		ShutdownGrace: time.Second,
+		SweepInterval: 20 * time.Millisecond,
+	})
+
+	row := waitForStatus(t, db, id, "done")
+	if row.Attempts != 1 {
+		t.Errorf("attempts = %d, want 1: the job was taken away from a live worker", row.Attempts)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("the provider ran %d times, want 1", got)
+	}
+}
+
+// If the job has been given to someone else, the worker stops and leaves it
+// alone: no status change, no event, and the audio stays for the new owner.
+func TestPoolAbandonsAJobItNoLongerOwns(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db, NewBus())
+	audio := &fakeAudio{}
+	ctx := context.Background()
+
+	started := make(chan struct{})
+	cancelled := make(chan struct{})
+	stuck := providerFunc(func(ctx context.Context, _ func(string)) (provider.Result, error) {
+		close(started)
+		<-ctx.Done()
+		close(cancelled)
+		return provider.Result{}, ctx.Err()
+	})
+
+	id, err := store.Enqueue(ctx, "en", "clip.wav")
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	startPoolWith(t, store, stuck, audio, Config{
+		Lease:         90 * time.Millisecond, // heartbeat every 30 ms
+		ShutdownGrace: time.Second,
+		SweepInterval: time.Hour, // keep the sweeper out of this test
+	})
+	<-started
+
+	// Another worker takes the job over: same effect as an expired lease
+	// followed by a new claim, done directly so the pool cannot claim it.
+	if _, err := db.Exec(ctx, "UPDATE jobs SET attempts = attempts + 1 WHERE id = $1", id); err != nil {
+		t.Fatalf("simulating a takeover: %v", err)
+	}
+
+	select {
+	case <-cancelled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the worker kept running a job it no longer owns")
+	}
+	time.Sleep(50 * time.Millisecond) // time for a wrong write to happen, if there is one
+
+	row := readJob(t, db, id)
+	if row.Status != "processing" || row.Attempts != 2 {
+		t.Errorf("job = %+v; want it untouched: processing, attempts 2", row)
+	}
+	events, err := store.Events(ctx, id, 0)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	if got := eventTypes(events); !slices.Equal(got, []string{"queued", "processing"}) {
+		t.Errorf("event types = %v; the stale worker must add none", got)
+	}
+	if got := audio.deletedKeys(); len(got) != 0 {
+		t.Errorf("deleted audio = %v; it belongs to the new owner", got)
 	}
 }

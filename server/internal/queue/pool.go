@@ -23,6 +23,10 @@ type Config struct {
 	Lease         time.Duration // how long a claim is valid
 	ShutdownGrace time.Duration // how long running jobs get to finish on shutdown
 
+	// SweepInterval is how often to look for jobs whose worker has died.
+	// Zero means 30 seconds.
+	SweepInterval time.Duration
+
 	// Backoff says how long to wait before retrying after the given attempt.
 	// Nil means ExponentialBackoff(2s, 1m). Tests pass a short fixed delay.
 	Backoff func(attempt int) time.Duration
@@ -41,6 +45,12 @@ type Pool struct {
 func NewPool(store *Store, p provider.Provider, audio AudioStore, logger *slog.Logger, cfg Config) *Pool {
 	if cfg.Backoff == nil {
 		cfg.Backoff = ExponentialBackoff(2*time.Second, time.Minute)
+	}
+	if cfg.Lease <= 0 {
+		cfg.Lease = 2 * time.Minute
+	}
+	if cfg.SweepInterval <= 0 {
+		cfg.SweepInterval = 30 * time.Second
 	}
 	return &Pool{
 		store:    store,
@@ -81,6 +91,12 @@ func (p *Pool) Run(ctx context.Context) {
 		wg.Go(func() { p.work(ctx, jobCtx, id) })
 	}
 
+	// The sweeper stops as soon as shutdown begins; it has its own
+	// WaitGroup so Run can wait for it without mixing it up with the workers.
+	var sweeper sync.WaitGroup
+	sweeper.Go(func() { p.sweep(ctx) })
+	defer sweeper.Wait()
+
 	// wg.Wait cannot be used in a select, so a goroutine turns "all workers
 	// finished" into a channel that can.
 	idle := make(chan struct{})
@@ -96,6 +112,79 @@ func (p *Pool) Run(ctx context.Context) {
 		p.logger.Warn("shutdown grace period over, cancelling running jobs")
 		cancelJobs()
 		<-idle
+	}
+}
+
+// sweep periodically returns jobs to the queue whose worker has gone silent.
+// Every server process runs one. Several running at once is harmless: the
+// database lets only one of them change a given row.
+func (p *Pool) sweep(ctx context.Context) {
+	ticker := time.NewTicker(p.cfg.SweepInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n, err := p.store.RequeueExpired(ctx)
+			if err != nil {
+				if ctx.Err() == nil { // not just the shutdown interrupting it
+					p.logger.Error("sweeping expired leases", "error", err)
+				}
+				continue
+			}
+			if n > 0 {
+				p.logger.Warn("recovered jobs from workers that stopped", "count", n)
+				p.Wake()
+			}
+		}
+	}
+}
+
+// errLeaseLost is the reason a job's context is cancelled when its lease
+// could not be renewed because another worker now owns the job.
+var errLeaseLost = errors.New("queue: lease lost to another worker")
+
+// keepLease renews the job's lease in the background for as long as the job
+// runs. Without it, any job slower than the lease would look abandoned and be
+// handed to a second worker while the first is still on it.
+//
+// If the lease turns out to be lost anyway, it cancels the job through lost.
+// The returned function stops the renewing and waits for it to end.
+func (p *Pool) keepLease(ctx context.Context, lost context.CancelCauseFunc, logger *slog.Logger, job Job) (stop func()) {
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+
+	go func() {
+		defer close(stopped)
+		// Three chances to renew before the lease runs out, so one failed
+		// database call does not cost the job.
+		ticker := time.NewTicker(p.cfg.Lease / 3)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				err := p.store.ExtendLease(ctx, job, p.cfg.Lease)
+				if errors.Is(err, ErrNotProcessing) {
+					lost(errLeaseLost)
+					return
+				}
+				if err != nil && ctx.Err() == nil {
+					logger.Warn("renewing lease", "error", err)
+				}
+			}
+		}
+	}()
+
+	return func() {
+		close(done)
+		<-stopped
 	}
 }
 
@@ -130,7 +219,23 @@ func (p *Pool) work(ctx, jobCtx context.Context, id int) {
 
 func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 	logger.Info("job started", "attempt", job.Attempt)
-	result, err := p.transcribe(ctx, logger, job)
+
+	// workCtx is cancelled like ctx (shutdown), and also if the lease is
+	// lost. WithCancelCause records which, so the two can be told apart.
+	workCtx, cancelWork := context.WithCancelCause(ctx)
+	defer cancelWork(nil)
+	stopHeartbeat := p.keepLease(workCtx, cancelWork, logger, job)
+
+	result, err := p.transcribe(workCtx, logger, job)
+	stopHeartbeat()
+
+	if errors.Is(context.Cause(workCtx), errLeaseLost) {
+		// The job belongs to another worker now. Anything written here
+		// would be about their attempt, so write nothing, and leave the
+		// audio for them.
+		logger.Warn("job abandoned: its lease expired and another worker took it")
+		return
+	}
 
 	// The final status must be written even when ctx has just been
 	// cancelled by shutdown, so it gets a context of its own.
@@ -139,7 +244,7 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 
 	switch {
 	case err == nil:
-		if err := p.store.Complete(finishCtx, job.ID, result.Text, result.Language); err != nil {
+		if err := p.store.Complete(finishCtx, job, result.Text, result.Language); err != nil {
 			logger.Error("completing job", "error", err)
 			return
 		}
@@ -148,7 +253,7 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 	case ctx.Err() != nil:
 		// The job did not fail; the server is stopping. Hand it back so it
 		// runs again after restart, and keep its audio.
-		if err := p.store.Release(finishCtx, job.ID); err != nil {
+		if err := p.store.Release(finishCtx, job); err != nil {
 			logger.Error("releasing job", "error", err)
 			return
 		}
@@ -159,7 +264,7 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 		// Probably temporary, and there are attempts left: try again later.
 		// The audio is kept for the next attempt.
 		delay := p.cfg.Backoff(job.Attempt)
-		if err := p.store.Retry(finishCtx, job.ID, err.Error(), delay); err != nil {
+		if err := p.store.Retry(finishCtx, job, err.Error(), delay); err != nil {
 			logger.Error("scheduling retry", "error", err)
 			return
 		}
@@ -167,7 +272,7 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 		return
 
 	default:
-		if err := p.store.Fail(finishCtx, job.ID, err.Error()); err != nil {
+		if err := p.store.Fail(finishCtx, job, err.Error()); err != nil {
 			logger.Error("failing job", "error", err)
 			return
 		}

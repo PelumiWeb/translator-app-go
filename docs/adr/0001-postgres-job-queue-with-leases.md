@@ -72,9 +72,36 @@ project is meant to demonstrate.
   together or not at all.
 - Idle workers poll once a second. An in-process wake-up on enqueue removes
   that delay for the common case; the poll is the safety net.
-- A worker that dies without releasing its job leaves it in `processing`
-  until something notices the expired lease. That sweep, and retries with
-  backoff, arrive in milestone 5. Until then a hard crash mid-job strands that
-  job. A normal shutdown does not.
 - Jobs are claimed in `run_at` order, which is roughly but not strictly first
   in, first out once several workers run.
+
+## Addendum, 2026-10-08: heartbeats, the sweeper and fencing
+
+Milestone 5 completed the lease design. Three parts work together.
+
+**Heartbeat.** While a worker runs a job it renews the lease every third of
+its length. A lease is therefore not a time limit on the job; it is the longest
+a worker may go silent. A job can run for an hour on a two minute lease.
+
+**Sweeper.** Every server process periodically looks for jobs in `processing`
+whose lease has run out, which now can only mean the worker crashed or hung,
+and puts them back to `queued`. The lost attempt counts, so a job that kills
+every worker that touches it fails after `max_attempts` instead of circulating
+forever.
+
+**Fencing.** A worker that was only stalled, not dead, may wake up after its
+job has been given to someone else. Checking `status = 'processing'` would not
+stop it: the job is `processing` again, for the new worker. So every write a
+worker makes also requires `attempts = <the attempt it claimed>`. The attempt
+number changes with each claim, which makes it a fencing token: the stale
+worker's writes match no row. Its heartbeat fails the same way, which is how it
+finds out, and it then stops without writing anything or deleting the audio.
+
+Retries with backoff were added at the same time: a failed attempt goes back
+to `queued` with a later `run_at`, unless the provider marked the error as
+permanent.
+
+What remains true: a job may run more than once (the first worker may have
+done real work before it stalled), so the queue is at-least-once. That is
+acceptable here because a transcription has no side effects beyond its result,
+and only one attempt's result can be recorded.
