@@ -1,20 +1,28 @@
 # Architecture
 
-Status: approved 2026-10-04.
+Status: approved 2026-10-04. Section 3 (iOS) added 2026-10-14, awaiting
+approval.
 
 ## 1. What the system does
 
-A person records speech on an Android phone. The app transcribes it, translates
-the text into a target language picked for the receiver, and shows the result.
+A person records speech on a phone, Android or iPhone. The app transcribes it,
+translates the text into a target language picked for the receiver, and shows
+the result.
+
+There are two apps, both native, built to one design: the same stages, the
+same seams, the same rules, the same server. Section 2 describes it through
+the Android app, which came first; section 3 records where the iOS app
+differs. They share no code; the server's API and this document are what keep
+them alike.
 
 Transcription happens on the device when it can. When it cannot (no model yet,
 slow device, low confidence), the audio goes to a Go backend that queues the
 work, runs it through a cloud provider, and streams progress back.
 
 ```
-                      Android app
+                  Android or iOS app
   mic -> AudioRecorder -> Transcriber --------> Translator -> screen
-                            |      \             (ML Kit)
+                            |      \            (on device)
                 on device   |       \  fallback
               (whisper.cpp) |        \
                                       v
@@ -248,13 +256,112 @@ The user records one once, by reading a passage of about 20 seconds on a
 The app has two screens and no navigation library: `AppRoot` shows one or the
 other from a single boolean.
 
-## 3. Server
+## 3. iOS
+
+Added 2026-10-14. Swift 6 and SwiftUI, one Xcode project in `ios/` with one
+app target, `PTranslate`, bundle id `com.example.ptranslate`. iOS 26 and
+later: the owner's iPhone runs it, and Apple's translation can only be used
+without a screen from iOS 26 (section 3.4). whisper.cpp is built for arm64
+only, which covers iPhones and the simulator on Apple silicon.
+
+Everything in section 2 applies unless this section says otherwise: the same
+pipeline and seams, the same fallback triggers and thresholds, the same model
+download rules, the same voice-sample rules, the same server API.
+
+### 3.1 Why native Swift
+
+The alternatives were Kotlin Multiplatform, sharing `core/` with Android, and
+React Native. What could be shared is the smaller part: the pipeline, the
+routing rules, the API client. The heavy parts are platform APIs on both
+phones (recording, translation, speech, loading a C library) and would be
+written twice anyway. A native app is also what the portfolio is meant to
+show. The cost is that every rule exists twice and must be kept alike by
+hand; the "Both phones" convention in CLAUDE.md is how. ADR 0011.
+
+### 3.2 Layout
+
+The same packages as Android, as folders of the app target: `Core/Audio`,
+`Core/STT`, `Core/Translate`, `Core/Model`, `Core/Net`, `Core/Speech`,
+`Core/Voice`, `Core/Pipeline`, and `UI/`. `Core/` imports no SwiftUI and
+nothing from `UI/`, because the keyboard extension of milestone 11 will reuse
+it. When the keyboard is built, `Core/` moves into a framework shared by the
+app and the extension. Until then the boundary is kept by discipline, as on
+Android.
+
+### 3.3 The same design in iOS terms
+
+| Android | iOS |
+| --- | --- |
+| `AudioRecord` at 16 kHz | `AVAudioEngine`, converted to 16 kHz mono 16-bit with `AVAudioConverter`: the hardware records at 44.1 or 48 kHz and cannot be asked for 16 |
+| `Flow` | `AsyncThrowingStream` |
+| `WhisperContext` through JNI | `WhisperContext` calling whisper's C functions directly: Swift imports C headers, so there is no bridge layer to write |
+| a single-thread dispatcher for whisper | an actor that owns the `WhisperContext`, so one transcription runs at a time |
+| whisper.cpp built by Gradle through CMake | a script builds the same submodule with CMake and Ninja into `whisper.xcframework` (iPhone and simulator), git-ignored |
+| ML Kit Translate | Apple's Translation framework, proposed (section 3.4) |
+| `TextToSpeech` | `AVSpeechSynthesizer` |
+| OkHttp and `okhttp-sse` | `URLSession`; the event stream is read line by line from `URLSession.bytes` |
+| `Sha256` | CryptoKit's `SHA256` |
+| `<files>/models/` | Application Support `models/`, excluded from iCloud backup since it can be downloaded again |
+| `SharedPreferences` | `UserDefaults` |
+| ViewModel and `StateFlow` | `@Observable` view model classes |
+| JUnit and `MockWebServer` | Swift Testing and a `URLProtocol` stub |
+
+### 3.4 Translation
+
+Apple's Translation framework is the iPhone's own translator, the one behind
+Apple's Translate app. It runs on the phone, costs nothing, and adds nothing
+to the project. Its language packs are downloaded by iOS, can be managed in
+Settings, and are shared with the Translate app.
+
+Compared with using ML Kit on iOS as well:
+
+- It covers about 20 languages against ML Kit's 59, so the "To" list on an
+  iPhone is shorter than on Android. The exact list is read from the
+  framework at runtime.
+- iOS asks the user before downloading a language, in its own sheet, so a
+  download starts from a screen. `Core/` translates between installed
+  languages with no screen involved (`TranslationSession(installedSource:target:)`,
+  iOS 26) and reports a pair that is missing; the screen asks iOS for it.
+- ML Kit on iOS is distributed only through CocoaPods, which stops accepting
+  new releases on 2 December 2026. Using it would mean adopting CocoaPods
+  weeks before it freezes.
+
+The choice is made at checkpoint 10.4 and recorded in ADR 0012.
+
+### 3.5 Reaching the server
+
+The simulator shares the Mac's network, so `http://localhost:8080` works as on
+the Android emulator. A real iPhone has no `adb reverse`: it uses the Mac's
+address on the same Wi-Fi, such as `http://<mac-name>.local:8080`. The server
+already listens on every interface (`HTTP_ADDR` defaults to `:8080`). The
+address is a build setting. Plain HTTP is allowed only to local addresses,
+through App Transport Security's `NSAllowsLocalNetworking`, and iOS asks the
+user once for permission to reach the local network.
+
+### 3.6 Simulator and iPhone
+
+The simulator covers most of the work: it records from the Mac's microphone
+and runs whisper.cpp on the Mac's hardware. Its timings therefore say nothing
+about a phone, and the device benchmark (section 2.6) only means something on
+a real iPhone. A free Apple ID is enough to install on the owner's iPhone; the
+app stops opening after 7 days and is installed again from Xcode.
+
+### 3.7 The keyboard, ahead
+
+iOS does not let a keyboard extension use the microphone. Apps that offer
+voice typing have their main app record in the background and pass the words
+to the keyboard through a shared App Group container. Apple documents none of
+this, and an app in the background may not use the GPU, so whisper.cpp would
+run on the CPU there. Milestone 11 starts with a test on a real iPhone before
+anything is built on it.
+
+## 4. Server
 
 Go, one binary. By default it runs the HTTP API and the worker pool in the
 same process; with `-role api` or `-role worker` it runs one of them, so they
 can be separate processes. Postgres is the only external service.
 
-### 3.1 Endpoints
+### 4.1 Endpoints
 
 **`POST /v1/jobs`**: `multipart/form-data` with an `audio` part (WAV) and a
 `source_lang` field. The body is limited to 10 MB with `http.MaxBytesReader`.
@@ -323,7 +430,7 @@ library, so resume support needs no code of ours. The SHA-256 is sent as the
 has been replaced, the server sends the whole new file instead of a tail that
 would not match the half the client already has.
 
-### 3.2 Data model
+### 4.2 Data model
 
 ```sql
 CREATE TABLE jobs (
@@ -355,7 +462,7 @@ CREATE TABLE job_events (
 );
 ```
 
-### 3.3 Job queue
+### 4.3 Job queue
 
 A worker claims a job with one short statement:
 
@@ -402,7 +509,7 @@ everyone else, because uncommitted changes are invisible to other connections.
   cancel their contexts. A cancelled job is released back to `queued` without
   counting the attempt.
 
-### 3.4 Events and SSE
+### 4.4 Events and SSE
 
 The worker and the SSE handler are different goroutines and may be different
 processes, so events go through the database rather than straight from one to
@@ -430,7 +537,7 @@ replay from the table. ADR 0002 and ADR 0006 have the reasoning.
 The server runs in one of three roles, chosen with `-role`: `all` (default),
 `api` (HTTP and the listener), or `worker` (the pool and the sweeper).
 
-### 3.5 Providers
+### 4.5 Providers
 
 ```go
 type Provider interface {
@@ -465,18 +572,18 @@ one queue: a job row has a `kind`, and a worker looks at it to choose the
 provider. Claiming, leases, heartbeats, retries, fencing and events are shared
 and know nothing about which kind they are handling.
 
-### 3.6 Audio storage
+### 4.6 Audio storage
 
 A small `BlobStore` interface (`Put`, `Open`, `Delete`) with a local directory
 implementation. Audio is deleted when its job reaches `done` or `failed`.
 
-### 3.7 Configuration and logging
+### 4.7 Configuration and logging
 
 Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 `WORKERS`, `AUDIO_DIR`, `MODELS_DIR`, `JOB_LEASE`, `SWEEP_INTERVAL`). Structured logs with `log/slog`, with
 the job id on every line that concerns a job.
 
-## 4. Testing
+## 5. Testing
 
 | Area | How |
 | --- | --- |
@@ -484,9 +591,10 @@ the job id on every line that concerns a job.
 | SSE handler (required) | `httptest` with an in-memory event source, no database. Covers: framing, replay from `Last-Event-ID`, no duplicates across the replay/live boundary, stream closes on terminal event, handler returns when the client disconnects. |
 | Model checksum (required) | Kotlin JVM tests with OkHttp `MockWebServer`: good hash, bad hash, resumed download, server ignoring `Range`. Go test that manifest hashes match the files on disk. |
 | Fallback policy | Kotlin JVM tests with fake `Transcriber`s. |
+| iOS | Swift Testing, on the simulator. The same cases as the Kotlin tests wherever the logic is the same (routing, model download, upload retries and reconnect, transcript checks, voice-sample rules), with fakes and a `URLProtocol` stub. whisper.cpp is tested on the simulator with its sample clip. |
 | Everything else | Tested where logic exists; no tests for wiring. |
 
-## 5. Dependencies
+## 6. Dependencies
 
 Anything outside this list needs approval first. Items marked *added* were not
 in the original spec; the owner approved them on 2026-10-04.
@@ -518,7 +626,21 @@ runner at startup), no UUID library (Postgres generates ids), no test library.
 
 No DI framework, no Retrofit, no Room.
 
-## 6. Planned ADRs
+**iOS** (proposed 2026-10-14, awaiting approval)
+
+| Dependency | Why |
+| --- | --- |
+| Xcode 26.4 and the iOS 26 SDK | needed for any iOS app; already installed |
+| SwiftUI, AVFoundation, CryptoKit, Foundation (`URLSession`) | part of the SDK; nothing to install |
+| Translation (Apple) | part of the SDK; proposed for translation, decided at checkpoint 10.4 |
+| whisper.cpp (the same submodule) | the same engine as on Android |
+| CMake and Ninja, through Homebrew | build whisper.cpp into an xcframework. Already installed on the dev machine (CMake 4.0, Ninja 1.12), but new as build tools of this project |
+| Swift Testing | tests; part of Xcode |
+
+No CocoaPods, no third-party Swift packages, no project generator: the owner
+creates the Xcode project, as with the Android one.
+
+## 7. Planned ADRs
 
 Written in the milestone where the decision is implemented.
 
@@ -534,8 +656,12 @@ Written in the milestone where the decision is implemented.
 | 0008 | Speech output with the phone's voices (written) | 8 |
 | 0009 | Cloud transcription provider | 7 |
 | 0010 | Voice-cloning engine | 9 |
+| 0004 addendum | whisper.cpp on iOS: the build, GPU or CPU | 10 |
+| 0011 | A native iOS app on the same server | 10 |
+| 0012 | Translation on iOS | 10 |
+| 0013 | Voice keyboards, and recording for the iPhone keyboard | 11 |
 
-## 7. Known limits
+## 8. Known limits
 
 - No auth: anyone who can reach the server can upload audio and download
   models. Job ids are random UUIDs, so one client cannot guess another's event

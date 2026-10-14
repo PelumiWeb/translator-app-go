@@ -10,6 +10,17 @@ commits. Then work continues.
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` approved.
 
+Milestones are numbered in the order they were planned, not the order they
+are built. The order of work, as of 2026-10-14:
+
+1. Milestone 10: the iOS app catches up with Android (to checkpoint 9.2)
+2. The rest of milestone 9, on both phones
+3. Milestone 11: voice keyboards
+4. Milestone 7 and checkpoint 8.2, in an order still to agree
+
+From milestone 10 on, a checkpoint with phone work is done on Android, then
+on iOS, stopping after each for a commit.
+
 ---
 
 ## [x] Milestone 0: Agree on the design
@@ -336,6 +347,10 @@ dependency and makes the app speech-to-speech.
 Next, at the owner's request (2026-10-09), ahead of milestone 7 and
 checkpoint 8.2.
 
+Paused after checkpoint 9.2 on 2026-10-14 for milestone 10. It resumes at 9.3
+once the iOS app has caught up, and from there each checkpoint is done on both
+phones.
+
 The spoken translation sounds like the person who owns the phone. This is for
 every user of the app, each in their own voice.
 
@@ -377,7 +392,7 @@ is spoken in that voice.
 - Nothing is uploaded yet: the sample is only recorded and kept
 - Verify: `make android-install`, then tap "Record" beside "Your voice"
 
-**Checkpoint 9.3: the app speaks through the server**
+**Checkpoint 9.3: the app speaks through the server** (Android, then iOS)
 - A second `SpeechSynthesizer` that uploads the sample and the translation,
   and plays what comes back
 - Fallback to the phone's stock voice when there is no sample, no network, or
@@ -389,7 +404,7 @@ is spoken in that voice.
   to change, and the test recordings go to a public demo. For trying the flow,
   not for real users
 - The onboarding screen's description of what happens to the recording must
-  change with this: it currently says the server uses it once and deletes it,
+  change with this, on both phones: it currently says the server uses it once and deletes it,
   which stops being the whole truth when a third party's demo receives it
 - ADR for the voice-cloning engine
 
@@ -400,6 +415,124 @@ Later, not planned in detail:
   engine is chosen per request so it stays possible
 - A guest mode: with one enrolled voice per phone, a guest's words come out in
   the owner's voice
+
+---
+
+## [ ] Milestone 10: The iOS app catches up
+
+Added on 2026-10-14 at the owner's request, and next. The app should exist on
+iPhone as well, and from here on be built on both phones together. A native
+Swift app on the same Go server; architecture section 3 has the design. The
+server does not change in this milestone.
+
+The checkpoints follow the order Android took, merged where the iOS app can
+start from where Android ended up (for example, the upload already retries
+and the stream already reconnects in 10.1).
+
+**Demo**: on an iPhone, everything the Android app does at checkpoint 9.2.
+Record, transcribe on the phone or on the server, chosen automatically;
+translate; speak the translation; record your voice.
+
+**Checkpoint 10.1: project, and the server route** (≈ 1.4 and 5.4)
+- The owner creates the Xcode project, as with Android at 1.4: File, New,
+  Project, iOS App; product name `PTranslate`; organisation identifier
+  `com.example`; interface SwiftUI; language Swift; testing Swift Testing;
+  storage none; saved in `ios/`, with "Create Git repository" unticked
+  because `ios/` is inside this repository. Then the bundle id is set to
+  `com.example.ptranslate` and the minimum iOS version to 26.0
+- `.gitignore` for Xcode's per-user and build files
+- One screen: Record/Stop, a status line, the text
+- `AudioRecorder` on `AVAudioEngine`, converted to 16 kHz mono 16-bit, capped
+  at 30 seconds; WAV encoding; the microphone permission
+- `BackendClient` on `URLSession`: upload with an idempotency key and retries;
+  the event stream, reconnecting with `Last-Event-ID`
+- `RemoteTranscriber`, and a minimal `SpeechTranslationPipeline`
+- Tests: WAV encoding; `RemoteTranscriber` against a `URLProtocol` stub
+  (events, reconnect, giving up, upload retries)
+- `make ios-build`, `make ios-test`
+- ADR 0011
+- Verify: `make server-run`; run the app in the simulator from Xcode; record,
+  and read the transcript
+
+**Checkpoint 10.2: whisper.cpp on iOS** (≈ 2.1)
+- A script builds the pinned submodule with CMake and Ninja into
+  `whisper.xcframework`, for iPhone and the simulator, git-ignored;
+  `make ios-whisper`
+- `WhisperContext`, the only Swift type that calls whisper's C functions,
+  owned by an actor
+- Simulator tests that load the model and transcribe whisper.cpp's sample clip
+- ADR 0004 addendum: the build, and GPU or CPU (an app in the background may
+  not use the GPU, which matters for the keyboard)
+- Verify: `make model-download ios-whisper ios-test`
+
+**Checkpoint 10.3: on-device transcription and the model download**
+(≈ 2.2, 4.2, 4.3 and the fix after 8.1)
+- `ModelManager`: manifest, download with resume, SHA-256, rename into place
+- `WhisperTranscriber`: confidence; silence and "no speech"; the
+  repetition-loop check
+- On screen: the download button, progress, failure with "Try again"; the
+  switch between this device and the server
+- Tests: the model download cases of 4.2; the transcript checks
+- Verify: `make server-run`, download the model in the app, then stop the
+  server and record on "This device"
+
+**Checkpoint 10.4: translation** (≈ 3.1 and 3.2)
+- The owner chooses the translator: Apple's Translation framework (proposed)
+  or ML Kit (architecture section 3.4)
+- `Translator` and its implementation; the pipeline translates after
+  transcribing, and a failed translation keeps the transcript
+- "From" and "To" pickers; the transcript, then the translation;
+  "Downloading language pack"
+- ADR 0012
+- Verify: pick two languages, record, read the translation
+
+**Checkpoint 10.5: the automatic route** (≈ 6.1 and 6.2)
+- `RoutingTranscriber` with the automatic route, and the same
+  `FallbackThresholds` values as Android
+- `DeviceBenchmark` on the same bundled 11 second clip
+- Three-way choice on screen, the device's speed, and why each result was
+  routed as it was
+- Tests: the routing cases of 6.1
+- The simulator measures the Mac, not a phone; a real speed needs the iPhone
+- Verify: as 6.2
+
+**Checkpoint 10.6: speak the translation** (≈ 8.1)
+- `SpeechSynthesizer`, and an implementation on `AVSpeechSynthesizer`
+- The same rules as 8.1: failing to speak keeps the text with the reason, a
+  voice still downloading is retried, nothing is spoken when both languages
+  are the same
+- Verify: record with a target language other than the source, and listen
+
+**Checkpoint 10.7: record your voice** (≈ 9.2)
+- The "Record your voice" screen on first launch, the same passage and rules,
+  `VoiceSampleStore`, `AudioPlayer`, "Not now", replace and delete
+- Verify: as 9.2
+
+---
+
+## [ ] Milestone 11: Voice keyboards
+
+Added on 2026-10-14 at the owner's request, after a screenshot of a voice
+keyboard dictating into WhatsApp on an iPhone.
+
+A keyboard on both phones that records the user and types the original words,
+in the language spoken, into whatever app is open. It uses the same recording
+and transcription as the app (on the phone or on the server, by the same
+routing). Translation and speech stay in the app: a keyboard can only type.
+
+**Demo**: in WhatsApp, switch to our keyboard, speak, and the words appear in
+the message field. On both phones.
+
+Checkpoints, to be detailed when the milestone starts:
+
+- 11.1 Android: `core/` moves into its own Gradle module; an
+  `InputMethodService` with a record button that types the transcript
+- 11.2 iPhone, a throwaway test on the owner's iPhone. iOS does not let a
+  keyboard use the microphone, so the main app records in the background and
+  passes the words to the keyboard through a shared App Group. Apple documents
+  none of this. This checkpoint decides whether 11.3 happens
+- 11.3 iPhone: `Core/` moves into a shared framework; the keyboard extension
+- ADR 0013
 
 ---
 
@@ -417,8 +550,18 @@ onboarding and kept on the phone (replacing the 2026-10-07 idea of using each
 recording as its own sample). No voice profiles on the server and no accounts,
 so auth stays a non-goal. The trial engine is a public Hugging Face demo.
 
+Decided on 2026-10-14: an iOS app, native Swift, built next (milestone 10);
+then the rest of milestone 9 on both phones; then voice keyboards on both
+(milestone 11). The keyboard types the original words, not a translation.
+iOS and the keyboard were non-goals until this date.
+
 Still open, not blocking yet:
 
 1. Which real cloud provider (milestone 7).
 2. Which paid voice-cloning engine to use once the free trial is not enough
    (milestone 9). A new dependency to approve.
+3. The translator on iOS: Apple's Translation framework or ML Kit (checkpoint
+   10.4).
+4. Whether a free Apple ID can share an App Group between the app and its
+   keyboard. If not, the iPhone keyboard needs the Apple Developer Program,
+   $99 a year (milestone 11).

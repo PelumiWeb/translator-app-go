@@ -1,13 +1,17 @@
 # Voice Translation
 
-Record speech on Android, transcribe it, translate it into a target language
+Record speech on a phone, transcribe it, translate it into a target language
 chosen for the receiver. Portfolio piece that must prove three things: native
-Android, on-device inference, and Go backend services.
+mobile apps (Android and iOS), on-device inference, and Go backend services.
 
 The aim is speech-to-speech interpretation: each user speaks in one language
 and hears the translation in another, in their own voice. It is being built in
 steps; text output comes first, spoken output is milestones 8 and 9 in the
 plan.
+
+The Android app came first. The iOS app was added on 2026-10-14: a native
+Swift app on the same Go server, built to the same design. Milestone 10 brings
+it level with Android; after that, every phone feature is built on both.
 
 Read `docs/architecture.md` for the design and `docs/plan.md` for the current
 milestone before starting any work.
@@ -16,10 +20,13 @@ milestone before starting any work.
 
 Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 
-- Favour idiomatic, readable code over cleverness, in both languages.
+- Favour idiomatic, readable code over cleverness, in every language.
 - When a Go decision is not obvious, explain it in a one or two line comment at
   the point of the decision (why this, not what it does).
 - Kotlin needs no such hand-holding; comment only what is surprising.
+- Swift: treated like Go until the owner says otherwise. A one or two line
+  comment where a decision is not obvious, especially around Swift
+  concurrency and calling whisper.cpp's C API.
 
 ## Working agreement
 
@@ -30,7 +37,8 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
    changed and how to verify it, suggest a commit message, and wait.
 3. Ask before adding any dependency that is not in the approved list in
    `docs/architecture.md` (section "Dependencies"). That includes Gradle
-   plugins, Go modules, Homebrew formulas and git submodules.
+   plugins, Go modules, Swift packages, CocoaPods, Homebrew formulas and git
+   submodules.
 4. If something in the spec or the plan looks wrong, say so before building on
    it. Do not quietly work around it.
 5. A significant decision gets an ADR in `docs/adr/NNNN-short-title.md`, written
@@ -41,10 +49,11 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 
 ```
 /android   Kotlin, Jetpack Compose, single Gradle module (:app)
+/ios       Swift, SwiftUI, one Xcode project (PTranslate), from milestone 10
 /server    Go service: HTTP API, job queue, workers
 /docs      architecture.md, plan.md, adr/
 /third_party/whisper.cpp   git submodule, pinned to a release tag
-Makefile   common commands for both sides
+Makefile   common commands for all three
 ```
 
 Android package layout (inside `:app`):
@@ -64,6 +73,23 @@ ui/              Compose screens and ViewModels
 Native code is in `android/app/src/main/cpp`: the CMake build and the JNI
 bridge.
 
+iOS folder layout (inside the app target), the same packages as Android:
+
+```
+Core/Audio       microphone capture and playback, 16 kHz mono PCM, WAV
+Core/STT         Transcriber protocol and its implementations
+Core/Translate   Translator protocol and its implementations
+Core/Model       model manifest, download with resume, SHA-256 check
+Core/Net         backend client: upload, SSE
+Core/Speech      SpeechSynthesizer protocol and its implementations
+Core/Voice       the user's recorded voice sample: storage and rules
+Core/Pipeline    transcribe -> translate -> speak, the reusable entry point
+UI/              SwiftUI views and their view models
+```
+
+whisper.cpp is built into an xcframework by a script; Swift calls its C API
+directly, so there is no bridge code.
+
 Server layout:
 
 ```
@@ -77,6 +103,15 @@ migrations/          plain SQL, embedded in the binary
 ```
 
 ## Conventions
+
+### Both phones
+
+- The two apps are built to one design (`docs/architecture.md`, sections 2
+  and 3). The same stages, seams, rules and thresholds; where the logic is the
+  same, the same test cases. A change to a rule on one phone is made on the
+  other in the same milestone.
+- Each phone is idiomatic for its platform. Do not write Kotlin in Swift or
+  Swift in Kotlin to make the two look alike.
 
 ### Android
 
@@ -92,6 +127,25 @@ migrations/          plain SQL, embedded in the binary
   Android text-to-speech types.
 - JNI surface stays small: one Kotlin class owns the native handle and is the
   only caller of `external` functions.
+
+### iOS
+
+- `Core/` must stay reusable by the keyboard extension (milestone 11). It may
+  not import SwiftUI, use UIKit views or view controllers, or reference
+  anything in `UI/`.
+- Dependencies are passed through initialisers. One `AppContainer` builds the
+  object graph. No DI framework.
+- Swift 6 language mode. `async`/`await` and `AsyncThrowingStream` for async
+  work (the counterpart of `Flow`). No unstructured task that nothing owns
+  (the counterpart of `GlobalScope`). Blocking and native work stays off the
+  main actor.
+- `Transcriber`, `Translator` and `SpeechSynthesizer` are the seams, as
+  protocols. UI and pipeline code never see whisper.cpp, Translation or
+  `AVSpeechSynthesizer` types.
+- One Swift type owns the whisper context and is the only caller of whisper's
+  C functions.
+- Tests use Swift Testing, built into Xcode. Network tests stub `URLSession`
+  with a `URLProtocol`; no third-party test libraries.
 
 ### Go
 
@@ -115,9 +169,11 @@ migrations/          plain SQL, embedded in the binary
 After cloning, fetch whisper.cpp: `git submodule update --init`.
 
 Postgres is a local Homebrew install (`postgresql@16`), not Docker: the dev
-machine is short on disk and RAM. `make help` lists every target. The Android
-project lives in `android/` (package `com.example.ptranslate`); open that
-folder in Android Studio.
+machine is short on disk and RAM. For the same reason, run the Android
+emulator or the iOS simulator, never both at once. `make help` lists every
+target. The Android project lives in `android/` (package
+`com.example.ptranslate`); open that folder in Android Studio. The iOS project
+lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 
 | Command | What it does |
 | --- | --- |
@@ -141,14 +197,21 @@ folder in Android Studio.
 | `make model-download` | download the Whisper model into `server/data/models/` (57 MB, git-ignored) |
 | `make android-push-model` | copy the model to the device for the device tests; the app itself downloads its model from the server |
 
-The app calls `http://localhost:8080`. `adb reverse` forwards that to this
-machine, on the emulator and on a phone over USB alike.
+The iOS targets (`ios-build`, `ios-test`, `ios-whisper`) arrive with
+milestone 10.
+
+The Android app calls `http://localhost:8080`. `adb reverse` forwards that to
+this machine, on the emulator and on a phone over USB alike. The iOS
+simulator reaches `localhost` directly; a real iPhone uses the Mac's address
+on the same Wi-Fi (architecture, section 3.5).
 
 ## Non-goals for now
 
 Do not build, scaffold, or add placeholders for any of these:
 
-- iOS
-- the system keyboard (IME); only keep `core/` reusable for it
 - auth, accounts, billing
 - multi-region
+
+Voice keyboards (an Android IME and an iOS keyboard extension) are planned as
+milestone 11. Until then, do not build them; only keep `core/` and `Core/`
+reusable for them.
