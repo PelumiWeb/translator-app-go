@@ -128,6 +128,22 @@ android-install: device-proxy ## Install the debug build on the connected device
 android-device-test: ## Run the tests that need a device (native code). Removes the app afterwards
 	cd android && ./gradlew :app:connectedDebugAndroidTest
 
+# --- iOS --------------------------------------------------------------------
+
+# The simulator to build and test on. Override for another one:
+# `make ios-test IOS_SIM="iPhone 17"`. `xcrun simctl list devices` lists them.
+IOS_PROJECT := ios/PTranslate.xcodeproj
+IOS_SIM     ?= iPhone 17 Pro
+IOS_DEST    := platform=iOS Simulator,name=$(IOS_SIM)
+
+.PHONY: ios-build
+ios-build: ## Build the iOS app for the simulator
+	xcodebuild build -project $(IOS_PROJECT) -scheme PTranslate -destination '$(IOS_DEST)' -quiet
+
+.PHONY: ios-test
+ios-test: ## Run the iOS tests on the simulator
+	xcodebuild test -project $(IOS_PROJECT) -scheme PTranslate -destination '$(IOS_DEST)' -quiet
+
 # --- Whisper model ----------------------------------------------------------
 
 # A file target: make skips the download when the file already exists.

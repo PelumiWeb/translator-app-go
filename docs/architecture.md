@@ -259,10 +259,12 @@ other from a single boolean.
 ## 3. iOS
 
 Added 2026-10-14. Swift 6 and SwiftUI, one Xcode project in `ios/` with one
-app target, `PTranslate`, bundle id `com.example.ptranslate`. iOS 26 and
-later: the owner's iPhone runs it, and Apple's translation can only be used
-without a screen from iOS 26 (section 3.4). whisper.cpp is built for arm64
-only, which covers iPhones and the simulator on Apple silicon.
+app target, `PTranslate`, bundle id `pelumi.PTranslate` (the owner's own
+prefix: installing on an iPhone needs an identifier registered to their Apple
+developer team, which `com.example` cannot be). iOS 26 and later: the owner's
+iPhone runs it, and Apple's translation can only be used without a screen from
+iOS 26 (section 3.4). whisper.cpp is built for arm64 only, which covers
+iPhones and the simulator on Apple silicon.
 
 Everything in section 2 applies unless this section says otherwise: the same
 pipeline and seams, the same fallback triggers and thresholds, the same model
@@ -293,13 +295,14 @@ Android.
 | Android | iOS |
 | --- | --- |
 | `AudioRecord` at 16 kHz | `AVAudioEngine`, converted to 16 kHz mono 16-bit with `AVAudioConverter`: the hardware records at 44.1 or 48 kHz and cannot be asked for 16 |
-| `Flow` | `AsyncThrowingStream` |
+| `Flow` | `AsyncThrowingStream`, fed by a task the stream owns and cancels when nobody is listening |
+| `Dispatchers` | Swift concurrency. The target's default actor isolation is left at nonisolated, not Xcode's newer main-actor default, so `Core/` assumes no actor and can move into a framework unchanged; screens and view models are `@MainActor` explicitly |
 | `WhisperContext` through JNI | `WhisperContext` calling whisper's C functions directly: Swift imports C headers, so there is no bridge layer to write |
 | a single-thread dispatcher for whisper | an actor that owns the `WhisperContext`, so one transcription runs at a time |
 | whisper.cpp built by Gradle through CMake | a script builds the same submodule with CMake and Ninja into `whisper.xcframework` (iPhone and simulator), git-ignored |
 | ML Kit Translate | Apple's Translation framework, proposed (section 3.4) |
 | `TextToSpeech` | `AVSpeechSynthesizer` |
-| OkHttp and `okhttp-sse` | `URLSession`; the event stream is read line by line from `URLSession.bytes` |
+| OkHttp and `okhttp-sse` | `URLSession`. The event stream is parsed by hand from `URLSession.bytes`, because its `lines` leaves out the empty lines that end each event |
 | `Sha256` | CryptoKit's `SHA256` |
 | `<files>/models/` | Application Support `models/`, excluded from iCloud backup since it can be downloaded again |
 | `SharedPreferences` | `UserDefaults` |

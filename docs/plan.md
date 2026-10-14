@@ -418,7 +418,7 @@ Later, not planned in detail:
 
 ---
 
-## [ ] Milestone 10: The iOS app catches up
+## [~] Milestone 10: The iOS app catches up
 
 Added on 2026-10-14 at the owner's request, and next. The app should exist on
 iPhone as well, and from here on be built on both phones together. A native
@@ -433,13 +433,19 @@ and the stream already reconnects in 10.1).
 Record, transcribe on the phone or on the server, chosen automatically;
 translate; speak the translation; record your voice.
 
-**Checkpoint 10.1: project, and the server route** (≈ 1.4 and 5.4)
+**Checkpoint 10.1: project, and the server route** (≈ 1.4 and 5.4) (done)
 - The owner creates the Xcode project, as with Android at 1.4: File, New,
   Project, iOS App; product name `PTranslate`; organisation identifier
   `com.example`; interface SwiftUI; language Swift; testing Swift Testing;
   storage none; saved in `ios/`, with "Create Git repository" unticked
-  because `ios/` is inside this repository. Then the bundle id is set to
-  `com.example.ptranslate` and the minimum iOS version to 26.0
+  because `ios/` is inside this repository. Then the minimum iOS version
+  is set to 26.0, Swift 6 language mode, and nonisolated default actor
+  isolation. The bundle id stays the owner's `pelumi.PTranslate`, and the UI
+  test target Xcode adds is removed
+- A shared scheme, so `xcodebuild` works without Xcode having opened the
+  project
+- `Info.plist`: microphone and local-network descriptions, plain HTTP to local
+  addresses only, and `BackendURL` from the `BACKEND_URL` build setting
 - `.gitignore` for Xcode's per-user and build files
 - One screen: Record/Stop, a status line, the text
 - `AudioRecorder` on `AVAudioEngine`, converted to 16 kHz mono 16-bit, capped
@@ -447,8 +453,9 @@ translate; speak the translation; record your voice.
 - `BackendClient` on `URLSession`: upload with an idempotency key and retries;
   the event stream, reconnecting with `Last-Event-ID`
 - `RemoteTranscriber`, and a minimal `SpeechTranslationPipeline`
-- Tests: WAV encoding; `RemoteTranscriber` against a `URLProtocol` stub
-  (events, reconnect, giving up, upload retries)
+- Tests: WAV encoding; the event-stream parser; `RemoteTranscriber` against a
+  `URLProtocol` stub, the same 15 cases as Android; the view model with fakes.
+  30 in all
 - `make ios-build`, `make ios-test`
 - ADR 0011
 - Verify: `make server-run`; run the app in the simulator from Xcode; record,

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BackendURL</key>
+	<string>$(BACKEND_URL)</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The app records what you say so it can transcribe and translate it.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>The app talks to the development server on this network.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

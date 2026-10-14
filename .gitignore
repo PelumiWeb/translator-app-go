@@ -24,6 +24,10 @@
 *.apk
 *.aab
 
+# iOS: Xcode's per-user state (open files, breakpoints), and build output
+xcuserdata/
+/ios/build/
+
 # Whisper models are downloaded, never committed
 *.bin
 *.gguf

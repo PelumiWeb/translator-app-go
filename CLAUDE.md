@@ -24,9 +24,8 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 - When a Go decision is not obvious, explain it in a one or two line comment at
   the point of the decision (why this, not what it does).
 - Kotlin needs no such hand-holding; comment only what is surprising.
-- Swift: treated like Go until the owner says otherwise. A one or two line
-  comment where a decision is not obvious, especially around Swift
-  concurrency and calling whisper.cpp's C API.
+- Swift needs no hand-holding either (the owner is comfortable in it); comment
+  only what is surprising.
 
 ## Working agreement
 
@@ -196,9 +195,11 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make android-device-test` | tests that need a device (native code); uninstalls the app afterwards |
 | `make model-download` | download the Whisper model into `server/data/models/` (57 MB, git-ignored) |
 | `make android-push-model` | copy the model to the device for the device tests; the app itself downloads its model from the server |
+| `make ios-build` | build the iOS app for the simulator |
+| `make ios-test` | iOS tests on the simulator (`IOS_SIM="..."` picks another one) |
 
-The iOS targets (`ios-build`, `ios-test`, `ios-whisper`) arrive with
-milestone 10.
+`make ios-whisper`, which builds whisper.cpp for iOS, arrives at checkpoint
+10.2.
 
 The Android app calls `http://localhost:8080`. `adb reverse` forwards that to
 this machine, on the emulator and on a phone over USB alike. The iOS
