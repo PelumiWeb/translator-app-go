@@ -17,6 +17,11 @@ struct PCMAudio: Equatable, Sendable {
         .milliseconds(samples.count * 1000 / sampleRate)
     }
 
+    /// The samples scaled to the range -1 to 1, the form Whisper takes.
+    var floatSamples: [Float] {
+        samples.map { Float($0) / 32768 }
+    }
+
     /// How loud the recording is, in decibels relative to the loudest value a sample can hold: 0 is full scale,
     /// more negative is quieter. Measured as the root mean square of the samples, the usual measure of loudness.
     var levelDB: Double {

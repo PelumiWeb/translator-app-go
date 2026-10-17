@@ -488,16 +488,18 @@ translate; speak the translation; record your voice.
   the screen's logic, and the rest of Android's WAV cases. 54 in all
 - Verify: run the app in the simulator; it opens on "Record your voice"
 
-**Checkpoint 10.3: whisper.cpp on iOS** (≈ 2.1)
+**Checkpoint 10.3: whisper.cpp on iOS** (≈ 2.1) (done)
 - A script builds the pinned submodule with CMake and Ninja into
   `whisper.xcframework`, for iPhone and the simulator, git-ignored;
-  `make ios-whisper`
-- `WhisperContext`, the only Swift type that calls whisper's C functions,
-  owned by an actor
-- Simulator tests that load the model and transcribe whisper.cpp's sample clip
-- ADR 0004 addendum: the build, and GPU or CPU (an app in the background may
-  not use the GPU, which matters for the keyboard)
-- Verify: `make model-download ios-whisper ios-test`
+  `make ios-whisper`, which `ios-build` and `ios-test` run first. On the CPU
+  (Metal off) and compiled for the A13, iOS 26's oldest chip
+- `WhisperContext`, the only Swift type that calls whisper's C functions: an
+  actor on a dispatch queue of its own, with Android's decoding settings
+- Simulator tests that load the model and transcribe whisper.cpp's sample
+  clip, refuse a missing or wrong file, and check the CPU instructions used.
+  59 tests in all
+- ADR 0004 addendum: the build, CPU rather than GPU, and the A13 target
+- Verify: `make model-download ios-test`
 
 **Checkpoint 10.4: on-device transcription and the model download**
 (≈ 2.2, 4.2, 4.3 and the fix after 8.1)
@@ -511,8 +513,8 @@ translate; speak the translation; record your voice.
   server and record on "This device"
 
 **Checkpoint 10.5: translation** (≈ 3.1 and 3.2)
-- The owner chooses the translator: Apple's Translation framework (proposed)
-  or ML Kit (architecture section 3.4)
+- Apple's Translation framework, chosen on 2026-10-17 (architecture section
+  3.4)
 - `Translator` and its implementation; the pipeline translates after
   transcribing, and a failed translation keeps the transcript
 - "From" and "To" pickers; the transcript, then the translation;
@@ -545,7 +547,11 @@ Added on 2026-10-14 at the owner's request, after a screenshot of a voice
 keyboard dictating into WhatsApp on an iPhone.
 
 A keyboard on both phones that records the user and types the original words,
-in the language spoken, into whatever app is open. It uses the same recording
+in the language spoken, into whatever app is open. Confirmed by the owner on
+2026-10-17, with room for typing the translation as a later option: the
+keyboard goes through the same pipeline as the app, which already stops after
+the text when asked not to speak, so adding translation is a setting, not a
+redesign. Only the original words are built now. It uses the same recording
 and transcription as the app (on the phone or on the server, by the same
 routing). Translation and speech stay in the app: a keyboard can only type.
 
@@ -579,6 +585,13 @@ onboarding and kept on the phone (replacing the 2026-10-07 idea of using each
 recording as its own sample). No voice profiles on the server and no accounts,
 so auth stays a non-goal. The trial engine is a public Hugging Face demo.
 
+Decided on 2026-10-17: the iOS app translates with Apple's Translation
+framework, for now. The owner would prefer ML Kit on both phones, but ML Kit
+for iOS has no build for Apple-silicon simulators (checked in its 8.0.0
+binary), and Xcode 26 no longer runs simulators under Rosetta: with it, the
+whole app would stop running in the simulator. The keyboard of milestone 11
+types the original words; typing the translation may come later.
+
 Decided on 2026-10-14: an iOS app, native Swift, built next (milestone 10);
 then the rest of milestone 9 on both phones; then voice keyboards on both
 (milestone 11). The keyboard types the original words, not a translation.
@@ -589,9 +602,7 @@ Still open, not blocking yet:
 1. Which real cloud provider (milestone 7).
 2. Which paid voice-cloning engine to use once the free trial is not enough
    (milestone 9). A new dependency to approve.
-3. The translator on iOS: Apple's Translation framework or ML Kit (checkpoint
-   10.5).
-4. Whether a free Apple ID can share an App Group between the app and its
+3. Whether a free Apple ID can share an App Group between the app and its
    keyboard. If not, the iPhone keyboard needs the Apple Developer Program,
    $99 a year (milestone 11). The owner plans to subscribe later
    (2026-10-17).

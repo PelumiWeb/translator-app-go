@@ -301,9 +301,9 @@ Android.
 | `Flow` | `AsyncThrowingStream`, fed by a task the stream owns and cancels when nobody is listening |
 | `Dispatchers` | Swift concurrency. The target's default actor isolation is left at nonisolated, not Xcode's newer main-actor default, so `Core/` assumes no actor and can move into a framework unchanged; screens and view models are `@MainActor` explicitly |
 | `WhisperContext` through JNI | `WhisperContext` calling whisper's C functions directly: Swift imports C headers, so there is no bridge layer to write |
-| a single-thread dispatcher for whisper | an actor that owns the `WhisperContext`, so one transcription runs at a time |
-| whisper.cpp built by Gradle through CMake | a script builds the same submodule with CMake and Ninja into `whisper.xcframework` (iPhone and simulator), git-ignored |
-| ML Kit Translate | Apple's Translation framework, proposed (section 3.4) |
+| a single-thread dispatcher for whisper | `WhisperContext` is an actor on a dispatch queue of its own, so one transcription runs at a time and it never blocks Swift's shared thread pool |
+| whisper.cpp built by Gradle through CMake | a script builds the same submodule with CMake and Ninja into `whisper.xcframework` (iPhone and simulator), git-ignored; on the CPU like Android, compiled for the A13 (ADR 0004 addendum) |
+| ML Kit Translate | Apple's Translation framework (section 3.4) |
 | `TextToSpeech` | `AVSpeechSynthesizer` |
 | `AudioTrack` | `AVAudioPlayerNode` on an `AVAudioEngine`; the mixer converts 16 kHz to the output's rate |
 | `<files>/voice/` | Application Support `voice/`, excluded from iCloud backup, so that "the recording stays on this phone" holds |
@@ -333,8 +333,16 @@ Compared with using ML Kit on iOS as well:
 - ML Kit on iOS is distributed only through CocoaPods, which stops accepting
   new releases on 2 December 2026. Using it would mean adopting CocoaPods
   weeks before it freezes.
+- ML Kit for iOS has no build for Apple-silicon simulators: its binary holds
+  an iPhone slice and an Intel-simulator slice only, and its package turns
+  off Apple-silicon simulator builds for the whole app. Xcode 26 no longer
+  runs simulators under Rosetta, so with ML Kit the app would not run in the
+  simulator at all.
 
-The choice is made at checkpoint 10.5 and recorded in ADR 0012.
+Chosen on 2026-10-17: Apple's Translation framework, for now. The owner
+prefers ML Kit in principle, for the same languages on both phones; the
+simulator problem decided it. ADR 0012 is written at checkpoint 10.5, where
+it is built.
 
 ### 3.5 Reaching the server
 
@@ -640,7 +648,7 @@ No DI framework, no Retrofit, no Room.
 | --- | --- |
 | Xcode 26.4 and the iOS 26 SDK | needed for any iOS app; already installed |
 | SwiftUI, AVFoundation, CryptoKit, Foundation (`URLSession`) | part of the SDK; nothing to install |
-| Translation (Apple) | part of the SDK; proposed for translation, decided at checkpoint 10.5 |
+| Translation (Apple) | part of the SDK; the iOS translator, chosen 2026-10-17 |
 | whisper.cpp (the same submodule) | the same engine as on Android |
 | CMake and Ninja, through Homebrew | build whisper.cpp into an xcframework. Already installed on the dev machine (CMake 4.0, Ninja 1.12), but new as build tools of this project |
 | Swift Testing | tests; part of Xcode |
@@ -677,6 +685,8 @@ Written in the milestone where the decision is implemented.
 - ML Kit translation covers about 59 languages and translates through English
   when neither side is English, so quality between two non-English languages is
   modest.
+- On iPhone, Apple's translation covers about 20 languages, so the "To" list
+  is shorter than on Android.
 - Recordings are limited to 30 seconds.
 - The low-confidence fallback makes the user wait twice: once for the device,
   then for the cloud.

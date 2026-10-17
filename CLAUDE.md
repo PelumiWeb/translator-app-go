@@ -195,11 +195,9 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make android-device-test` | tests that need a device (native code); uninstalls the app afterwards |
 | `make model-download` | download the Whisper model into `server/data/models/` (57 MB, git-ignored) |
 | `make android-push-model` | copy the model to the device for the device tests; the app itself downloads its model from the server |
+| `make ios-whisper` | build whisper.cpp for iOS into `ios/build/` (once after cloning, about a minute; Xcode needs it) |
 | `make ios-build` | build the iOS app for the simulator |
-| `make ios-test` | iOS tests on the simulator (`IOS_SIM="..."` picks another one) |
-
-`make ios-whisper`, which builds whisper.cpp for iOS, arrives at checkpoint
-10.3.
+| `make ios-test` | iOS tests on the simulator (`IOS_SIM="..."` picks another one); the Whisper test needs `make model-download` |
 
 The Android app calls `http://localhost:8080`. `adb reverse` forwards that to
 this machine, on the emulator and on a phone over USB alike. The iOS

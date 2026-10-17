@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		844B83A1307F59A2003153E6 /* whisper.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 844B83A2307F59A2003153E6 /* whisper.xcframework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		844B8377307F59A2003153E6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -17,6 +21,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		844B83A2307F59A2003153E6 /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = build/whisper.xcframework; sourceTree = "<group>"; };
 		844B8367307F599E003153E6 /* PTranslate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PTranslate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		844B8376307F59A2003153E6 /* PTranslateTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PTranslateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -52,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				844B83A1307F59A2003153E6 /* whisper.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,8 +76,17 @@
 			children = (
 				844B8369307F599E003153E6 /* PTranslate */,
 				844B8379307F59A2003153E6 /* PTranslateTests */,
+				844B83A3307F59A2003153E6 /* Frameworks */,
 				844B8368307F599E003153E6 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		844B83A3307F59A2003153E6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				844B83A2307F59A2003153E6 /* whisper.xcframework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		844B8368307F599E003153E6 /* Products */ = {

@@ -136,12 +136,21 @@ IOS_PROJECT := ios/PTranslate.xcodeproj
 IOS_SIM     ?= iPhone 17 Pro
 IOS_DEST    := platform=iOS Simulator,name=$(IOS_SIM)
 
+# The app links whisper.cpp as an xcframework built from the submodule. The
+# script does nothing when it is already built from the submodule's commit,
+# so the targets below can always depend on it.
+.PHONY: ios-whisper
+ios-whisper: ## Build whisper.cpp for iOS into ios/build/whisper.xcframework (once, about a minute)
+	ios/scripts/build-whisper.sh
+
 .PHONY: ios-build
-ios-build: ## Build the iOS app for the simulator
+ios-build: ios-whisper ## Build the iOS app for the simulator
 	xcodebuild build -project $(IOS_PROJECT) -scheme PTranslate -destination '$(IOS_DEST)' -quiet
 
+# The Whisper tests read the model from server/data/models; without it they
+# are skipped, so run `make model-download` first to include them.
 .PHONY: ios-test
-ios-test: ## Run the iOS tests on the simulator
+ios-test: ios-whisper ## Run the iOS tests on the simulator
 	xcodebuild test -project $(IOS_PROJECT) -scheme PTranslate -destination '$(IOS_DEST)' -quiet
 
 # --- Whisper model ----------------------------------------------------------

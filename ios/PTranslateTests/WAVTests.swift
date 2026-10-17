@@ -44,6 +44,15 @@ struct WAVTests {
         #expect(PCMAudio(samples: Array(repeating: 0, count: 24_000)).duration == .milliseconds(1_500))
     }
 
+    @Test func floatSamplesAreScaledToTheRangeMinusOneToOne() {
+        let floats = PCMAudio(samples: [0, 16_384, .max, .min]).floatSamples
+
+        #expect(floats[0] == 0)
+        #expect(floats[1] == 0.5)
+        #expect(abs(floats[2] - 0.99997) < 0.00001)
+        #expect(floats[3] == -1)
+    }
+
     @Test func quietRecordingsCountAsSilentAndSpeechLevelOnesDoNot() {
         #expect(PCMAudio(samples: []).isSilent, "empty")
         #expect(PCMAudio(samples: Array(repeating: 0, count: 16_000)).isSilent, "digital silence")

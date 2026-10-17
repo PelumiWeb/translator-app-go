@@ -133,3 +133,51 @@ the benchmark in milestone 6 finds too slow for `base`.
 - Code that calls the native library cannot be tested on the JVM. It is covered
   by device tests (`make android-device-test`) that transcribe whisper.cpp's
   sample recording.
+
+## Addendum, 2026-10-17: the same engine on iOS
+
+The iOS app (milestone 10) runs the same submodule and the same model file.
+What differs is how it is built and called.
+
+**Built by a script into an xcframework.** `ios/scripts/build-whisper.sh`
+(`make ios-whisper`) runs CMake with Ninja twice, for iPhones and for the
+simulator, both arm64 only. Each build's static libraries are merged into one,
+and `xcodebuild -create-xcframework` packs the two with whisper.h, the ggml
+headers it includes, and a module map, so Swift can `import whisper`. The
+result is 5.8 MB in `ios/build/`, which is git-ignored; it is rebuilt only when
+the submodule's commit changes, and the object files are deleted afterwards to
+save disk. whisper.cpp's own `build-xcframework.sh` was not used: it builds for
+seven Apple platforms, inside the submodule's folder.
+
+**No bridge code.** Swift reads C headers directly, so there is nothing like
+`whisper_jni.cpp`. `WhisperContext` is an actor that holds the context pointer
+and is the only caller of whisper's functions. It runs on a dispatch queue of
+its own, not on Swift's shared thread pool, because a transcription blocks its
+thread for seconds. The decoding settings are Android's.
+
+**On the CPU, as on Android, with Metal turned off.** ggml turns Metal (the
+GPU) on by default for Apple platforms; the script turns it off, for now:
+
+- An app in the background may not use the GPU, and the iPhone keyboard of
+  milestone 11 depends on the main app transcribing in the background.
+- The two phones behave the same way, which keeps the fallback thresholds
+  shared and comparable.
+- The CPU path needs no shader library and runs the same in the simulator.
+
+Metal would probably be faster on a real iPhone. Whether that matters is for
+the benchmark (checkpoint 10.6) to show; if it does, the GPU can be used in the
+foreground with the CPU kept for the background.
+
+**Built for the A13.** iOS 26 runs on the A13 and later, so the libraries are
+compiled for ARMv8.4 with the dot-product and half-precision instructions
+(`GGML_CPU_ARM_ARCH=armv8.4-a+fp16+dotprod`). The quantised model's fast paths
+use them; left to itself, the compiler assumes the oldest 64-bit iPhone. A test
+checks that the build reports them. Android cannot do the same, since its
+oldest supported phones lack these instructions.
+
+**Tested on the simulator.** The tests load the model from
+`server/data/models/` and the clip from the submodule, where they already are:
+a simulator can read the Mac's files. Without the model, the transcription
+test is skipped and says to run `make model-download`. The 11 second clip took
+2 seconds on the simulator, which runs on the Mac's CPU and says nothing about
+a phone.
