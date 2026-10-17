@@ -199,7 +199,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make ios-test` | iOS tests on the simulator (`IOS_SIM="..."` picks another one) |
 
 `make ios-whisper`, which builds whisper.cpp for iOS, arrives at checkpoint
-10.2.
+10.3.
 
 The Android app calls `http://localhost:8080`. `adb reverse` forwards that to
 this machine, on the emulator and on a phone over USB alike. The iOS

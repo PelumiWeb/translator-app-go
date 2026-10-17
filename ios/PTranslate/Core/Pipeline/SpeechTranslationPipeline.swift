@@ -1,7 +1,7 @@
 /// Everything that happens to a recording after it is made. This is the entry point any front end uses: the app's
 /// screen today, a keyboard later.
 ///
-/// It only transcribes for now. Translation joins at checkpoint 10.4 and adds events here without changing how
+/// It only transcribes for now. Translation joins at checkpoint 10.5 and adds events here without changing how
 /// callers read them.
 struct SpeechTranslationPipeline: Sendable {
     let transcriber: any Transcriber

@@ -89,37 +89,6 @@ struct TranslateViewModelTests {
     }
 }
 
-private final class FakeRecorder: AudioRecorder {
-    private let audio: PCMAudio
-    private let failure: RecorderError?
-    private(set) var starts = 0
-
-    init(audio: PCMAudio, failure: RecorderError? = nil) {
-        self.audio = audio
-        self.failure = failure
-    }
-
-    func start() throws -> any Recording {
-        if let failure {
-            throw failure
-        }
-        starts += 1
-        return FakeRecording(audio: audio)
-    }
-}
-
-private final class FakeRecording: Recording {
-    private let audio: PCMAudio
-
-    init(audio: PCMAudio) {
-        self.audio = audio
-    }
-
-    func stop() -> PCMAudio { audio }
-
-    func cancel() {}
-}
-
 /// Emits the scripted events, then ends or fails.
 private final class FakeTranscriber: Transcriber {
     private let events: [TranscriptEvent]

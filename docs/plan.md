@@ -427,7 +427,10 @@ server does not change in this milestone.
 
 The checkpoints follow the order Android took, merged where the iOS app can
 start from where Android ended up (for example, the upload already retries
-and the stream already reconnects in 10.1).
+and the stream already reconnects in 10.1). One exception: recording the
+user's voice (Android's 9.2) was moved from last to second on 2026-10-14, at
+the owner's request. It needs only the recorder, and it is the first screen a
+new user sees.
 
 **Demo**: on an iPhone, everything the Android app does at checkpoint 9.2.
 Record, transcribe on the phone or on the server, chosen automatically;
@@ -461,7 +464,23 @@ translate; speak the translation; record your voice.
 - Verify: `make server-run`; run the app in the simulator from Xcode; record,
   and read the transcript
 
-**Checkpoint 10.2: whisper.cpp on iOS** (≈ 2.1)
+**Checkpoint 10.2: record your voice** (≈ 9.2) (done)
+- The "Record your voice" screen on first launch: what the recording is for
+  and what happens to it, the same passage as Android, a timer and progress
+  while recording, then listen, record again, or keep
+- The same rules: under 10 seconds, or silent, cannot be kept, and says why
+- "Not now" does not ask again; the main screen shows whether a voice is
+  recorded, with a button to record or change it; a saved voice can be
+  replaced or deleted
+- `VoiceSampleStore`: one WAV file in Application Support, excluded from
+  iCloud backup so that "the recording stays on this phone" is true
+- `AudioPlayer` on `AVAudioEngine`; `PCMAudio` gains its loudness check and
+  WAV reading
+- Tests: the voice rules, the store (and that it is kept out of backups),
+  the screen's logic, and the rest of Android's WAV cases. 54 in all
+- Verify: run the app in the simulator; it opens on "Record your voice"
+
+**Checkpoint 10.3: whisper.cpp on iOS** (≈ 2.1)
 - A script builds the pinned submodule with CMake and Ninja into
   `whisper.xcframework`, for iPhone and the simulator, git-ignored;
   `make ios-whisper`
@@ -472,7 +491,7 @@ translate; speak the translation; record your voice.
   not use the GPU, which matters for the keyboard)
 - Verify: `make model-download ios-whisper ios-test`
 
-**Checkpoint 10.3: on-device transcription and the model download**
+**Checkpoint 10.4: on-device transcription and the model download**
 (≈ 2.2, 4.2, 4.3 and the fix after 8.1)
 - `ModelManager`: manifest, download with resume, SHA-256, rename into place
 - `WhisperTranscriber`: confidence; silence and "no speech"; the
@@ -483,7 +502,7 @@ translate; speak the translation; record your voice.
 - Verify: `make server-run`, download the model in the app, then stop the
   server and record on "This device"
 
-**Checkpoint 10.4: translation** (≈ 3.1 and 3.2)
+**Checkpoint 10.5: translation** (≈ 3.1 and 3.2)
 - The owner chooses the translator: Apple's Translation framework (proposed)
   or ML Kit (architecture section 3.4)
 - `Translator` and its implementation; the pipeline translates after
@@ -493,7 +512,7 @@ translate; speak the translation; record your voice.
 - ADR 0012
 - Verify: pick two languages, record, read the translation
 
-**Checkpoint 10.5: the automatic route** (≈ 6.1 and 6.2)
+**Checkpoint 10.6: the automatic route** (≈ 6.1 and 6.2)
 - `RoutingTranscriber` with the automatic route, and the same
   `FallbackThresholds` values as Android
 - `DeviceBenchmark` on the same bundled 11 second clip
@@ -503,17 +522,12 @@ translate; speak the translation; record your voice.
 - The simulator measures the Mac, not a phone; a real speed needs the iPhone
 - Verify: as 6.2
 
-**Checkpoint 10.6: speak the translation** (≈ 8.1)
+**Checkpoint 10.7: speak the translation** (≈ 8.1)
 - `SpeechSynthesizer`, and an implementation on `AVSpeechSynthesizer`
 - The same rules as 8.1: failing to speak keeps the text with the reason, a
   voice still downloading is retried, nothing is spoken when both languages
   are the same
 - Verify: record with a target language other than the source, and listen
-
-**Checkpoint 10.7: record your voice** (≈ 9.2)
-- The "Record your voice" screen on first launch, the same passage and rules,
-  `VoiceSampleStore`, `AudioPlayer`, "Not now", replace and delete
-- Verify: as 9.2
 
 ---
 
@@ -568,7 +582,7 @@ Still open, not blocking yet:
 2. Which paid voice-cloning engine to use once the free trial is not enough
    (milestone 9). A new dependency to approve.
 3. The translator on iOS: Apple's Translation framework or ML Kit (checkpoint
-   10.4).
+   10.5).
 4. Whether a free Apple ID can share an App Group between the app and its
    keyboard. If not, the iPhone keyboard needs the Apple Developer Program,
    $99 a year (milestone 11).

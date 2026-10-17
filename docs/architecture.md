@@ -1,7 +1,6 @@
 # Architecture
 
-Status: approved 2026-10-04. Section 3 (iOS) added 2026-10-14, awaiting
-approval.
+Status: approved 2026-10-04. Section 3 (iOS) added and approved 2026-10-14.
 
 ## 1. What the system does
 
@@ -302,6 +301,8 @@ Android.
 | whisper.cpp built by Gradle through CMake | a script builds the same submodule with CMake and Ninja into `whisper.xcframework` (iPhone and simulator), git-ignored |
 | ML Kit Translate | Apple's Translation framework, proposed (section 3.4) |
 | `TextToSpeech` | `AVSpeechSynthesizer` |
+| `AudioTrack` | `AVAudioPlayerNode` on an `AVAudioEngine`; the mixer converts 16 kHz to the output's rate |
+| `<files>/voice/` | Application Support `voice/`, excluded from iCloud backup, so that "the recording stays on this phone" holds |
 | OkHttp and `okhttp-sse` | `URLSession`. The event stream is parsed by hand from `URLSession.bytes`, because its `lines` leaves out the empty lines that end each event |
 | `Sha256` | CryptoKit's `SHA256` |
 | `<files>/models/` | Application Support `models/`, excluded from iCloud backup since it can be downloaded again |
@@ -329,7 +330,7 @@ Compared with using ML Kit on iOS as well:
   new releases on 2 December 2026. Using it would mean adopting CocoaPods
   weeks before it freezes.
 
-The choice is made at checkpoint 10.4 and recorded in ADR 0012.
+The choice is made at checkpoint 10.5 and recorded in ADR 0012.
 
 ### 3.5 Reaching the server
 
@@ -629,13 +630,13 @@ runner at startup), no UUID library (Postgres generates ids), no test library.
 
 No DI framework, no Retrofit, no Room.
 
-**iOS** (proposed 2026-10-14, awaiting approval)
+**iOS** (approved by the owner on 2026-10-14)
 
 | Dependency | Why |
 | --- | --- |
 | Xcode 26.4 and the iOS 26 SDK | needed for any iOS app; already installed |
 | SwiftUI, AVFoundation, CryptoKit, Foundation (`URLSession`) | part of the SDK; nothing to install |
-| Translation (Apple) | part of the SDK; proposed for translation, decided at checkpoint 10.4 |
+| Translation (Apple) | part of the SDK; proposed for translation, decided at checkpoint 10.5 |
 | whisper.cpp (the same submodule) | the same engine as on Android |
 | CMake and Ninja, through Homebrew | build whisper.cpp into an xcframework. Already installed on the dev machine (CMake 4.0, Ninja 1.12), but new as build tools of this project |
 | Swift Testing | tests; part of Xcode |

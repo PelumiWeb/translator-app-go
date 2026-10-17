@@ -79,4 +79,4 @@ of the reason.
   language works against it unchanged. Checked at 10.1 with a run from the
   simulator against the real server.
 - The simulator runs on the Mac, so its speed says nothing about a phone. A
-  real iPhone is needed for the benchmark (10.5) and the keyboard (11.2).
+  real iPhone is needed for the benchmark (10.6) and the keyboard (11.2).
