@@ -392,6 +392,14 @@ is spoken in that voice.
 - Nothing is uploaded yet: the sample is only recorded and kept
 - Verify: `make android-install`, then tap "Record" beside "Your voice"
 
+**Fix after 9.2** (2026-10-17)
+- The onboarding screen says the recording stays on the phone, but Android's
+  backup rules were still the template, so the voice sample went into the
+  user's cloud backup (until the 57 MB model pushed the app past the 25 MB
+  backup limit, which stopped all of its backups). The voice sample, the model
+  and the `device` preferences are now excluded from cloud backup and from
+  transfer to a new phone. iOS excludes its sample from the start (10.2)
+
 **Checkpoint 9.3: the app speaks through the server** (Android, then iOS)
 - A second `SpeechSynthesizer` that uploads the sample and the translation,
   and plays what comes back
@@ -585,4 +593,5 @@ Still open, not blocking yet:
    10.5).
 4. Whether a free Apple ID can share an App Group between the app and its
    keyboard. If not, the iPhone keyboard needs the Apple Developer Program,
-   $99 a year (milestone 11).
+   $99 a year (milestone 11). The owner plans to subscribe later
+   (2026-10-17).

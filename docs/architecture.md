@@ -251,6 +251,10 @@ The user records one once, by reading a passage of about 20 seconds on a
   so the app asks once.
 - One voice per phone: there are no accounts, so the sample belongs to the
   device. A guest's words would be spoken in the owner's voice.
+- It never leaves the phone by any other route: it is excluded from cloud
+  backup and from transfer to a new phone (Android's backup rules, iOS's
+  backup exclusion). So are the Whisper model, which can be downloaded again,
+  and Android's `device` preferences, which describe this phone only.
 
 The app has two screens and no navigation library: `AppRoot` shows one or the
 other from a single boolean.
