@@ -149,9 +149,21 @@ ios-build: ios-whisper ## Build the iOS app for the simulator
 
 # The Whisper tests read the model from server/data/models; without it they
 # are skipped, so run `make model-download` first to include them.
+# -quiet prints nothing when every test passes, so the counts are read back
+# from the result bundle afterwards. The exit status is xcodebuild's.
+IOS_RESULTS := ios/build/test-results.xcresult
+
 .PHONY: ios-test
-ios-test: ios-whisper ## Run the iOS tests on the simulator
-	xcodebuild test -project $(IOS_PROJECT) -scheme PTranslate -destination '$(IOS_DEST)' -quiet
+ios-test: ios-whisper ## Run the iOS tests on the simulator and print the counts
+	@rm -rf $(IOS_RESULTS)
+	@echo "xcodebuild test on $(IOS_SIM)"
+	@xcodebuild test -project $(IOS_PROJECT) -scheme PTranslate -destination '$(IOS_DEST)' -quiet \
+		-resultBundlePath $(IOS_RESULTS); \
+	status=$$?; \
+	if [ -d $(IOS_RESULTS) ]; then \
+		xcrun xcresulttool get test-results summary --path $(IOS_RESULTS) | python3 -I ios/scripts/test-summary.py; \
+	fi; \
+	exit $$status
 
 # --- Whisper model ----------------------------------------------------------
 
