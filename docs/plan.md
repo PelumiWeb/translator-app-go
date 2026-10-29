@@ -502,15 +502,25 @@ translate; speak the translation; record your voice.
 - Verify: `make model-download ios-test`
 
 **Checkpoint 10.4: on-device transcription and the model download**
-(≈ 2.2, 4.2, 4.3 and the fix after 8.1)
-- `ModelManager`: manifest, download with resume, SHA-256, rename into place
+(≈ 2.2, 4.2, 4.3 and the fix after 8.1) (done)
+- `ModelManager`: manifest, download with resume (`Range` and `If-Range`),
+  SHA-256, rename into place; kept out of iCloud backup. On the main actor,
+  since its state drives the screen; the download and the checksum run off it
 - `WhisperTranscriber`: confidence; silence and "no speech"; the
-  repetition-loop check
-- On screen: the download button, progress, failure with "Try again"; the
-  switch between this device and the server
-- Tests: the model download cases of 4.2; the transcript checks
-- Verify: `make server-run`, download the model in the app, then stop the
-  server and record on "This device"
+  repetition-loop check, with zlib as on Android so both phones measure the
+  same ratio
+- `RoutingTranscriber` with two routes, this device and the server; the
+  server stays the default until the automatic route arrives at 10.6
+- On screen: the route switch, the download button, progress, "Checking the
+  download", failure with "Try again"; under each result, where it came from,
+  how long it took and the confidence
+- Tests: Android's model download cases, transcript checks, checksum vectors
+  and view model cases; the transcriber on the simulator with the real model
+  (speech, silence, hiss, no model). 94 in all. Also checked once against the
+  real server: the 57 MB model downloaded and verified in 9 seconds and
+  transcribed the sample clip
+- Verify: `make server-run`, choose "This device", download the model in the
+  app, then stop the server and record
 
 **Checkpoint 10.5: translation** (≈ 3.1 and 3.2)
 - Apple's Translation framework, chosen on 2026-10-17 (architecture section

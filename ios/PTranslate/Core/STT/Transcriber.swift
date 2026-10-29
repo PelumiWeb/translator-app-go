@@ -38,13 +38,23 @@ struct Transcript: Equatable, Sendable {
     var source: Source
 }
 
+/// Why a transcription did not produce a transcript. Each case carries the reason in words for the user.
 enum TranscriptionError: LocalizedError, Equatable {
-    /// The transcription could not be done; the message says why, in words for the user.
     case failed(String)
+
+    /// Nothing was recorded: a muted or missing microphone. No transcriber can do better.
+    case silentAudio(String)
+
+    /// There was sound, but this transcriber found no words in it. Another one might.
+    case noSpeech(String)
+
+    /// The transcriber produced text, but it is not a transcript: the same phrase over and over. Showing,
+    /// translating or speaking it would be worse than saying nothing. Another transcriber might do better.
+    case garbled(String)
 
     var errorDescription: String? {
         switch self {
-        case .failed(let message): message
+        case .failed(let message), .silentAudio(let message), .noSpeech(let message), .garbled(let message): message
         }
     }
 }

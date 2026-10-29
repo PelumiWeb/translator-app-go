@@ -309,6 +309,8 @@ Android.
 | `<files>/voice/` | Application Support `voice/`, excluded from iCloud backup, so that "the recording stays on this phone" holds |
 | OkHttp and `okhttp-sse` | `URLSession`. The event stream is parsed by hand from `URLSession.bytes`, because its `lines` leaves out the empty lines that end each event |
 | `Sha256` | CryptoKit's `SHA256` |
+| `ModelManager` with a `StateFlow` | `ModelManager`, `@Observable` on the main actor; the download (read from `URLSession.bytes`) and the checksum run off it |
+| `java.util.zip.Deflater` for the repetition check | zlib's `compress2`, the same algorithm and level, so the ratio is identical |
 | `<files>/models/` | Application Support `models/`, excluded from iCloud backup since it can be downloaded again |
 | `SharedPreferences` | `UserDefaults` |
 | ViewModel and `StateFlow` | `@Observable` view model classes |

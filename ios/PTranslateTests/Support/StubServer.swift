@@ -19,6 +19,12 @@ final class StubServer: Sendable {
         /// The request arrives, then the connection dies before any response, so the client cannot know whether
         /// it was acted on.
         case dropAfterRequest
+
+        /// Any status, headers and bytes, for answers the cases above do not cover, such as part of a file.
+        case data(status: Int, headers: [String: String] = [:], body: Data)
+
+        /// The same, but the connection is lost once the bytes are sent.
+        case dataThenDrop(status: Int, headers: [String: String] = [:], body: Data)
     }
 
     struct Request: Sendable {
@@ -39,6 +45,7 @@ final class StubServer: Sendable {
 
     private struct State {
         var queued: [Response] = []
+        var handler: (@Sendable (Request) -> Response)?
         var requests: [Request] = []
         var reachable = true
     }
@@ -59,6 +66,12 @@ final class StubServer: Sendable {
         state.withLock { $0.queued.append(response) }
     }
 
+    /// Answers every request with what `handler` returns, instead of from the queue: for a server whose answer
+    /// depends on the request, like one that serves byte ranges.
+    func respond(with handler: @escaping @Sendable (Request) -> Response) {
+        state.withLock { $0.handler = handler }
+    }
+
     /// From now on every connection is refused, and nothing more is recorded.
     func shutdown() {
         state.withLock { $0.reachable = false }
@@ -70,11 +83,17 @@ final class StubServer: Sendable {
 
     /// nil when the connection should be refused: the server is shut down, or has nothing left to say.
     fileprivate func respond(to request: Request) -> Response? {
-        state.withLock { state in
+        let next: (handler: (@Sendable (Request) -> Response)?, queued: Response?)? = state.withLock { state in
             guard state.reachable else { return nil }
             state.requests.append(request)
-            return state.queued.isEmpty ? nil : state.queued.removeFirst()
+            if let handler = state.handler {
+                return (handler, nil)
+            }
+            return (nil, state.queued.isEmpty ? nil : state.queued.removeFirst())
         }
+        // The handler is called outside the lock, so it may use the server itself.
+        guard let next else { return nil }
+        return next.handler?(request) ?? next.queued
     }
 }
 
@@ -116,29 +135,46 @@ private final class StubProtocol: URLProtocol, @unchecked Sendable {
             client?.urlProtocolDidFinishLoading(self)
         case .eventsThenDrop(let body)?:
             send(200, contentType: "text/event-stream", body: body)
-            fail(.networkConnectionLost)
+            failSoon(.networkConnectionLost)
         case .dropAfterRequest?:
             fail(.networkConnectionLost)
+        case .data(let status, let headers, let body)?:
+            send(status, headers: headers, body: body)
+            client?.urlProtocolDidFinishLoading(self)
+        case .dataThenDrop(let status, let headers, let body)?:
+            send(status, headers: headers, body: body)
+            failSoon(.networkConnectionLost)
         }
     }
 
     override func stopLoading() {}
 
     private func send(_ status: Int, contentType: String, body: String) {
-        let response = HTTPURLResponse(
-            url: request.url!,
-            statusCode: status,
-            httpVersion: "HTTP/1.1",
-            headerFields: ["Content-Type": contentType]
-        )!
+        send(status, headers: ["Content-Type": contentType], body: Data(body.utf8))
+    }
+
+    private func send(_ status: Int, headers: [String: String], body: Data) {
+        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         if !body.isEmpty {
-            client?.urlProtocol(self, didLoad: Data(body.utf8))
+            client?.urlProtocol(self, didLoad: body)
         }
     }
 
     private func fail(_ code: URLError.Code) {
         client?.urlProtocol(self, didFailWithError: URLError(code))
+    }
+
+    /// Fails a moment after the body was sent, as a real connection does: bytes arrive, then the line drops.
+    /// Failing at once is not the same: `URLSession.AsyncBytes` discards bytes it holds but has not handed over
+    /// when an error arrives, so the client would see none of them. The failure is delivered on the thread that
+    /// started loading, which is where a URLProtocol must talk to its client.
+    private func failSoon(_ code: URLError.Code) {
+        nonisolated(unsafe) let loop = CFRunLoopGetCurrent()
+        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(200)) {
+            CFRunLoopPerformBlock(loop, CFRunLoopMode.commonModes.rawValue) { self.fail(code) }
+            CFRunLoopWakeUp(loop)
+        }
     }
 
     /// URLSession hands a protocol the body as a stream, not as `httpBody`.

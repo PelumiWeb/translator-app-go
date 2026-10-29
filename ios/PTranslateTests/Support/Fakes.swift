@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 @testable import PTranslate
 
 /// Audio of the given length that is loud enough to count as speech.
@@ -85,4 +86,77 @@ final class FakeVoiceStore: VoiceSampleStore {
 
 final class FakePreference: VoiceSetupPreference {
     var skipped = false
+}
+
+/// Emits the scripted events, then ends or fails.
+final class FakeTranscriber: Transcriber {
+    private let events: [TranscriptEvent]
+    private let error: TranscriptionError?
+    private let count = Mutex(0)
+
+    init(events: [TranscriptEvent], error: TranscriptionError? = nil) {
+        self.events = events
+        self.error = error
+    }
+
+    var calls: Int { count.withLock { $0 } }
+
+    func transcribe(_ audio: PCMAudio, language: Language) -> AsyncThrowingStream<TranscriptEvent, any Error> {
+        count.withLock { $0 += 1 }
+        return .producing { [events, error] continuation in
+            for event in events {
+                continuation.yield(event)
+            }
+            if let error {
+                throw error
+            }
+        }
+    }
+}
+
+/// Answers with whatever the test sends, when it sends it, so that time can pass between the start and the result.
+/// For one transcription only.
+final class ControlledTranscriber: Transcriber {
+    private let stream: AsyncThrowingStream<TranscriptEvent, any Error>
+    private let continuation: AsyncThrowingStream<TranscriptEvent, any Error>.Continuation
+
+    init() {
+        (stream, continuation) = AsyncThrowingStream.makeStream()
+    }
+
+    func transcribe(_ audio: PCMAudio, language: Language) -> AsyncThrowingStream<TranscriptEvent, any Error> {
+        stream
+    }
+
+    /// Sends the last event, and ends the transcription.
+    func send(_ event: TranscriptEvent) {
+        continuation.yield(event)
+        continuation.finish()
+    }
+}
+
+@MainActor
+final class FakeModels: ModelInstaller {
+    static let file = URL(filePath: "/model.bin")
+
+    var state = ModelState.missing
+    private(set) var installCalls = 0
+
+    /// When set, installing fails with this reason.
+    var failure: String?
+
+    func ensureInstalled() async throws(ModelError) -> URL {
+        installCalls += 1
+        if let failure {
+            state = .failed(failure)
+            throw ModelError(message: failure)
+        }
+        state = .ready(Self.file)
+        return Self.file
+    }
+}
+
+/// A clock that moves only when the test moves it.
+final class FakeClock {
+    var elapsed = Duration.zero
 }

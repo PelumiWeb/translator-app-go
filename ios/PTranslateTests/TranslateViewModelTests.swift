@@ -1,20 +1,26 @@
-import Synchronization
+import Foundation
 import Testing
 @testable import PTranslate
 
 @MainActor
 struct TranslateViewModelTests {
     private let oneSecond = PCMAudio(samples: Array(repeating: 0, count: 16_000))
+    private let models = FakeModels()
+    private let route = RouteSetting(.cloud)
+    private let clock = FakeClock()
 
     private func makeViewModel(
         recorder: FakeRecorder,
-        transcriber: FakeTranscriber,
+        transcriber: any Transcriber,
         microphoneAllowed: Bool = true
     ) -> TranslateViewModel {
         TranslateViewModel(
             recorder: recorder,
             pipeline: SpeechTranslationPipeline(transcriber: transcriber),
-            requestMicrophone: { microphoneAllowed }
+            models: models,
+            route: route,
+            requestMicrophone: { microphoneAllowed },
+            now: { [clock] in clock.elapsed }
         )
     }
 
@@ -87,30 +93,96 @@ struct TranslateViewModelTests {
         #expect(viewModel.phase == .idle)
         #expect(viewModel.error == "no microphone")
     }
-}
 
-/// Emits the scripted events, then ends or fails.
-private final class FakeTranscriber: Transcriber {
-    private let events: [TranscriptEvent]
-    private let error: TranscriptionError?
-    private let count = Mutex(0)
+    // MARK: Where the result came from
 
-    init(events: [TranscriptEvent], error: TranscriptionError? = nil) {
-        self.events = events
-        self.error = error
+    @Test func showsWhereTheTranscriptCameFromHowLongItTookAndTheConfidence() async {
+        let transcriber = ControlledTranscriber()
+        let fourSeconds = PCMAudio(samples: Array(repeating: 0, count: 64_000))
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: fourSeconds), transcriber: transcriber)
+
+        await tap(viewModel)
+        viewModel.recordTapped() // stop
+        clock.elapsed += .milliseconds(1_200)
+        transcriber.send(.final(Transcript(text: "hello", confidence: 0.874, source: .onDevice)))
+        await viewModel.work?.value
+
+        #expect(viewModel.details == "On device, 1.2 s for 4.0 s of audio (0.30x real time), confidence 0.87")
     }
 
-    var calls: Int { count.withLock { $0 } }
+    @Test func detailsLeaveOutTheConfidenceWhenThereIsNone() async {
+        let transcriber = ControlledTranscriber()
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: transcriber)
 
-    func transcribe(_ audio: PCMAudio, language: Language) -> AsyncThrowingStream<TranscriptEvent, any Error> {
-        count.withLock { $0 += 1 }
-        return .producing { [events, error] continuation in
-            for event in events {
-                continuation.yield(event)
-            }
-            if let error {
-                throw error
-            }
-        }
+        await tap(viewModel)
+        viewModel.recordTapped()
+        clock.elapsed += .seconds(3)
+        transcriber.send(.final(Transcript(text: "hello", confidence: nil, source: .cloud)))
+        await viewModel.work?.value
+
+        #expect(viewModel.details == "Cloud, 3.0 s for 1.0 s of audio (3.00x real time)")
+    }
+
+    @Test func theRouteCanBeChosenButNotDuringARecording() async {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: FakeTranscriber(events: []))
+        #expect(viewModel.route == .cloud)
+
+        viewModel.routeSelected(.onDevice)
+        #expect(route.current == .onDevice)
+        #expect(viewModel.route == .onDevice)
+
+        await tap(viewModel) // now recording
+        viewModel.routeSelected(.cloud)
+        #expect(route.current == .onDevice)
+        #expect(viewModel.route == .onDevice)
+    }
+
+    // MARK: The speech model
+
+    @Test func showsTheStateOfTheSpeechModelAsItChanges() {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: FakeTranscriber(events: []))
+        #expect(viewModel.model == .missing)
+
+        models.state = .downloading(bytes: 10, total: 100)
+        #expect(viewModel.model == .downloading(bytes: 10, total: 100))
+
+        models.state = .verifying
+        #expect(viewModel.model == .verifying)
+    }
+
+    @Test func theDownloadButtonInstallsTheModel() async {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: FakeTranscriber(events: []))
+
+        viewModel.downloadModelTapped()
+        await viewModel.download?.value
+
+        #expect(models.installCalls == 1)
+        #expect(viewModel.model == .ready(FakeModels.file))
+    }
+
+    @Test func aFailedDownloadShowsItsReasonAndCanBeTriedAgain() async {
+        models.failure = "The download was interrupted"
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: FakeTranscriber(events: []))
+
+        viewModel.downloadModelTapped()
+        await viewModel.download?.value
+        #expect(viewModel.model == .failed("The download was interrupted"))
+
+        models.failure = nil
+        viewModel.downloadModelTapped()
+        await viewModel.download?.value
+
+        #expect(models.installCalls == 2)
+        #expect(viewModel.model == .ready(FakeModels.file))
+    }
+
+    @Test func theDownloadButtonDoesNothingWhileADownloadIsRunning() async {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: FakeTranscriber(events: []))
+        models.state = .downloading(bytes: 10, total: 100)
+
+        viewModel.downloadModelTapped()
+
+        #expect(viewModel.download == nil)
+        #expect(models.installCalls == 0)
     }
 }

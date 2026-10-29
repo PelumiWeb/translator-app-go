@@ -30,6 +30,22 @@ struct JobUpdate: Equatable, Sendable {
     let event: JobEvent
 }
 
+/// One model the backend offers, as listed in its manifest.
+struct RemoteModel: Decodable, Equatable, Sendable {
+    let id: String
+    let version: String
+    let size: Int64
+    let sha256: String
+    let url: String
+}
+
+/// An open model download. `partial` is true when the server honoured the requested offset and `bytes` holds only
+/// the rest of the file; false when it is sending the whole file from the start.
+struct ModelDownload {
+    let partial: Bool
+    let bytes: URLSession.AsyncBytes
+}
+
 /// The only type that knows the backend's URLs and JSON.
 final class BackendClient: Sendable {
     private let baseURL: URL
@@ -69,6 +85,51 @@ final class BackendClient: Sendable {
         } catch {
             throw BackendError(message: "The server sent an unreadable response", retryable: false)
         }
+    }
+
+    /// Fetches the list of models the backend offers.
+    func modelManifest() async throws -> [RemoteModel] {
+        var request = URLRequest(url: url("/v1/models/manifest"))
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (body, response) = try await send(request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw BackendError(
+                message: Self.errorMessage(in: body) ?? "The server answered \(response.statusCode)",
+                retryable: response.statusCode >= 500
+            )
+        }
+        do {
+            return try JSONDecoder().decode(ManifestResponse.self, from: body).models
+        } catch {
+            throw BackendError(message: "The server sent an unreadable model list", retryable: false)
+        }
+    }
+
+    /// Opens a model for download, starting at `fromByte`. The caller reads the bytes as they arrive.
+    ///
+    /// A resume sends two headers. `Range` asks for the rest of the file. `If-Range` adds a condition, "only if the
+    /// file is still this one", using the checksum the server publishes as its ETag. If the file was replaced
+    /// meanwhile, the server sends the whole new one instead.
+    func openModel(_ model: RemoteModel, fromByte: Int64) async throws -> ModelDownload {
+        var request = URLRequest(url: url(model.url))
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        if fromByte > 0 {
+            request.setValue("bytes=\(fromByte)-", forHTTPHeaderField: "Range")
+            request.setValue("\"\(model.sha256)\"", forHTTPHeaderField: "If-Range")
+        }
+
+        let bytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (bytes, response) = try await session.bytes(for: request)
+        } catch {
+            throw Self.connectionError(error, "Could not reach the server")
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 || status == 206 else {
+            throw BackendError(message: "The server answered \(status)", retryable: status >= 500)
+        }
+        return ModelDownload(partial: status == 206, bytes: bytes)
     }
 
     /// Opens a job's event stream. Its events can then be read as they arrive, until the server closes the
@@ -212,6 +273,10 @@ private struct MultipartForm {
     private mutating func append(_ text: String) {
         data.append(Data(text.utf8))
     }
+}
+
+private struct ManifestResponse: Decodable {
+    let models: [RemoteModel]
 }
 
 private struct CreateJobResponse: Decodable {

@@ -15,6 +15,8 @@ struct PTranslateApp: App {
             initialValue: TranslateViewModel(
                 recorder: container.recorder,
                 pipeline: container.pipeline,
+                models: container.models,
+                route: container.route,
                 requestMicrophone: requestMicrophone
             )
         )
