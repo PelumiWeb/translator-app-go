@@ -114,6 +114,63 @@ final class FakeTranscriber: Transcriber {
     }
 }
 
+/// Translates "hello" from en to es as "[en>es] hello", and records what it was asked.
+final class FakeTranslator: Translator {
+    private struct State {
+        var ready: Bool
+        var prepareError: TranslationError?
+        var translateError: TranslationError?
+        var calls: [String] = []
+    }
+
+    private let languages: [Language]
+    private let state: Mutex<State>
+
+    init(
+        ready: Bool = true,
+        languages: [Language] = [Language("en"), Language("es"), Language("yo")],
+        prepareError: TranslationError? = nil,
+        translateError: TranslationError? = nil
+    ) {
+        self.languages = languages
+        state = Mutex(State(ready: ready, prepareError: prepareError, translateError: translateError))
+    }
+
+    var calls: [String] { state.withLock { $0.calls } }
+
+    var supportedLanguages: [Language] {
+        get async { languages }
+    }
+
+    func isReady(source: Language, target: Language) async -> Bool {
+        state.withLock { $0.ready }
+    }
+
+    func prepare(source: Language, target: Language) async throws(TranslationError) {
+        let error = state.withLock { state in
+            state.calls.append("prepare \(source.tag)>\(target.tag)")
+            if state.prepareError == nil {
+                state.ready = true
+            }
+            return state.prepareError
+        }
+        if let error {
+            throw error
+        }
+    }
+
+    func translate(_ text: String, source: Language, target: Language) async throws(TranslationError) -> String {
+        let error = state.withLock { state in
+            state.calls.append("translate \(source.tag)>\(target.tag)")
+            return state.translateError
+        }
+        if let error {
+            throw error
+        }
+        return "[\(source.tag)>\(target.tag)] \(text)"
+    }
+}
+
 /// Answers with whatever the test sends, when it sends it, so that time can pass between the start and the result.
 /// For one transcription only.
 final class ControlledTranscriber: Transcriber {

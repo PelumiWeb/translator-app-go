@@ -524,15 +524,32 @@ translate; speak the translation; record your voice.
 - Verify: `make server-run`, choose "This device", download the model in the
   app, then stop the server and record
 
-**Checkpoint 10.5: translation** (≈ 3.1 and 3.2)
+**Checkpoint 10.5: translation** (≈ 3.1 and 3.2) (done)
 - Apple's Translation framework, chosen on 2026-10-17 (architecture section
-  3.4)
-- `Translator` and its implementation; the pipeline translates after
+  3.4). Found on 2026-10-29: it does not translate in the simulator, which
+  lists its languages but reports every pair as unsupported. The app says so
+  there, and real translation is checked on the iPhone
+- `Translator` and `AppleTranslator`; the pipeline translates after
   transcribing, and a failed translation keeps the transcript
+- iOS downloads a language pack only from a screen, after asking the user in
+  its own sheet: `TranslationDownloads` in `Core/` waits while the app's root
+  view runs the request through SwiftUI's `translationTask`. Declining fails
+  the run and keeps the transcript, as a failed download does on Android
+- One entry per language, 22 in all, as the variant iOS treats as the
+  default; Apple's Norwegian, `nb`, is `no`, as on Android and in Whisper
+- `WhisperLanguages`, as on Android: "From" lists what both Whisper and the
+  translator support, "To" everything the translator translates into
 - "From" and "To" pickers; the transcript, then the translation;
-  "Downloading language pack"
+  "Downloading language pack", "Translating"
+- Tests: Android's translation cases for the pipeline and the view model, the
+  Whisper language list, matching Apple's languages, and the real framework's
+  list. A test that really translates English to Spanish runs only on an
+  iPhone and is skipped on the simulator. 111 pass, 1 skipped
 - ADR 0012
-- Verify: pick two languages, record, read the translation
+- Verify: `make ios-test`. In the simulator, pick two languages and record:
+  the transcript appears, then "Apple's translation does not work in the
+  simulator". On the iPhone the translation appears instead, after iOS asks
+  to download the language the first time
 
 **Checkpoint 10.6: the automatic route** (≈ 6.1 and 6.2)
 - `RoutingTranscriber` with the automatic route, and the same

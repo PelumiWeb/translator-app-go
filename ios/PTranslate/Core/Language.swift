@@ -7,4 +7,5 @@ struct Language: Hashable, Sendable {
     }
 
     static let english = Language("en")
+    static let spanish = Language("es")
 }

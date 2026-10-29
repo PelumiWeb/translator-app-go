@@ -14,6 +14,10 @@ final class AppContainer {
     /// adds the automatic route, as the app did before it could transcribe on the phone.
     let route = RouteSetting(.cloud)
 
+    /// Language pack downloads, which iOS lets only a screen start. The app's root view runs them.
+    let translationDownloads: TranslationDownloads
+
+    let translator: any Translator
     let pipeline: SpeechTranslationPipeline
 
     /// The recording of the user's voice, in the app's private files.
@@ -34,8 +38,16 @@ final class AppContainer {
             // More threads than fast cores makes Whisper slower, not faster: the slow cores hold the others back.
             threads: min(max(ProcessInfo.processInfo.activeProcessorCount, 1), 4)
         )
+        let downloads = TranslationDownloads()
+        translationDownloads = downloads
+        let translator = AppleTranslator(download: { source, target in
+            try await downloads.download(from: source, to: target)
+        })
+        self.translator = translator
+
         pipeline = SpeechTranslationPipeline(
-            transcriber: RoutingTranscriber(onDevice: whisper, cloud: RemoteTranscriber(backend: backend), route: route)
+            transcriber: RoutingTranscriber(onDevice: whisper, cloud: RemoteTranscriber(backend: backend), route: route),
+            translator: translator
         )
     }
 

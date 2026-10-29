@@ -12,13 +12,25 @@ enum RecordingPhase {
 final class TranslateViewModel {
     private(set) var phase = RecordingPhase.idle
     private(set) var status = "Tap Record and speak"
+
+    /// What was said, in the source language.
     private(set) var text = ""
+
+    /// The same, in the target language. Empty until translated.
+    private(set) var translation = ""
 
     /// Where the last transcript came from and how long it took.
     private(set) var details: String?
 
     private(set) var error: String?
     private(set) var route: TranscriptionRoute
+
+    private(set) var source = Language.english
+    private(set) var target = Language.spanish
+
+    /// Empty until `loadLanguages` has run.
+    private(set) var sourceLanguages: [Language] = []
+    private(set) var targetLanguages: [Language] = []
 
     /// The on-device speech model: missing, downloading, ready or failed.
     var model: ModelState { models.state }
@@ -29,6 +41,7 @@ final class TranslateViewModel {
 
     @ObservationIgnored private let recorder: any AudioRecorder
     @ObservationIgnored private let pipeline: SpeechTranslationPipeline
+    @ObservationIgnored private let translator: any Translator
     @ObservationIgnored private let models: any ModelInstaller
     @ObservationIgnored private let routeSetting: RouteSetting
     @ObservationIgnored private let requestMicrophone: () async -> Bool
@@ -42,6 +55,7 @@ final class TranslateViewModel {
     init(
         recorder: any AudioRecorder,
         pipeline: SpeechTranslationPipeline,
+        translator: any Translator,
         models: any ModelInstaller,
         route: RouteSetting,
         requestMicrophone: @escaping () async -> Bool,
@@ -50,6 +64,7 @@ final class TranslateViewModel {
     ) {
         self.recorder = recorder
         self.pipeline = pipeline
+        self.translator = translator
         self.models = models
         routeSetting = route
         self.route = route.current
@@ -71,7 +86,7 @@ final class TranslateViewModel {
             work = Task { await startRecording() }
         case .recording:
             let startedAt = now()
-            work = Task { await stopAndTranscribe(startedAt: startedAt) }
+            work = Task { await stopAndProcess(startedAt: startedAt) }
         case .working:
             break
         }
@@ -83,6 +98,25 @@ final class TranslateViewModel {
         guard phase == .idle else { return }
         routeSetting.current = selected
         route = selected
+    }
+
+    /// The languages can be changed only between recordings: a run uses the ones showing when it started.
+    func sourceSelected(_ language: Language) {
+        guard phase == .idle else { return }
+        source = language
+    }
+
+    func targetSelected(_ language: Language) {
+        guard phase == .idle else { return }
+        target = language
+    }
+
+    /// Fills the "From" and "To" lists. A language can be spoken only if Whisper transcribes it and the translator
+    /// translates from it.
+    func loadLanguages() async {
+        let all = await translator.supportedLanguages
+        sourceLanguages = all.filter(WhisperLanguages.supports)
+        targetLanguages = all
     }
 
     /// Starts, or after a failure continues, the download of the speech model.
@@ -113,7 +147,9 @@ final class TranslateViewModel {
         }
         phase = .recording
         status = "Recording. Tap Stop when done"
+        // A new recording clears the previous result but keeps the settings.
         text = ""
+        translation = ""
         details = nil
         error = nil
 
@@ -123,17 +159,19 @@ final class TranslateViewModel {
             guard !Task.isCancelled, let self else { return }
             // Cleared first, so that stopping does not cancel this task, which goes on to run the pipeline.
             autoStop = nil
-            await stopAndTranscribe(startedAt: now())
+            await stopAndProcess(startedAt: now())
         }
     }
 
-    private func stopAndTranscribe(startedAt: Duration) async {
+    private func stopAndProcess(startedAt: Duration) async {
         guard let finished = recording else { return }
         recording = nil
         autoStop?.cancel()
         autoStop = nil
         phase = .working
         status = "Preparing audio"
+        // Read once, so the whole run uses the languages chosen at this moment.
+        let (source, target) = (source, target)
 
         let audio = finished.stop()
         guard audio.duration >= Self.minRecording else {
@@ -142,8 +180,8 @@ final class TranslateViewModel {
         }
 
         do {
-            for try await event in pipeline.process(audio, source: .english) {
-                show(event, audio: audio.duration, startedAt: startedAt)
+            for try await event in pipeline.process(audio, source: source, target: target) {
+                show(event, audio: audio.duration, startedAt: startedAt, translating: source != target)
             }
             finish(error: nil)
         } catch {
@@ -151,16 +189,24 @@ final class TranslateViewModel {
         }
     }
 
-    private func show(_ event: PipelineEvent, audio: Duration, startedAt: Duration) {
+    private func show(_ event: PipelineEvent, audio: Duration, startedAt: Duration, translating: Bool) {
         switch event {
         case .transcribing(let stage):
             status = stage.label
         case .partialTranscript(let partial):
             text = partial
         case .transcribed(let transcript):
-            status = "Done"
+            status = "Transcribed"
             text = transcript.text
             details = Self.describe(transcript, audio: audio, elapsed: now() - startedAt)
+        case .downloadingLanguages:
+            status = "Downloading language pack"
+        case .translating:
+            status = "Translating"
+        case .translated(let translated):
+            status = "Done"
+            // With the same language on both sides there is nothing to show twice.
+            translation = translating ? translated : ""
         }
     }
 

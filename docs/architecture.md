@@ -343,8 +343,27 @@ Compared with using ML Kit on iOS as well:
 
 Chosen on 2026-10-17: Apple's Translation framework, for now. The owner
 prefers ML Kit in principle, for the same languages on both phones; the
-simulator problem decided it. ADR 0012 is written at checkpoint 10.5, where
-it is built.
+simulator problem decided it. ADR 0012 has the reasons.
+
+How it is used, from checkpoint 10.5:
+
+- `AppleTranslator` translates through `TranslationSession(installedSource:target:)`,
+  which needs no screen. `prepare` asks `LanguageAvailability` whether the
+  pair is installed. When it is not, it waits on `TranslationDownloads`, a
+  main-actor object in `Core/`, while a view modifier at the app's root
+  (`PTranslateApp.swift`, with the wiring) runs the request through SwiftUI's
+  `translationTask`, where iOS shows its download sheet. The screens in `UI/`
+  see no Translation type. If the user declines, the run fails and the
+  transcript stays, as when a download fails on Android.
+- Apple lists some languages once per region: 38 entries for 22 languages on
+  iOS 26.4. The app offers each language once, as the variant iOS treats as
+  the default (American English, Brazilian Portuguese, simplified Chinese),
+  with the tags Android and Whisper use. Apple's Norwegian, `nb`, is `no`.
+- It does not translate in the simulator. The iOS 26.4 simulator lists the
+  languages, then reports every pair as unsupported and cannot download any
+  (checked 2026-10-29). The app says so there, and translation is checked on
+  an iPhone. ML Kit would have been worse: it stops the whole app building
+  for the simulator.
 
 ### 3.5 Reaching the server
 
@@ -359,7 +378,8 @@ user once for permission to reach the local network.
 ### 3.6 Simulator and iPhone
 
 The simulator covers most of the work: it records from the Mac's microphone
-and runs whisper.cpp on the Mac's hardware. Its timings therefore say nothing
+and runs whisper.cpp on the Mac's hardware. Translation is the exception:
+Apple's does not run there (section 3.4). Its timings say nothing
 about a phone, and the device benchmark (section 2.6) only means something on
 a real iPhone. A free Apple ID is enough to install on the owner's iPhone; the
 app stops opening after 7 days and is installed again from Xcode.
@@ -688,8 +708,10 @@ Written in the milestone where the decision is implemented.
 - ML Kit translation covers about 59 languages and translates through English
   when neither side is English, so quality between two non-English languages is
   modest.
-- On iPhone, Apple's translation covers about 20 languages, so the "To" list
-  is shorter than on Android.
+- On iPhone, Apple's translation covers 22 languages, so the "To" list is
+  shorter than on Android.
+- Apple's translation does not run in the iOS simulator, so translation on
+  iOS can only be seen on an iPhone.
 - Recordings are limited to 30 seconds.
 - The low-confidence fallback makes the user wait twice: once for the device,
   then for the cloud.

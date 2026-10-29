@@ -13,17 +13,23 @@ struct TranslateScreen: View {
             phase: viewModel.phase,
             status: viewModel.status,
             text: viewModel.text,
+            translation: viewModel.translation,
             details: viewModel.details,
             error: viewModel.error,
-            // A closure, not the method itself: passing `viewModel.routeSelected` here crashes the Swift 6.3
+            // Closures, not the methods themselves: passing `viewModel.routeSelected` here crashes the Swift 6.3
             // compiler while it converts the main-actor method into the binding's setter.
             route: Binding(get: { viewModel.route }, set: { viewModel.routeSelected($0) }),
+            source: Binding(get: { viewModel.source }, set: { viewModel.sourceSelected($0) }),
+            target: Binding(get: { viewModel.target }, set: { viewModel.targetSelected($0) }),
+            sourceLanguages: viewModel.sourceLanguages,
+            targetLanguages: viewModel.targetLanguages,
             model: viewModel.model,
             savedVoice: savedVoice,
             onRecord: viewModel.recordTapped,
             onDownloadModel: viewModel.downloadModelTapped,
             onVoice: onVoiceTapped
         )
+        .task { await viewModel.loadLanguages() }
     }
 }
 
@@ -32,9 +38,14 @@ private struct TranslateContent: View {
     let phase: RecordingPhase
     let status: String
     let text: String
+    let translation: String
     let details: String?
     let error: String?
     @Binding var route: TranscriptionRoute
+    @Binding var source: Language
+    @Binding var target: Language
+    let sourceLanguages: [Language]
+    let targetLanguages: [Language]
     let model: ModelState
     let savedVoice: Duration?
     let onRecord: () -> Void
@@ -54,6 +65,12 @@ private struct TranslateContent: View {
                     Button(savedVoice == nil ? "Record" : "Change", action: onVoice)
                         .disabled(phase != .idle)
                 }
+
+                HStack(alignment: .top, spacing: 16) {
+                    LanguagePicker(label: "From", selection: $source, options: sourceLanguages)
+                    LanguagePicker(label: "To", selection: $target, options: targetLanguages)
+                }
+                .disabled(phase != .idle)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Picker("Transcribe on", selection: $route) {
@@ -79,6 +96,10 @@ private struct TranslateContent: View {
                     .font(.subheadline.weight(.medium))
                 Text(text)
                     .font(.title3)
+                if !translation.isEmpty {
+                    Text(translation)
+                        .font(.title2)
+                }
                 if let details {
                     Text(details)
                         .font(.footnote)
@@ -91,6 +112,33 @@ private struct TranslateContent: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
         }
+    }
+}
+
+private struct LanguagePicker: View {
+    let label: String
+    @Binding var selection: Language
+    let options: [Language]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.footnote)
+            Picker(label, selection: $selection) {
+                // Until the list has loaded, the current choice is its only entry, so the picker has something to
+                // show.
+                ForEach(sorted(options.isEmpty ? [selection] : options), id: \.self) { language in
+                    Text(language.displayName).tag(language)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// By the name the user reads, which depends on the phone's language.
+    private func sorted(_ languages: [Language]) -> [Language] {
+        languages.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
     }
 }
 
@@ -125,6 +173,14 @@ private struct ModelStatus: View {
     }
 }
 
+private extension Language {
+    /// Such as "Spanish", or "Espagnol" on a phone set to French.
+    var displayName: String {
+        let name = Locale.current.localizedString(forLanguageCode: tag) ?? tag
+        return name.prefix(1).uppercased() + name.dropFirst()
+    }
+}
+
 private extension Int64 {
     var megabytes: Int64 { self / (1024 * 1024) }
 }
@@ -147,9 +203,11 @@ private extension TranscriptionRoute {
 
 #Preview {
     TranslateContent(
-        phase: .idle, status: "Done", text: "this is a fake",
+        phase: .idle, status: "Done", text: "this is a fake", translation: "esto es falso",
         details: "On device, 1.2 s for 4.0 s of audio (0.30x real time), confidence 0.87", error: nil,
-        route: .constant(.onDevice), model: .downloading(bytes: 20_000_000, total: 59_707_625),
+        route: .constant(.onDevice), source: .constant(.english), target: .constant(.spanish),
+        sourceLanguages: [.english, .spanish], targetLanguages: [.english, .spanish],
+        model: .downloading(bytes: 20_000_000, total: 59_707_625),
         savedVoice: .seconds(21), onRecord: {}, onDownloadModel: {}, onVoice: {}
     )
 }

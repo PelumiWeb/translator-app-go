@@ -12,16 +12,23 @@ struct TranslateViewModelTests {
     private func makeViewModel(
         recorder: FakeRecorder,
         transcriber: any Transcriber,
+        translator: FakeTranslator = FakeTranslator(),
         microphoneAllowed: Bool = true
     ) -> TranslateViewModel {
         TranslateViewModel(
             recorder: recorder,
-            pipeline: SpeechTranslationPipeline(transcriber: transcriber),
+            pipeline: SpeechTranslationPipeline(transcriber: transcriber, translator: translator),
+            translator: translator,
             models: models,
             route: route,
             requestMicrophone: { microphoneAllowed },
             now: { [clock] in clock.elapsed }
         )
+    }
+
+    /// A transcriber that hears `text`.
+    private func saying(_ text: String) -> FakeTranscriber {
+        FakeTranscriber(events: [.final(Transcript(text: text, confidence: nil, source: .cloud))])
     }
 
     /// Taps the button and waits for what the tap started to finish.
@@ -135,6 +142,94 @@ struct TranslateViewModelTests {
         viewModel.routeSelected(.cloud)
         #expect(route.current == .onDevice)
         #expect(viewModel.route == .onDevice)
+    }
+
+    // MARK: Translation
+
+    @Test func showsTheTranscriptAndItsTranslationIntoTheChosenLanguage() async {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: saying("good morning"))
+        viewModel.targetSelected(Language("fr"))
+
+        await tap(viewModel)
+        await tap(viewModel)
+
+        #expect(viewModel.text == "good morning")
+        #expect(viewModel.translation == "[en>fr] good morning")
+        #expect(viewModel.status == "Done")
+        #expect(viewModel.phase == .idle)
+    }
+
+    @Test func theSameLanguageOnBothSidesShowsTheTranscriptOnly() async {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: saying("good morning"))
+        viewModel.targetSelected(Language("en"))
+
+        await tap(viewModel)
+        await tap(viewModel)
+
+        #expect(viewModel.text == "good morning")
+        #expect(viewModel.translation == "")
+        #expect(viewModel.status == "Done")
+    }
+
+    @Test func aFailedTranslationKeepsTheTranscriptOnScreen() async {
+        let translator = FakeTranslator(translateError: TranslationError(message: "Translation failed"))
+        let viewModel = makeViewModel(
+            recorder: FakeRecorder(audio: oneSecond),
+            transcriber: saying("good morning"),
+            translator: translator
+        )
+
+        await tap(viewModel)
+        await tap(viewModel)
+
+        #expect(viewModel.text == "good morning")
+        #expect(viewModel.translation == "")
+        #expect(viewModel.error == "Translation failed")
+        #expect(viewModel.phase == .idle)
+    }
+
+    @Test func aNewRecordingClearsTheLastResultButKeepsTheLanguages() async {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: saying("good morning"))
+        viewModel.sourceSelected(Language("es"))
+        viewModel.targetSelected(Language("fr"))
+        await tap(viewModel)
+        await tap(viewModel)
+        #expect(viewModel.translation == "[es>fr] good morning")
+
+        await tap(viewModel)
+
+        #expect(viewModel.text == "")
+        #expect(viewModel.translation == "")
+        #expect(viewModel.details == nil)
+        #expect(viewModel.source == Language("es"))
+        #expect(viewModel.target == Language("fr"))
+    }
+
+    @Test func languagesCannotBeChangedDuringARecording() async {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: FakeTranscriber(events: []))
+
+        await tap(viewModel)
+        viewModel.sourceSelected(Language("es"))
+        viewModel.targetSelected(Language("fr"))
+
+        #expect(viewModel.source == .english)
+        #expect(viewModel.target == .spanish)
+    }
+
+    @Test func offersEveryLanguageToTranslateIntoButOnlyThoseWhisperHearsToSpeakIn() async {
+        // Whisper cannot transcribe Esperanto.
+        let translator = FakeTranslator(languages: [Language("en"), Language("eo"), Language("es")])
+        let viewModel = makeViewModel(
+            recorder: FakeRecorder(audio: oneSecond),
+            transcriber: FakeTranscriber(events: []),
+            translator: translator
+        )
+        #expect(viewModel.sourceLanguages.isEmpty)
+
+        await viewModel.loadLanguages()
+
+        #expect(viewModel.sourceLanguages == [Language("en"), Language("es")])
+        #expect(viewModel.targetLanguages == [Language("en"), Language("eo"), Language("es")])
     }
 
     // MARK: The speech model
