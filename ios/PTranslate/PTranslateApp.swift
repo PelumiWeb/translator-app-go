@@ -19,6 +19,8 @@ struct PTranslateApp: App {
                 translator: container.translator,
                 models: container.models,
                 route: container.route,
+                speed: container.speed,
+                thresholds: container.thresholds,
                 requestMicrophone: requestMicrophone
             )
         )

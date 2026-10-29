@@ -22,6 +22,9 @@ final class TranslateViewModel {
     /// Where the last transcript came from and how long it took.
     private(set) var details: String?
 
+    /// Why the result came from where it did, when that needs saying.
+    private(set) var routing: String?
+
     private(set) var error: String?
     private(set) var route: TranscriptionRoute
 
@@ -35,15 +38,28 @@ final class TranslateViewModel {
     /// The on-device speech model: missing, downloading, ready or failed.
     var model: ModelState { models.state }
 
-    /// The work the last tap started, and the model download. Tests wait on them.
+    /// This phone's measured speed as a real-time factor, or nil if it has not been measured.
+    var deviceSpeed: Double? { speed.realTimeFactor }
+
+    var measuringSpeed: Bool { speed.measuring }
+
+    /// True when `deviceSpeed` is over the limit the automatic route allows.
+    var deviceTooSlow: Bool {
+        deviceSpeed.map { $0 > thresholds.maxRealTimeFactor } ?? false
+    }
+
+    /// The work the last tap started, the model download, and the speed measurement. Tests wait on them.
     @ObservationIgnored private(set) var work: Task<Void, Never>?
     @ObservationIgnored private(set) var download: Task<Void, Never>?
+    @ObservationIgnored private(set) var measurement: Task<Void, Never>?
 
     @ObservationIgnored private let recorder: any AudioRecorder
     @ObservationIgnored private let pipeline: SpeechTranslationPipeline
     @ObservationIgnored private let translator: any Translator
     @ObservationIgnored private let models: any ModelInstaller
     @ObservationIgnored private let routeSetting: RouteSetting
+    @ObservationIgnored private let speed: any DeviceSpeed
+    @ObservationIgnored private let thresholds: FallbackThresholds
     @ObservationIgnored private let requestMicrophone: () async -> Bool
     @ObservationIgnored private let maxRecording: Duration
     @ObservationIgnored private let now: () -> Duration
@@ -58,6 +74,8 @@ final class TranslateViewModel {
         translator: any Translator,
         models: any ModelInstaller,
         route: RouteSetting,
+        speed: any DeviceSpeed,
+        thresholds: FallbackThresholds = FallbackThresholds(),
         requestMicrophone: @escaping () async -> Bool,
         maxRecording: Duration = .seconds(30),
         now: @escaping () -> Duration = { clockOrigin.duration(to: .now) }
@@ -68,6 +86,8 @@ final class TranslateViewModel {
         self.models = models
         routeSetting = route
         self.route = route.current
+        self.speed = speed
+        self.thresholds = thresholds
         self.requestMicrophone = requestMicrophone
         self.maxRecording = maxRecording
         self.now = now
@@ -92,8 +112,8 @@ final class TranslateViewModel {
         }
     }
 
-    /// The choice between this device and the server. Not during a recording: the next result must come from
-    /// the route that was showing when it was made.
+    /// The choice of route: automatic, this device, or the server. Not during a recording: the next result must
+    /// come from the route that was showing when it was made.
     func routeSelected(_ selected: TranscriptionRoute) {
         guard phase == .idle else { return }
         routeSetting.current = selected
@@ -117,6 +137,11 @@ final class TranslateViewModel {
         let all = await translator.supportedLanguages
         sourceLanguages = all.filter(WhisperLanguages.supports)
         targetLanguages = all
+    }
+
+    func measureSpeedTapped() {
+        guard !measuringSpeed else { return }
+        measurement = Task { await speed.measureAgain() }
     }
 
     /// Starts, or after a failure continues, the download of the speech model.
@@ -151,6 +176,7 @@ final class TranslateViewModel {
         text = ""
         translation = ""
         details = nil
+        routing = nil
         error = nil
 
         let limit = maxRecording
@@ -199,6 +225,7 @@ final class TranslateViewModel {
             status = "Transcribed"
             text = transcript.text
             details = Self.describe(transcript, audio: audio, elapsed: now() - startedAt)
+            routing = transcript.note?.explanation
         case .downloadingLanguages:
             status = "Downloading language pack"
         case .translating:
@@ -240,6 +267,20 @@ final class TranslateViewModel {
 
 /// The fixed point the default clock measures from.
 private let clockOrigin = ContinuousClock.now
+
+private extension RoutingNote {
+    var explanation: String {
+        switch self {
+        case .noModel: "Sent to the server: there is no speech model on this device"
+        case .slowDevice: "Sent to the server: this device is too slow for the model"
+        case .lowConfidence: "Sent to the server: this device was not confident in its own result"
+        case .noSpeechOnDevice: "Sent to the server: this device heard sound but found no words"
+        case .garbledOnDevice: "Sent to the server: this device could not make out the speech"
+        case .onDeviceFailed: "Sent to the server: the model on this device failed"
+        case .cloudUnavailable: "This device's result was kept: the server could not be reached"
+        }
+    }
+}
 
 private extension TranscriptionStage {
     var label: String {

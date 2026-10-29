@@ -6,7 +6,8 @@ import Testing
 struct TranslateViewModelTests {
     private let oneSecond = PCMAudio(samples: Array(repeating: 0, count: 16_000))
     private let models = FakeModels()
-    private let route = RouteSetting(.cloud)
+    private let route = RouteSetting(.automatic)
+    private let speed = FakeSpeed()
     private let clock = FakeClock()
 
     private func makeViewModel(
@@ -21,6 +22,7 @@ struct TranslateViewModelTests {
             translator: translator,
             models: models,
             route: route,
+            speed: speed,
             requestMicrophone: { microphoneAllowed },
             now: { [clock] in clock.elapsed }
         )
@@ -132,16 +134,73 @@ struct TranslateViewModelTests {
 
     @Test func theRouteCanBeChosenButNotDuringARecording() async {
         let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: FakeTranscriber(events: []))
+        #expect(viewModel.route == .automatic)
+
+        viewModel.routeSelected(.cloud)
+        #expect(route.current == .cloud)
         #expect(viewModel.route == .cloud)
 
-        viewModel.routeSelected(.onDevice)
-        #expect(route.current == .onDevice)
-        #expect(viewModel.route == .onDevice)
-
         await tap(viewModel) // now recording
-        viewModel.routeSelected(.cloud)
-        #expect(route.current == .onDevice)
-        #expect(viewModel.route == .onDevice)
+        viewModel.routeSelected(.onDevice)
+        #expect(route.current == .cloud)
+        #expect(viewModel.route == .cloud)
+    }
+
+    @Test func saysWhyAResultWasSentToTheServer() async {
+        let transcriber = ControlledTranscriber()
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: transcriber)
+
+        await tap(viewModel)
+        viewModel.recordTapped() // stop
+        transcriber.send(.final(Transcript(text: "hello", confidence: nil, source: .cloud, note: .lowConfidence)))
+        await viewModel.work?.value
+
+        #expect(viewModel.routing == "Sent to the server: this device was not confident in its own result")
+
+        // The explanation belongs to that result and goes with it.
+        await tap(viewModel)
+        #expect(viewModel.routing == nil)
+    }
+
+    @Test func aResultThatTookTheFirstChoiceNeedsNoExplanation() async {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: saying("good morning"))
+
+        await tap(viewModel)
+        await tap(viewModel)
+
+        #expect(viewModel.routing == nil)
+    }
+
+    // MARK: The device's speed
+
+    @Test func showsTheDevicesSpeedAndWhetherItIsTooSlow() {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: FakeTranscriber(events: []))
+        #expect(viewModel.deviceSpeed == nil)
+        #expect(!viewModel.deviceTooSlow)
+
+        speed.realTimeFactor = 0.4
+        #expect(viewModel.deviceSpeed == 0.4)
+        #expect(!viewModel.deviceTooSlow)
+
+        speed.realTimeFactor = 1.7 // over the default limit of 1.0
+        #expect(viewModel.deviceTooSlow)
+
+        speed.measuring = true
+        #expect(viewModel.measuringSpeed)
+    }
+
+    @Test func measureAgainAsksForANewMeasurementOnceAtATime() async {
+        let viewModel = makeViewModel(recorder: FakeRecorder(audio: oneSecond), transcriber: FakeTranscriber(events: []))
+
+        viewModel.measureSpeedTapped()
+        await viewModel.measurement?.value
+        #expect(speed.measurements == 1)
+        #expect(viewModel.deviceSpeed == 0.5)
+
+        speed.measuring = true
+        viewModel.measureSpeedTapped()
+        await viewModel.measurement?.value
+        #expect(speed.measurements == 1)
     }
 
     // MARK: Translation

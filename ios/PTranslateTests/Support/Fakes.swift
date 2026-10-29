@@ -213,6 +213,18 @@ final class FakeModels: ModelInstaller {
     }
 }
 
+@MainActor
+final class FakeSpeed: DeviceSpeed {
+    var realTimeFactor: Double?
+    var measuring = false
+    private(set) var measurements = 0
+
+    func measureAgain() async {
+        measurements += 1
+        realTimeFactor = 0.5
+    }
+}
+
 /// A clock that moves only when the test moves it.
 final class FakeClock {
     var elapsed = Duration.zero

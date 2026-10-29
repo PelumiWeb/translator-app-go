@@ -36,6 +36,33 @@ struct Transcript: Equatable, Sendable {
     var confidence: Float?
 
     var source: Source
+
+    /// Why this came from where it did, when that was not the first choice.
+    var note: RoutingNote? = nil
+}
+
+/// Why the automatic route did not simply use the phone.
+enum RoutingNote: Sendable {
+    /// Sent to the server: there is no model on this phone.
+    case noModel
+
+    /// Sent to the server: this phone runs the model too slowly.
+    case slowDevice
+
+    /// Sent to the server: the phone's own result was not confident enough.
+    case lowConfidence
+
+    /// Sent to the server: the phone heard sound but no words.
+    case noSpeechOnDevice
+
+    /// Sent to the server: the phone produced repeated nonsense instead of a transcript.
+    case garbledOnDevice
+
+    /// Sent to the server: the on-device model failed to run.
+    case onDeviceFailed
+
+    /// Kept the phone's result although the server was wanted: it could not be reached.
+    case cloudUnavailable
 }
 
 /// Why a transcription did not produce a transcript. Each case carries the reason in words for the user.

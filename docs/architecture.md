@@ -312,6 +312,7 @@ Android.
 | `ModelManager` with a `StateFlow` | `ModelManager`, `@Observable` on the main actor; the download (read from `URLSession.bytes`) and the checksum run off it |
 | `java.util.zip.Deflater` for the repetition check | zlib's `compress2`, the same algorithm and level, so the ratio is identical |
 | `<files>/models/` | Application Support `models/`, excluded from iCloud backup since it can be downloaded again |
+| `DeviceBenchmark` with `StateFlow`s, started from the app's scope when a model is ready | `DeviceBenchmark`, `@Observable` on the main actor; the container watches the installed model with `Observations` and measures when one appears |
 | `SharedPreferences` | `UserDefaults` |
 | ViewModel and `StateFlow` | `@Observable` view model classes |
 | JUnit and `MockWebServer` | Swift Testing and a `URLProtocol` stub |

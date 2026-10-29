@@ -15,6 +15,7 @@ struct TranslateScreen: View {
             text: viewModel.text,
             translation: viewModel.translation,
             details: viewModel.details,
+            routing: viewModel.routing,
             error: viewModel.error,
             // Closures, not the methods themselves: passing `viewModel.routeSelected` here crashes the Swift 6.3
             // compiler while it converts the main-actor method into the binding's setter.
@@ -24,9 +25,15 @@ struct TranslateScreen: View {
             sourceLanguages: viewModel.sourceLanguages,
             targetLanguages: viewModel.targetLanguages,
             model: viewModel.model,
+            speed: DeviceSpeedStatus.State(
+                realTimeFactor: viewModel.deviceSpeed,
+                measuring: viewModel.measuringSpeed,
+                tooSlow: viewModel.deviceTooSlow
+            ),
             savedVoice: savedVoice,
             onRecord: viewModel.recordTapped,
             onDownloadModel: viewModel.downloadModelTapped,
+            onMeasureSpeed: viewModel.measureSpeedTapped,
             onVoice: onVoiceTapped
         )
         .task { await viewModel.loadLanguages() }
@@ -40,6 +47,7 @@ private struct TranslateContent: View {
     let text: String
     let translation: String
     let details: String?
+    let routing: String?
     let error: String?
     @Binding var route: TranscriptionRoute
     @Binding var source: Language
@@ -47,9 +55,11 @@ private struct TranslateContent: View {
     let sourceLanguages: [Language]
     let targetLanguages: [Language]
     let model: ModelState
+    let speed: DeviceSpeedStatus.State
     let savedVoice: Duration?
     let onRecord: () -> Void
     let onDownloadModel: () -> Void
+    let onMeasureSpeed: () -> Void
     let onVoice: () -> Void
 
     var body: some View {
@@ -84,9 +94,17 @@ private struct TranslateContent: View {
                         .font(.footnote)
                 }
 
-                // The model only matters when this device may be used.
+                // The model and its speed only matter when this device may be used.
                 if route != .cloud {
                     ModelStatus(model: model, onDownload: onDownloadModel)
+                    if case .ready = model {
+                        DeviceSpeedStatus(
+                            state: speed,
+                            automatic: route == .automatic,
+                            onMeasure: onMeasureSpeed
+                        )
+                        .disabled(phase != .idle)
+                    }
                 }
 
                 Button(phase == .recording ? "Stop" : "Record", action: onRecord)
@@ -102,6 +120,10 @@ private struct TranslateContent: View {
                 }
                 if let details {
                     Text(details)
+                        .font(.footnote)
+                }
+                if let routing {
+                    Text(routing)
                         .font(.footnote)
                 }
                 if let error {
@@ -139,6 +161,40 @@ private struct LanguagePicker: View {
     /// By the name the user reads, which depends on the phone's language.
     private func sorted(_ languages: [Language]) -> [Language] {
         languages.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+}
+
+/// How fast this device runs the model, and what that means for routing.
+private struct DeviceSpeedStatus: View {
+    struct State {
+        var realTimeFactor: Double?
+        var measuring: Bool
+        var tooSlow: Bool
+    }
+
+    let state: State
+    let automatic: Bool
+    let onMeasure: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(description)
+                .font(.footnote)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Measure again", action: onMeasure)
+                .disabled(state.measuring)
+        }
+    }
+
+    private var description: String {
+        if state.measuring {
+            return "Measuring this device's speed"
+        }
+        guard let speed = state.realTimeFactor else {
+            return "This device's speed has not been measured"
+        }
+        let figure = String(format: "Speed: %.2fx real time", speed)
+        return state.tooSlow && automatic ? "\(figure). Too slow, so the server is used" : figure
     }
 }
 
@@ -188,13 +244,16 @@ private extension Int64 {
 private extension TranscriptionRoute {
     var label: String {
         switch self {
+        case .automatic: "Automatic"
         case .onDevice: "This device"
         case .cloud: "Server"
         }
     }
 
+    // The automatic route can upload audio without asking each time, so it says so.
     var description: String {
         switch self {
+        case .automatic: "Transcribes on this device when it can. Otherwise your recording is sent to the server."
         case .onDevice: "Transcribes on this device only. Nothing is uploaded."
         case .cloud: "Every recording is sent to the server."
         }
@@ -204,10 +263,12 @@ private extension TranscriptionRoute {
 #Preview {
     TranslateContent(
         phase: .idle, status: "Done", text: "this is a fake", translation: "esto es falso",
-        details: "On device, 1.2 s for 4.0 s of audio (0.30x real time), confidence 0.87", error: nil,
-        route: .constant(.onDevice), source: .constant(.english), target: .constant(.spanish),
+        details: "On device, 1.2 s for 4.0 s of audio (0.30x real time), confidence 0.87",
+        routing: "Sent to the server: this device was not confident in its own result", error: nil,
+        route: .constant(.automatic), source: .constant(.english), target: .constant(.spanish),
         sourceLanguages: [.english, .spanish], targetLanguages: [.english, .spanish],
-        model: .downloading(bytes: 20_000_000, total: 59_707_625),
-        savedVoice: .seconds(21), onRecord: {}, onDownloadModel: {}, onVoice: {}
+        model: .ready(URL(filePath: "/model.bin")),
+        speed: DeviceSpeedStatus.State(realTimeFactor: 0.31, measuring: false, tooSlow: false),
+        savedVoice: .seconds(21), onRecord: {}, onDownloadModel: {}, onMeasureSpeed: {}, onVoice: {}
     )
 }

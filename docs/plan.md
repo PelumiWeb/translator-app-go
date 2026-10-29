@@ -551,15 +551,24 @@ translate; speak the translation; record your voice.
   simulator". On the iPhone the translation appears instead, after iOS asks
   to download the language the first time
 
-**Checkpoint 10.6: the automatic route** (≈ 6.1 and 6.2)
+**Checkpoint 10.6: the automatic route** (≈ 6.1 and 6.2) (done)
 - `RoutingTranscriber` with the automatic route, and the same
-  `FallbackThresholds` values as Android
-- `DeviceBenchmark` on the same bundled 11 second clip
-- Three-way choice on screen, the device's speed, and why each result was
-  routed as it was
-- Tests: the routing cases of 6.1
-- The simulator measures the Mac, not a phone; a real speed needs the iPhone
-- Verify: as 6.2
+  `FallbackThresholds` values as Android (confidence 0.6, real-time factor
+  1.0); each transcript carries a `RoutingNote` saying how it was routed
+- `DeviceBenchmark` on the same bundled 11 second clip (whisper.cpp's
+  `jfk.wav`, as on Android), stored per model in `UserDefaults`. The container
+  watches the installed model and measures whenever one appears
+- Three-way choice on screen, automatic by default; the device's speed, with
+  "Measure again"; under each result, why it was routed as it was, when that
+  needs saying
+- Tests: Android's 20 routing cases, its 6 benchmark cases, and its 4 view
+  model cases for routing and speed. 140 pass, 1 skipped
+- The simulator measures the Mac, not a phone (0.10x real time on this one);
+  a real speed needs the iPhone
+- Verify: `make ios-test`. Then `make server-run`, run the app in the
+  simulator, download the model on "Automatic": the speed appears by itself.
+  Record: the result comes from this device with no explanation. Choose
+  "Server" and back, or stop the server, to see the other cases
 
 **Checkpoint 10.7: speak the translation** (≈ 8.1)
 - `SpeechSynthesizer`, and an implementation on `AVSpeechSynthesizer`
