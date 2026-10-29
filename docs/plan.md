@@ -11,12 +11,14 @@ commits. Then work continues.
 Status: `[ ]` not started, `[~]` in progress, `[x]` approved.
 
 Milestones are numbered in the order they were planned, not the order they
-are built. The order of work, as of 2026-10-14:
+are built. The order of work, as of 2026-10-29:
 
 1. Milestone 10: the iOS app catches up with Android (to checkpoint 9.2)
 2. The rest of milestone 9, on both phones
 3. Milestone 11: voice keyboards
 4. Milestone 7 and checkpoint 8.2, in an order still to agree
+5. Milestone 12: voice notes, interpret and reply (added 2026-10-29; whether
+   it moves ahead of milestone 11 is an open question)
 
 From milestone 10 on, a checkpoint with phone work is done on Android, then
 on iOS, stopping after each for a commit.
@@ -581,6 +583,81 @@ Checkpoints, to be detailed when the milestone starts:
 
 ---
 
+## [ ] Milestone 12: Voice notes, interpret and reply
+
+Added on 2026-10-29 at the owner's request. A user receives a voice note in
+another app, such as WhatsApp, and reads or hears it in their own language.
+They answer by speaking, and the answer goes back to the sender in the user's
+own voice and the sender's language. On both phones.
+
+The owner first pictured this through the keyboard. A keyboard cannot do
+either half, on either phone: it sees only the text box it types into, so it
+cannot read another app's voice notes, and it cannot insert audio (an Android
+keyboard can insert images into apps that accept them, never audio; an iOS
+keyboard only text). Sharing can do both. The proposed route, to confirm when
+the milestone starts: the voice note comes in through the share sheet, and the
+reply goes out the same way. The keyboard of milestone 11 is unchanged; its
+later option to type the translation would be the text way to reply.
+
+Most of it is built by then. The pipeline takes audio, not the microphone, so
+a decoded voice note goes through the same stages and the same routing; the
+reply in the user's voice is milestone 9. It needs 9.3 on both phones, and 9.4
+for the reply to sound like the user rather than the fake engine's beeps or
+the phone's stock voice.
+
+```
+WhatsApp voice note ──share──> PTranslate
+    decode -> 16 kHz mono PCM
+    transcribe, language detected       -> their words
+    translate into the user's language  -> on screen
+    the user records a reply
+    transcribe -> translate into the note's language
+    speak in the user's voice (POST /v1/speech) -> audio file
+PTranslate ──share──> WhatsApp
+```
+
+**Demo**: in WhatsApp, share a voice note in another language to PTranslate
+and read it in yours. Tap Reply, speak, and share the answer back to the same
+chat, where it plays in your voice and their language. On both phones.
+
+Checkpoints, to be detailed when the milestone starts:
+
+- 12.1 A throwaway test on both real phones: share a WhatsApp voice note in,
+  decode it, share a generated audio file back, and see how it arrives. This
+  decides the iOS route and the audio formats
+- 12.2 Interpret an incoming note (Android, then iOS): receiving the share;
+  decoding to PCM; the source language detected by Whisper, on the phone and
+  on the server (`source_lang=auto`), with the picker kept to correct it;
+  notes longer than 30 seconds; the screen
+- 12.3 Reply in the user's voice (Android, then iOS): record, translate into
+  the note's language, generate the speech as a file (the server's voice, or
+  the phone's own voice as the fallback), convert it to .m4a, listen, share
+- ADR 0014
+
+Known before starting:
+
+- WhatsApp voice notes are Opus audio in an Ogg file. Android decodes that
+  with `MediaExtractor` and `MediaCodec`. Whether iOS's AVFoundation opens Ogg
+  is not known; if it does not, libopus and libogg would be a new dependency
+- On iOS the app either registers the audio file type, so it is offered in
+  the share sheet, or adds a Share Extension. The extension needs an App Group
+  (open question 3); registering the file type does not
+- The reply will probably arrive in WhatsApp as an audio file, not as a voice
+  note with a waveform; 12.1 shows which
+- `speak` plays aloud; the reply needs speech saved to a file instead. The
+  server already returns a WAV, and the phones' own voices can write a file
+  too (`synthesizeToFile`, `AVSpeechSynthesizer.write`)
+- There are no accounts, so the app cannot know the sender's preferred
+  language: the reply goes in the language the note was spoken in, and the
+  user can change it
+- The incoming note is someone else's voice and words. Transcribed on the
+  phone, it stays there; the cloud fallback uploads it, and the screen must
+  say so
+- Recordings are capped at 30 seconds and uploads at 10 MB (about 5 minutes
+  of WAV); voice notes are often longer than 30 seconds
+
+---
+
 ## Open questions
 
 Answered on 2026-10-04: dependencies approved; Postgres through Homebrew
@@ -616,3 +693,13 @@ Still open, not blocking yet:
    keyboard. If not, the iPhone keyboard needs the Apple Developer Program,
    $99 a year (milestone 11). The owner plans to subscribe later
    (2026-10-17).
+4. Whether milestone 12 moves ahead of milestone 11. It stays last for now
+   (2026-10-29); to ask before milestone 11 starts.
+5. The share sheet instead of the keyboard for voice notes (milestone 12):
+   proposed because a keyboard can do neither half; the owner's answer is
+   pending.
+6. How an incoming voice note is given to the user: as text only, or also
+   read aloud in the phone's voice (milestone 12). Proposed: never in the
+   sender's own voice, although the note is a voice sample, because that
+   copies the voice of someone who never agreed.
+7. The longest incoming voice note to accept (milestone 12).

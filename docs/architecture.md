@@ -678,6 +678,7 @@ Written in the milestone where the decision is implemented.
 | 0011 | A native iOS app on the same server | 10 |
 | 0012 | Translation on iOS | 10 |
 | 0013 | Voice keyboards, and recording for the iPhone keyboard | 11 |
+| 0014 | Voice notes from other apps: how they come in and how the reply goes out | 12 |
 
 ## 8. Known limits
 
