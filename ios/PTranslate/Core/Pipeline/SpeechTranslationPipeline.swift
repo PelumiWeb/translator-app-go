@@ -1,14 +1,22 @@
-/// Everything that happens to a recording after it is made: transcribe it, then translate the transcript. This is
-/// the entry point any front end uses: the app's screen today, a keyboard later.
-///
-/// Speaking the translation joins at checkpoint 10.7 and adds events here without changing how callers read them.
+/// Everything that happens to a recording after it is made: transcribe it, translate the transcript, and say the
+/// translation aloud. This is the entry point any front end uses: the app's screen today, a keyboard later.
 struct SpeechTranslationPipeline: Sendable {
     let transcriber: any Transcriber
     let translator: any Translator
+    let synthesizer: any SpeechSynthesizer
 
-    /// Fails with `TranscriptionError` or `TranslationError`. When translation fails the transcript has already been
-    /// delivered, so it is not lost.
-    func process(_ audio: PCMAudio, source: Language, target: Language) -> AsyncThrowingStream<PipelineEvent, any Error> {
+    /// A stream that ends once the translation has been spoken, or after `.translated` when `speak` is false, as a
+    /// keyboard would want.
+    ///
+    /// It fails with `TranscriptionError` or `TranslationError`; when translation fails the transcript has already
+    /// been delivered, so it is not lost. A failure to speak is not a failure of the run: the text is already
+    /// delivered, so it is reported as `.speechFailed`.
+    func process(
+        _ audio: PCMAudio,
+        source: Language,
+        target: Language,
+        speak: Bool = true
+    ) -> AsyncThrowingStream<PipelineEvent, any Error> {
         .producing { events in
             var transcript: Transcript?
             for try await event in transcriber.transcribe(audio, language: source) {
@@ -37,7 +45,17 @@ struct SpeechTranslationPipeline: Sendable {
                 try await translator.prepare(source: source, target: target)
             }
             events.yield(.translating)
-            events.yield(.translated(try await translator.translate(text, source: source, target: target)))
+            let translation = try await translator.translate(text, source: source, target: target)
+            events.yield(.translated(translation))
+
+            guard speak else { return }
+            events.yield(.speaking)
+            do throws(SpeechError) {
+                try await synthesizer.speak(translation, language: target)
+                events.yield(.spoken)
+            } catch {
+                events.yield(.speechFailed(error.message))
+            }
         }
     }
 }
@@ -52,4 +70,13 @@ enum PipelineEvent: Equatable, Sendable {
 
     case translating
     case translated(String)
+
+    /// The translation is being said aloud.
+    case speaking
+
+    /// It has been said, or was stopped part way.
+    case spoken
+
+    /// The text is fine but could not be spoken, for example no voice for the language.
+    case speechFailed(String)
 }

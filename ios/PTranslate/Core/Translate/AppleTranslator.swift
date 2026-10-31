@@ -19,7 +19,7 @@ struct AppleTranslator: Translator {
     }
 
     var supportedLanguages: [Language] {
-        get async { Self.languages(in: await Self.supported()) }
+        get async { Language.distinct(in: await Self.supported()) }
     }
 
     func isReady(source: Language, target: Language) async -> Bool {
@@ -51,32 +51,13 @@ struct AppleTranslator: Translator {
         return try await Self.translate(text, from, to)
     }
 
-    /// The languages in Apple's list, once each, with the tags the rest of the app uses.
-    static func languages(in supported: [Locale.Language]) -> [Language] {
-        Set(supported.compactMap { $0.languageCode?.identifier })
-            .map { Language(appTags[$0] ?? $0) }
-            .sorted { $0.tag < $1.tag }
-    }
-
-    /// The entry in Apple's list that stands for `language`: the one iOS treats as the language's default, which
-    /// needs no region to name it, or else the first one listed.
-    static func match(_ language: Language, in supported: [Locale.Language]) -> Locale.Language? {
-        let code = appleCodes[language.tag] ?? language.tag
-        let candidates = supported.filter { $0.languageCode?.identifier == code }
-        return candidates.first { $0.minimalIdentifier == code } ?? candidates.first
-    }
-
-    // Norwegian is "nb" (Bokmål) to Apple, and "no" to Whisper and to ML Kit on Android.
-    private static let appTags = ["nb": "no"]
-    private static let appleCodes = ["no": "nb"]
-
     private static func pair(
         _ source: Language,
         _ target: Language
     ) async throws(TranslationError) -> (Locale.Language, Locale.Language) {
         let supported = await supported()
-        guard let from = match(source, in: supported) else { throw unsupported(source) }
-        guard let to = match(target, in: supported) else { throw unsupported(target) }
+        guard let from = source.match(in: supported) else { throw unsupported(source) }
+        guard let to = target.match(in: supported) else { throw unsupported(target) }
         return (from, to)
     }
 

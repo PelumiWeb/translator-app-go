@@ -570,12 +570,27 @@ translate; speak the translation; record your voice.
   Record: the result comes from this device with no explanation. Choose
   "Server" and back, or stop the server, to see the other cases
 
-**Checkpoint 10.7: speak the translation** (≈ 8.1)
-- `SpeechSynthesizer`, and an implementation on `AVSpeechSynthesizer`
-- The same rules as 8.1: failing to speak keeps the text with the reason, a
-  voice still downloading is retried, nothing is spoken when both languages
-  are the same
-- Verify: record with a target language other than the source, and listen
+**Checkpoint 10.7: speak the translation** (≈ 8.1) (done)
+- `SpeechSynthesizer`, and `SystemSpeechSynthesizer` on `AVSpeechSynthesizer`:
+  the voice iOS uses for the language's default region, which is the one the
+  user picked in Settings
+- The same rules as 8.1: the text arrives first; failing to speak keeps it,
+  with the reason; nothing is spoken when both languages are the same;
+  `speak: false` ends at the text, as a keyboard would want
+- Not carried over: retrying a voice that is still downloading. Android's
+  engine fetches a voice on first use and fails that request; iOS installs
+  its voices with the system and has no such state (ADR 0008 addendum)
+- Choosing among Apple's regional variants is now one rule on `Language`,
+  shared by the translator and the synthesizer
+- Tests: Android's speaking cases for the pipeline and the view model, and
+  the real synthesizer on the simulator: it speaks, `stop()` cuts it short, a
+  language with no voice is reported, the default region's voice is chosen.
+  148 pass, 1 skipped
+- In the simulator the app never reaches this step: Apple's translation does
+  not run there (10.5), and nothing is spoken when the languages are the
+  same. Hearing it in the app needs the iPhone
+- Verify: `make ios-test`, which speaks briefly. On the iPhone, record with a
+  target language other than the source, and listen
 
 ---
 

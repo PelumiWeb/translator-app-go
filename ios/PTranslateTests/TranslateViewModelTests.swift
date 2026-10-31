@@ -14,11 +14,12 @@ struct TranslateViewModelTests {
         recorder: FakeRecorder,
         transcriber: any Transcriber,
         translator: FakeTranslator = FakeTranslator(),
+        synthesizer: FakeSynthesizer = FakeSynthesizer(),
         microphoneAllowed: Bool = true
     ) -> TranslateViewModel {
         TranslateViewModel(
             recorder: recorder,
-            pipeline: SpeechTranslationPipeline(transcriber: transcriber, translator: translator),
+            pipeline: SpeechTranslationPipeline(transcriber: transcriber, translator: translator, synthesizer: synthesizer),
             translator: translator,
             models: models,
             route: route,
@@ -215,6 +216,51 @@ struct TranslateViewModelTests {
         #expect(viewModel.text == "good morning")
         #expect(viewModel.translation == "[en>fr] good morning")
         #expect(viewModel.status == "Done")
+        #expect(viewModel.phase == .idle)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func speaksTheTranslationAndShowsThatItIsSpeaking() async {
+        let synthesizer = FakeSynthesizer(holds: true) // keeps talking until told otherwise
+        let viewModel = makeViewModel(
+            recorder: FakeRecorder(audio: oneSecond),
+            transcriber: saying("good morning"),
+            synthesizer: synthesizer
+        )
+
+        await tap(viewModel)
+        viewModel.recordTapped() // stop
+        await synthesizer.untilSpeaking()
+        // The view model reads the events on the main actor; let it catch up with the ones already sent.
+        for _ in 0..<100 where viewModel.status != "Speaking" {
+            await Task.yield()
+        }
+
+        #expect(synthesizer.spoken == ["es: [en>es] good morning"])
+        #expect(viewModel.status == "Speaking")
+        #expect(viewModel.translation == "[en>es] good morning")
+        #expect(viewModel.phase == .working)
+
+        synthesizer.finish()
+        await viewModel.work?.value
+
+        #expect(viewModel.status == "Done")
+        #expect(viewModel.phase == .idle)
+    }
+
+    @Test func aTranslationThatCannotBeSpokenStaysOnScreenWithTheReason() async {
+        let viewModel = makeViewModel(
+            recorder: FakeRecorder(audio: oneSecond),
+            transcriber: saying("good morning"),
+            synthesizer: FakeSynthesizer(failure: SpeechError(message: "This iPhone has no voice for Spanish"))
+        )
+
+        await tap(viewModel)
+        await tap(viewModel)
+
+        #expect(viewModel.translation == "[en>es] good morning")
+        #expect(viewModel.status == "Done")
+        #expect(viewModel.error == "This iPhone has no voice for Spanish")
         #expect(viewModel.phase == .idle)
     }
 

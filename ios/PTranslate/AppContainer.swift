@@ -23,6 +23,10 @@ final class AppContainer {
     let translationDownloads: TranslationDownloads
 
     let translator: any Translator
+
+    /// Says translations aloud in one of the phone's own voices.
+    let synthesizer: any SpeechSynthesizer = SystemSpeechSynthesizer()
+
     let pipeline: SpeechTranslationPipeline
 
     /// The recording of the user's voice, in the app's private files.
@@ -87,7 +91,8 @@ final class AppContainer {
                 realTimeFactor: { await benchmark.realTimeFactor },
                 thresholds: thresholds
             ),
-            translator: translator
+            translator: translator,
+            synthesizer: synthesizer
         )
     }
 

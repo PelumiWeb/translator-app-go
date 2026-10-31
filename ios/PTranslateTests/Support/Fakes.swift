@@ -171,6 +171,76 @@ final class FakeTranslator: Translator {
     }
 }
 
+/// Records what it was asked to say. Speaking ends at once, unless `holds`: then it lasts until `stop()` or
+/// `finish()`.
+final class FakeSynthesizer: SpeechSynthesizer {
+    private struct State {
+        var spoken: [String] = []
+        var stops = 0
+        var speaking: CheckedContinuation<Void, Never>?
+        var waitingForSpeech: CheckedContinuation<Void, Never>?
+    }
+
+    private let failure: SpeechError?
+    private let holds: Bool
+    private let state = Mutex(State())
+
+    init(failure: SpeechError? = nil, holds: Bool = false) {
+        self.failure = failure
+        self.holds = holds
+    }
+
+    var spoken: [String] { state.withLock { $0.spoken } }
+    var stops: Int { state.withLock { $0.stops } }
+
+    func speak(_ text: String, language: Language) async throws(SpeechError) {
+        if let failure {
+            throw failure
+        }
+        state.withLock { $0.spoken.append("\(language.tag): \(text)") }
+        guard holds else { return }
+        await withCheckedContinuation { continuation in
+            let waiting = state.withLock { state in
+                state.speaking = continuation
+                defer { state.waitingForSpeech = nil }
+                return state.waitingForSpeech
+            }
+            waiting?.resume()
+        }
+    }
+
+    func stop() {
+        state.withLock { state in
+            state.stops += 1
+            defer { state.speaking = nil }
+            return state.speaking
+        }?.resume()
+    }
+
+    /// Ends a held utterance as if it had been said to the end.
+    func finish() {
+        state.withLock { state in
+            defer { state.speaking = nil }
+            return state.speaking
+        }?.resume()
+    }
+
+    /// Returns once a held utterance has started.
+    func untilSpeaking() async {
+        await withCheckedContinuation { continuation in
+            let started = state.withLock { state in
+                if state.speaking == nil {
+                    state.waitingForSpeech = continuation
+                }
+                return state.speaking != nil
+            }
+            if started {
+                continuation.resume()
+            }
+        }
+    }
+}
+
 /// Answers with whatever the test sends, when it sends it, so that time can pass between the start and the result.
 /// For one transcription only.
 final class ControlledTranscriber: Transcriber {

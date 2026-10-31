@@ -234,6 +234,14 @@ final class TranslateViewModel {
             status = "Done"
             // With the same language on both sides there is nothing to show twice.
             translation = translating ? translated : ""
+        case .speaking:
+            status = "Speaking"
+        case .spoken:
+            status = "Done"
+        case .speechFailed(let reason):
+            // The translation is on screen; only the voice is missing.
+            status = "Done"
+            error = reason
         }
     }
 
@@ -256,6 +264,8 @@ final class TranslateViewModel {
 
     private func finish(error: String?) {
         phase = .idle
+        // With no new error, one already on screen stays: a result can be complete and still carry a note, such
+        // as "could not be spoken".
         if let error {
             status = "Failed"
             self.error = error

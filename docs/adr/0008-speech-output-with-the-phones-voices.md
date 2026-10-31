@@ -78,3 +78,30 @@ one thing that can be tested as a whole.
   new language can wait on two of them.
 - The voice is not the speaker's. That is milestone 9, which adds a second
   `SpeechSynthesizer` and keeps this one as the offline fallback.
+
+## Addendum, 2026-10-29: iOS (checkpoint 10.7)
+
+The iOS app speaks through the same seam with `AVSpeechSynthesizer`, in
+`SystemSpeechSynthesizer`. The decisions above hold, with two differences.
+
+**No retry for a voice still downloading.** iOS installs a voice for every
+language it speaks with the system; better ones are downloaded from Settings,
+not on first use. There is no state to wait out, so a missing voice is
+reported at once ("This iPhone has no voice for ...").
+
+**Which voice.** Apple lists voices per region. The app speaks a language in
+the voice for its default region (American English, Spain's Spanish,
+Brazilian Portuguese), asked of iOS by language: that way it is the voice the
+user chose in Settings, never one of the novelty voices in the same list. The
+rule that picks the region is the one the translator uses.
+
+`AVSpeechSynthesizer` is not Sendable. Rather than tie speaking to the main
+actor, `SystemSpeechSynthesizer` keeps it behind a lock, so `stop()` stays
+synchronous and callable from anywhere, as on Android, and cancelling the
+caller stops the speech. Before speaking it switches the audio session to
+playback, as the player does: the recorder leaves it set up for recording,
+which plays nothing.
+
+In the simulator the synthesizer works, and its tests run there, but the app
+never reaches it: Apple's translation does not run in the simulator
+(ADR 0012), and nothing is spoken when both languages are the same.

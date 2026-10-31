@@ -304,7 +304,7 @@ Android.
 | a single-thread dispatcher for whisper | `WhisperContext` is an actor on a dispatch queue of its own, so one transcription runs at a time and it never blocks Swift's shared thread pool |
 | whisper.cpp built by Gradle through CMake | a script builds the same submodule with CMake and Ninja into `whisper.xcframework` (iPhone and simulator), git-ignored; on the CPU like Android, compiled for the A13 (ADR 0004 addendum) |
 | ML Kit Translate | Apple's Translation framework (section 3.4) |
-| `TextToSpeech` | `AVSpeechSynthesizer` |
+| `TextToSpeech` | `AVSpeechSynthesizer`, in the voice for the language's default region. iOS installs its voices with the system, so there is no first-use download to retry (ADR 0008 addendum) |
 | `AudioTrack` | `AVAudioPlayerNode` on an `AVAudioEngine`; the mixer converts 16 kHz to the output's rate |
 | `<files>/voice/` | Application Support `voice/`, excluded from iCloud backup, so that "the recording stays on this phone" holds |
 | OkHttp and `okhttp-sse` | `URLSession`. The event stream is parsed by hand from `URLSession.bytes`, because its `lines` leaves out the empty lines that end each event |
