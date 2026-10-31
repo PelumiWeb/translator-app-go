@@ -30,6 +30,12 @@ struct JobUpdate: Equatable, Sendable {
     let event: JobEvent
 }
 
+/// A request to speak, accepted and queued. Its audio is fetched from `audioURL` once the job is done.
+struct SpeechJob: Equatable, Sendable {
+    let id: String
+    let audioURL: String
+}
+
 /// One model the backend offers, as listed in its manifest.
 struct RemoteModel: Decodable, Equatable, Sendable {
     let id: String
@@ -75,10 +81,7 @@ final class BackendClient: Sendable {
 
         let (body, response) = try await send(request)
         guard (200..<300).contains(response.statusCode) else {
-            throw BackendError(
-                message: Self.errorMessage(in: body) ?? "The server answered \(response.statusCode)",
-                retryable: response.statusCode >= 500
-            )
+            throw Self.refusal(body, response)
         }
         do {
             return try JSONDecoder().decode(CreateJobResponse.self, from: body).id
@@ -87,16 +90,52 @@ final class BackendClient: Sendable {
         }
     }
 
+    /// Asks for `text` to be spoken in `language`, in the voice heard in `voiceWAV`. The server queues it like a
+    /// transcription: follow `jobEvents` until it is done, then fetch `speechAudio`. `idempotencyKey` works as for
+    /// `createJob`.
+    func createSpeech(voiceWAV: Data, text: String, language: Language, idempotencyKey: String) async throws -> SpeechJob {
+        var form = MultipartForm()
+        form.addField("text", value: text)
+        form.addField("lang", value: language.tag)
+        form.addFile("voice", filename: "voice.wav", contentType: "audio/wav", data: voiceWAV)
+
+        var request = URLRequest(url: url("/v1/speech"))
+        request.httpMethod = "POST"
+        request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        request.httpBody = form.body()
+
+        let (body, response) = try await send(request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw Self.refusal(body, response)
+        }
+        do {
+            let created = try JSONDecoder().decode(CreateSpeechResponse.self, from: body)
+            return SpeechJob(id: created.id, audioURL: created.audioURL)
+        } catch {
+            throw BackendError(message: "The server sent an unreadable response", retryable: false)
+        }
+    }
+
+    /// The audio a finished speech job produced, as a WAV file.
+    func speechAudio(_ audioURL: String) async throws -> Data {
+        var request = URLRequest(url: url(audioURL))
+        // It is the user's voice: never kept in a cache on the phone either.
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (body, response) = try await send(request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw Self.refusal(body, response)
+        }
+        return body
+    }
+
     /// Fetches the list of models the backend offers.
     func modelManifest() async throws -> [RemoteModel] {
         var request = URLRequest(url: url("/v1/models/manifest"))
         request.cachePolicy = .reloadIgnoringLocalCacheData
         let (body, response) = try await send(request)
         guard (200..<300).contains(response.statusCode) else {
-            throw BackendError(
-                message: Self.errorMessage(in: body) ?? "The server answered \(response.statusCode)",
-                retryable: response.statusCode >= 500
-            )
+            throw Self.refusal(body, response)
         }
         do {
             return try JSONDecoder().decode(ManifestResponse.self, from: body).models
@@ -185,6 +224,14 @@ final class BackendClient: Sendable {
         return BackendError(message: "\(prefix): \(error.localizedDescription)", retryable: true)
     }
 
+    /// A server fault is worth retrying; a request the server understood and refused is not.
+    private static func refusal(_ body: Data, _ response: HTTPURLResponse) -> BackendError {
+        BackendError(
+            message: errorMessage(in: body) ?? "The server answered \(response.statusCode)",
+            retryable: response.statusCode >= 500
+        )
+    }
+
     private static func errorMessage(in body: Data) -> String? {
         try? JSONDecoder().decode(ErrorResponse.self, from: body).error.message
     }
@@ -237,7 +284,7 @@ private extension JobEvent {
             case "partial": self = .partial(try decoder.decode(TextPayload.self, from: json).text)
             case "done":
                 let done = try decoder.decode(DonePayload.self, from: json)
-                self = .done(text: done.text, language: done.language ?? "")
+                self = .done(text: done.text ?? "", language: done.language ?? "")
             case "error": self = .failed(try decoder.decode(MessagePayload.self, from: json).message)
             default: self = .unknown // a type added later; older apps skip it
             }
@@ -283,12 +330,23 @@ private struct CreateJobResponse: Decodable {
     let id: String
 }
 
+private struct CreateSpeechResponse: Decodable {
+    let id: String
+    let audioURL: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case audioURL = "audio_url"
+    }
+}
+
 private struct TextPayload: Decodable {
     let text: String
 }
 
+/// A speech job ends with an empty "done": its result is the audio, fetched separately.
 private struct DonePayload: Decodable {
-    let text: String
+    let text: String?
     let language: String?
 }
 

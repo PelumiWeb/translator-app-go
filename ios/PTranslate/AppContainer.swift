@@ -24,8 +24,9 @@ final class AppContainer {
 
     let translator: any Translator
 
-    /// Says translations aloud in one of the phone's own voices.
-    let synthesizer: any SpeechSynthesizer = SystemSpeechSynthesizer()
+    /// Says translations aloud in the user's own voice, through the server, or in one of the phone's voices when
+    /// that cannot be done.
+    let synthesizer: any SpeechSynthesizer
 
     let pipeline: SpeechTranslationPipeline
 
@@ -81,6 +82,18 @@ final class AppContainer {
             try await downloads.download(from: source, to: target)
         })
         self.translator = translator
+
+        let (voice, player) = (voice, player)
+        let synthesizer = FallbackSpeechSynthesizer(
+            preferred: RemoteSpeechSynthesizer(
+                backend: backend,
+                voiceSample: { @MainActor in try await voice.loadWAV() },
+                play: { @MainActor audio in try await player.play(audio) },
+                stopPlaying: { @MainActor in player.stop() }
+            ),
+            fallback: SystemSpeechSynthesizer()
+        )
+        self.synthesizer = synthesizer
 
         pipeline = SpeechTranslationPipeline(
             transcriber: RoutingTranscriber(

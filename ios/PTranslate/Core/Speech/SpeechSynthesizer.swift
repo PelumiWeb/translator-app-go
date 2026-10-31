@@ -4,12 +4,13 @@ import Foundation
 /// a voice cloned from the speaker.
 protocol SpeechSynthesizer: Sendable {
     /// Speaks `text` in `language` and returns when it has finished, or when `stop()` cut it short. Cancelling the
-    /// caller stops the speech too. Fails if it cannot be spoken, for example because the phone has no voice for
-    /// that language.
+    /// caller stops it too, as far as each implementation can. Fails if it cannot be spoken, for example because
+    /// the phone has no voice for that language.
     func speak(_ text: String, language: Language) async throws(SpeechError)
 
-    /// Stops whatever is being spoken. Does nothing if nothing is.
-    func stop()
+    /// Stops whatever is being spoken. Does nothing if nothing is. Async, unlike Android's, because a voice may be
+    /// playing on the main actor, which another thread can reach only by waiting for it.
+    func stop() async
 }
 
 /// Why something could not be spoken, in words for the user.
