@@ -857,7 +857,7 @@ stores require block and report.
 
 ---
 
-## [ ] Milestone 19: The design
+## [~] Milestone 19: The design
 
 Added on 2026-10-31: the owner hands the app's design to Claude Design, to
 make it look great before more features are built. The brief is
@@ -865,15 +865,47 @@ make it look great before more features are built. The brief is
 of a translation with real timings, the screens of version 1, and what to
 ask for.
 
-Checkpoints, to be detailed when the design arrives:
+**Checkpoint 19.1: the design** (done)
+- The owner chose "Lagoon / Pearl" (working name Timbre) from Claude Design
+  on 2026-10-31. The handoff is in `docs/design/pearl/`: tokens, components,
+  and three screens (recording your voice, a conversation, the interpreter)
 
-- 19.1 The owner works with Claude Design: a style direction chosen, then
-  tokens, components and screens
-- 19.2 The design tokens and components in both apps, in SwiftUI and Compose
-- 19.3 The existing screens rebuilt to the design: recording your voice, the
-  interpreter, and settings, with the developer controls under "Advanced"
-- The new screens (sign-in, conversations, and so on) are built to the
-  design in their own milestones
+**Checkpoints 19.2 and 19.3: tokens, components, and today's screens**
+(Android, then iOS) (done)
+- The palette, IBM Plex Sans bundled and scaled with the phone's text size,
+  spacing and radii (ADR 0019). Always dark, the one mode designed
+- Fixed the same day: the first build followed the phone's appearance and
+  showed the proposed light palette on the owner's phone, which is not the
+  design. The apps are now dark whatever the phone's setting
+- Components: the record control with its rings (calmer while the voice is
+  made, still while it speaks, a fading halo with Reduce Motion), the
+  language chips with swap, a searchable language sheet, the dot waveform,
+  buttons and notices
+- Recording your voice: a teleprompter that moves through the passage over
+  the 20 seconds, the timer, then the recording's waveform to listen to,
+  record again, or keep
+- The interpreter: the two languages, what was said and its translation, and
+  a headline and line under it for every stage of a run, including
+  "Preparing your voice…", and "Speaking in the phone's voice" when the
+  user's own could not be made. Tap to stop it speaking. Haptics when
+  recording starts and stops
+- Settings, with the developer controls under Advanced: where speech is
+  turned into text, the speech model, the phone's speed, the last result
+- Underneath, on both phones: the speech reports whose voice it is in;
+  `pipeline.stopSpeaking`; the view models report a typed stage and the
+  screens own the wording; `levels` on recorded audio for the waveform
+- Tests: swapping languages, stopping speech, the voice reported, the
+  waveform's levels, and the stage in place of status text. Android 145
+  pass; iOS 167 pass, 1 skipped. iOS checked in the simulator, including
+  with the phone set to light. Android is built and tested, not yet looked at
+  on a screen
+- Not yet: rings that follow the microphone's level; a designed light mode;
+  the Plex families for Arabic, Devanagari, Thai and CJK
+- Verify: `make ios-device` and walk through recording your voice and a
+  translation; on Android, `make android-install`
+
+The new screens (sign-in, conversations, and so on) are built to the design
+in their own milestones.
 
 ---
 

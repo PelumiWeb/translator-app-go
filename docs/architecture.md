@@ -274,8 +274,9 @@ The user records one once, by reading a passage of about 20 seconds on a
   with their consent (section 9, ADR 0016). So are the Whisper model, which can be downloaded again,
   and Android's `device` preferences, which describe this phone only.
 
-The app has two screens and no navigation library: `AppRoot` shows one or the
-other from a single boolean.
+The app has three screens, the interpreter, settings and recording the voice,
+and no navigation library: `AppRoot` shows one of them from a state value. They
+follow the Pearl design (`docs/design/pearl`, ADR 0019).
 
 ## 3. iOS
 
@@ -739,6 +740,7 @@ Written in the milestone where the decision is implemented.
 | 0016 | Users' voices are kept on the server (written) | 13 |
 | 0017 | Messages are translated on the server (written) | 14 |
 | 0018 | Sign-in and sessions | 13 |
+| 0019 | The Pearl design in both apps (written) | 19 |
 
 ## 8. Known limits
 
