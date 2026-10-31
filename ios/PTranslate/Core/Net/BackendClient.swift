@@ -224,11 +224,12 @@ final class BackendClient: Sendable {
         return BackendError(message: "\(prefix): \(error.localizedDescription)", retryable: true)
     }
 
-    /// A server fault is worth retrying; a request the server understood and refused is not.
+    /// A server fault is worth retrying; a request the server understood and refused is not. Nor is 501: the server
+    /// cannot do this at all, such as speaking with no voice engine, so asking again gets the same answer.
     private static func refusal(_ body: Data, _ response: HTTPURLResponse) -> BackendError {
         BackendError(
             message: errorMessage(in: body) ?? "The server answered \(response.statusCode)",
-            retryable: response.statusCode >= 500
+            retryable: response.statusCode >= 500 && response.statusCode != 501
         )
     }
 

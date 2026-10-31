@@ -65,6 +65,10 @@ type API struct {
 
 	MaxUploadBytes int64
 	Heartbeat      time.Duration // gap between keep-alive comments on a stream
+
+	// CanSpeak is false when the server has no voice engine. Requests to
+	// speak are then refused at once, instead of queuing work nobody can do.
+	CanSpeak bool
 }
 
 // Handler builds the routes. Since Go 1.22 the standard ServeMux matches on

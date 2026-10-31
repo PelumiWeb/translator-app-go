@@ -82,6 +82,26 @@ func TestCreateSpeech(t *testing.T) {
 	}
 }
 
+func TestCreateSpeechWithoutAVoiceEngineIsRefused(t *testing.T) {
+	a := newTestAPI()
+	jobs := &fakeJobs{}
+	audio := &fakeAudio{}
+	a.Jobs, a.Audio, a.CanSpeak = jobs, audio, false
+
+	rec := httptest.NewRecorder()
+	a.Handler().ServeHTTP(rec, speechRequest(t, "es", "Buenos días", wavBytes(500)))
+
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want 501; body: %s", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"no_voice_engine"`) {
+		t.Errorf("body = %s, want the no_voice_engine code", rec.Body)
+	}
+	if len(audio.keys()) != 0 || len(jobs.synthesized) != 0 {
+		t.Errorf("stored %v and queued %v; nothing should be kept", audio.keys(), jobs.synthesized)
+	}
+}
+
 func TestCreateSpeechRejectsBadInput(t *testing.T) {
 	tests := []struct {
 		name       string

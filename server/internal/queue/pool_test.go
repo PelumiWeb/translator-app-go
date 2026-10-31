@@ -97,11 +97,18 @@ func startPool(t *testing.T, store *Store, p provider.Provider, audio AudioStore
 // timing. It fills in the settings every test shares.
 func startPoolWith(t *testing.T, store *Store, p provider.Provider, audio AudioStore, cfg Config) (stop func()) {
 	t.Helper()
+	return startPoolWithSynthesizer(t, store, p, fake.Synthesizer{}, audio, cfg)
+}
+
+// startPoolWithSynthesizer is startPoolWith with a voice engine of the test's
+// choosing, nil included.
+func startPoolWithSynthesizer(t *testing.T, store *Store, p provider.Provider, s provider.Synthesizer, audio AudioStore, cfg Config) (stop func()) {
+	t.Helper()
 	cfg.Workers = 2
 	cfg.PollInterval = 10 * time.Millisecond
 	// Retries almost at once, so tests of retrying finish in milliseconds.
 	cfg.Backoff = func(int) time.Duration { return 5 * time.Millisecond }
-	pool := NewPool(store, p, fake.Synthesizer{}, audio, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
+	pool := NewPool(store, p, s, audio, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan struct{})
@@ -626,6 +633,26 @@ func TestPoolFailsSynthesisAtOnceWhenTheRequestCannotBeServed(t *testing.T) {
 	}
 	if _, err := store.ResultAudio(context.Background(), id); !errors.Is(err, ErrNotReady) {
 		t.Errorf("ResultAudio of a failed job: error = %v, want ErrNotReady", err)
+	}
+}
+
+func TestPoolFailsSynthesisAtOnceWithoutAVoiceEngine(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+	audio := &fakeAudio{}
+	if err := audio.Put("voice.wav", bytes.NewReader(make([]byte, 64_000))); err != nil {
+		t.Fatal(err)
+	}
+
+	id := enqueueSynthesis(t, store, "hola")
+	startPoolWithSynthesizer(t, store, fake.Provider{}, nil, audio, Config{Lease: testLease, ShutdownGrace: time.Second})
+
+	row := waitForStatus(t, db, id, "failed")
+	if row.Attempts != 1 {
+		t.Errorf("attempts = %d, want 1: no attempt can succeed, so none is retried", row.Attempts)
+	}
+	if row.LastError == nil || *row.LastError != "this server has no voice engine" {
+		t.Errorf("last_error = %v", row.LastError)
 	}
 }
 

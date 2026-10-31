@@ -32,6 +32,12 @@ type createSpeechResponse struct {
 // The voice sample is used for this one request and deleted when the job
 // ends. The server keeps no voices.
 func (a *API) handleCreateSpeech(w http.ResponseWriter, r *http.Request) {
+	if !a.CanSpeak {
+		// 501 rather than 503: this is not a passing fault, so asking again
+		// later gets the same answer, and the phones know not to retry it.
+		writeError(w, http.StatusNotImplemented, "no_voice_engine", "this server has no voice engine")
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUploadBytes)
 
 	idempotencyKey := r.Header.Get("Idempotency-Key")

@@ -106,9 +106,9 @@ private fun VoiceSetupContent(
         )
         // Said before the user records, in plain words: what happens to it.
         Text(
-            "The recording stays on this phone. When a translation is spoken, it is sent to the server " +
-                "together with the text, used once to make the speech, and deleted. You can delete it " +
-                "from this phone at any time.",
+            "The recording stays on this phone. When a translation is spoken, it goes with the text to " +
+                "our server, and from there to Fish Audio, the service that makes the speech. Our server " +
+                "deletes it straight after. You can delete it from this phone at any time.",
             style = MaterialTheme.typography.bodySmall,
         )
 

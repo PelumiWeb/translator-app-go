@@ -355,6 +355,11 @@ func (p *Pool) transcribe(ctx context.Context, logger *slog.Logger, job Job) (re
 // synthesize speaks the job's text in the voice of its sample and stores the
 // audio. It returns the function that records where the audio is.
 func (p *Pool) synthesize(ctx context.Context, job Job) (record func(context.Context) error, err error) {
+	// A job queued by an API process that has an engine, picked up by a
+	// worker that has none: no attempt here can succeed.
+	if p.synthesizer == nil {
+		return nil, provider.Permanent(errors.New("this server has no voice engine"))
+	}
 	voice, err := p.audio.Open(job.AudioKey)
 	if err != nil {
 		return nil, provider.Permanent(err)

@@ -184,6 +184,7 @@ func newTestAPI() *API {
 		Stopping:       make(chan struct{}),
 		MaxUploadBytes: 1 << 20,
 		Heartbeat:      time.Hour, // effectively off unless a test lowers it
+		CanSpeak:       true,
 	}
 }
 

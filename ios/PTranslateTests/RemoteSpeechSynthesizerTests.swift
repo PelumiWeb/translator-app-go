@@ -131,6 +131,18 @@ struct RemoteSpeechSynthesizerTests {
         #expect(server.requestCount == 1)
     }
 
+    @Test func aServerWithNoVoiceEngineIsNotAskedAgain() async {
+        server.enqueue(.json(
+            status: 501,
+            body: #"{"error":{"code":"no_voice_engine","message":"this server has no voice engine"}}"#
+        ))
+
+        await #expect(throws: SpeechError(message: "this server has no voice engine")) {
+            try await speak(with: synthesizer)
+        }
+        #expect(server.requestCount == 1)
+    }
+
     @Test func withNoVoiceRecordedNothingIsSent() async {
         await #expect(throws: SpeechError(message: "No voice has been recorded")) {
             try await speak(with: synthesizer(sample: nil))

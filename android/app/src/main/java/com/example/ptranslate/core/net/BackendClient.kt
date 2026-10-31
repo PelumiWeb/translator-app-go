@@ -259,10 +259,14 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
         else -> JobEvent.Unknown // a type added later; older apps skip it
     }
 
-    /** A server fault is worth retrying; a request the server understood and refused is not. */
+    /**
+     * A server fault is worth retrying; a request the server understood and
+     * refused is not. Nor is 501: the server cannot do this at all, such as
+     * speaking with no voice engine, so asking again gets the same answer.
+     */
     private fun refusal(result: HttpResult) = BackendException(
         errorMessage(result.text) ?: "The server answered ${result.code}",
-        retryable = result.code >= 500,
+        retryable = result.code >= 500 && result.code != 501,
     )
 
     private fun errorMessage(body: String): String? =

@@ -181,6 +181,20 @@ class RemoteSpeechSynthesizerTest {
     }
 
     @Test
+    fun `a server with no voice engine is not asked again`() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(501)
+                .setBody("""{"error":{"code":"no_voice_engine","message":"this server has no voice engine"}}"""),
+        )
+
+        val error = speakFails()
+
+        assertEquals("this server has no voice engine", error.message)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
     fun `with no voice recorded nothing is sent`() {
         val error = speakFails(synthesizer(wav = null))
 

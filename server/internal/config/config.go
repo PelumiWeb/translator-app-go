@@ -22,6 +22,17 @@ type Config struct {
 	// FakeFailAttempts makes the fake provider fail the first N attempts of
 	// every job, to watch retries happen. 0 in normal use.
 	FakeFailAttempts int
+
+	// VoiceEngine names the engine that speaks in users' voices: "fish" for
+	// Fish Audio; "fake", which answers with beeps, for development; or
+	// empty for none, in which case requests to speak are refused and the
+	// phones use their own voices. A Fish Audio key on its own chooses "fish".
+	VoiceEngine string
+
+	// FishAudioAPIKey is secret: it lives in server/.env, which git ignores.
+	// FishAudioModel picks one of their models; empty for their default.
+	FishAudioAPIKey string
+	FishAudioModel  string
 }
 
 // Load is called once from main. Nothing else in the server reads the
@@ -40,6 +51,10 @@ func Load() Config {
 		SweepInterval: envDuration("SWEEP_INTERVAL", 30*time.Second),
 
 		FakeFailAttempts: envInt("FAKE_FAIL_ATTEMPTS", 0),
+
+		VoiceEngine:     env("VOICE_ENGINE", ""),
+		FishAudioAPIKey: env("FISH_AUDIO_API_KEY", ""),
+		FishAudioModel:  env("FISH_AUDIO_MODEL", ""),
 	}
 }
 

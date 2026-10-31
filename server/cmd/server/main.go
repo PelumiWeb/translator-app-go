@@ -3,6 +3,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -20,7 +21,9 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/internal/api"
 	"github.com/PelumiWeb/translator-app-go/server/internal/config"
 	"github.com/PelumiWeb/translator-app-go/server/internal/models"
+	"github.com/PelumiWeb/translator-app-go/server/internal/provider"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fake"
+	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fish"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 	"github.com/PelumiWeb/translator-app-go/server/internal/storage"
 	"github.com/PelumiWeb/translator-app-go/server/migrations"
@@ -105,12 +108,34 @@ func run(logger *slog.Logger) error {
 		WordDelay:    300 * time.Millisecond,
 		FailAttempts: cfg.FakeFailAttempts,
 	}
-	// Stands in for a voice-cloning engine: it answers with beeps. A real
-	// one is added in milestone 9.4.
-	synthesizer := fake.Synthesizer{
-		Delay:        1500 * time.Millisecond,
-		FailAttempts: cfg.FakeFailAttempts,
+	// The voice engine. A nil interface value means there is none: the API
+	// then refuses requests to speak, and the phones speak in their own
+	// voices. A Fish Audio key on its own is enough to choose Fish Audio.
+	engine := cfg.VoiceEngine
+	if engine == "" && cfg.FishAudioAPIKey != "" {
+		engine = "fish"
 	}
+	var synthesizer provider.Synthesizer
+	switch engine {
+	case "":
+	case "fish":
+		if cfg.FishAudioAPIKey == "" {
+			return errors.New("VOICE_ENGINE=fish needs FISH_AUDIO_API_KEY (put it in server/.env)")
+		}
+		synthesizer = fish.Synthesizer{
+			APIKey:    cfg.FishAudioAPIKey,
+			Model:     cfg.FishAudioModel,
+			VoiceText: provider.OnboardingPassage,
+		}
+	case "fake":
+		synthesizer = fake.Synthesizer{
+			Delay:        1500 * time.Millisecond,
+			FailAttempts: cfg.FakeFailAttempts,
+		}
+	default:
+		return fmt.Errorf("unknown VOICE_ENGINE %q: want fish, fake, or nothing for none", cfg.VoiceEngine)
+	}
+	logger.Info("voice engine", "engine", cmp.Or(engine, "none"))
 
 	store := queue.NewStore(pool)
 
@@ -174,6 +199,7 @@ func run(logger *slog.Logger) error {
 		Stopping:       ctx.Done(),
 		MaxUploadBytes: maxUploadBytes,
 		Heartbeat:      15 * time.Second,
+		CanSpeak:       synthesizer != nil,
 	}
 
 	srv := &http.Server{
