@@ -53,22 +53,33 @@ db-reset: ## Drop and recreate the dev database (deletes all local jobs)
 
 # --- Server -----------------------------------------------------------------
 
+# server/.env holds secrets, such as the voice engine's key, as NAME=value
+# lines; git ignores it. Its variables are exported to the server.
+SERVER_ENV := set -a; [ ! -f .env ] || . ./.env; set +a;
+
 .PHONY: server-run
 server-run: ## Run the Go server on :8080 (applies migrations on start)
-	cd server && go run ./cmd/server
+	cd server && $(SERVER_ENV) go run ./cmd/server
 
 # The two halves as separate processes. Run each in its own terminal.
 .PHONY: server-run-api
 server-run-api: ## Run only the HTTP API (pair with server-run-worker)
-	cd server && go run ./cmd/server -role api
+	cd server && $(SERVER_ENV) go run ./cmd/server -role api
 
 .PHONY: server-run-worker
 server-run-worker: ## Run only the job workers (pair with server-run-api)
-	cd server && go run ./cmd/server -role worker
+	cd server && $(SERVER_ENV) go run ./cmd/server -role worker
 
 .PHONY: server-run-flaky
 server-run-flaky: ## Run the server with a provider that fails each job twice, to watch retries
-	cd server && FAKE_FAIL_ATTEMPTS=2 go run ./cmd/server
+	cd server && $(SERVER_ENV) FAKE_FAIL_ATTEMPTS=2 go run ./cmd/server
+
+# One real request to the voice engine, with whisper.cpp's sample clip as the
+# voice, then plays the result. Costs a fraction of a cent.
+.PHONY: voice-check
+voice-check: ## Ask Fish Audio to speak once (key from server/.env) and play what it made
+	cd server && $(SERVER_ENV) FISH_LIVE_OUT=/tmp/vt-fish.wav go test ./internal/provider/fish -run TestLiveSynthesis -count=1 -v
+	afplay /tmp/vt-fish.wav
 
 .PHONY: server-test
 server-test: ## Run the Go tests (needs `make db-up`)
@@ -165,6 +176,23 @@ ios-test: ios-whisper ## Run the iOS tests on the simulator and print the counts
 	fi; \
 	exit $$status
 
+# A real iPhone has no localhost to the Mac: it reaches the server by the
+# Mac's Bonjour name on the same Wi-Fi. The project sets that name for phone
+# builds; this target reads it afresh, in case the Mac was renamed. The phone
+# must be unlocked, with Developer Mode on (Settings, Privacy & Security).
+IOS_DEVICE ?= iPhone
+MAC_HOST   := $(shell scutil --get LocalHostName 2>/dev/null).local
+
+.PHONY: ios-device
+ios-device: ios-whisper ## Build, install and open the app on the connected iPhone; start the server first
+	xcodebuild build -project $(IOS_PROJECT) -scheme PTranslate -destination 'platform=iOS,name=$(IOS_DEVICE)' \
+		-allowProvisioningUpdates -quiet BACKEND_URL=http://$(MAC_HOST):8080
+	@app=$$(xcodebuild -project $(IOS_PROJECT) -scheme PTranslate -destination 'generic/platform=iOS' -showBuildSettings 2>/dev/null \
+		| awk -F' = ' '/ TARGET_BUILD_DIR /{dir=$$2} / FULL_PRODUCT_NAME /{name=$$2} END{print dir "/" name}'); \
+	xcrun devicectl device install app --device "$(IOS_DEVICE)" "$$app"
+	xcrun devicectl device process launch --device "$(IOS_DEVICE)" pelumi.PTranslate
+	@echo "The app on the phone talks to http://$(MAC_HOST):8080"
+
 # --- Whisper model ----------------------------------------------------------
 
 # A file target: make skips the download when the file already exists.
@@ -197,7 +225,7 @@ android-push-model: $(MODEL_FILE) ## Copy the model to the device for the device
 # plays the result. With the fake engine the answer is one beep per word.
 # The voice sample here is three seconds of silence: the fake does not listen.
 .PHONY: sample-speech
-sample-speech: ## Ask the running server to speak a sentence, and play the result
+sample-speech: ## Ask the running server to speak a sentence (start it with VOICE_ENGINE=fake), and play the result
 	@python3 -c "import wave; w = wave.open('/tmp/vt-voice.wav', 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(bytes(96000)); w.close()"
 	@resp=$$(curl -sf -F voice=@/tmp/vt-voice.wav -F lang=es -F "text=Buenos dias, como estas hoy" localhost:8080/v1/speech) \
 		&& events=$$(echo "$$resp" | sed -E 's/.*"events_url":"([^"]+)".*/\1/') \
