@@ -31,6 +31,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				PTranslate.entitlements,
 			);
 			target = 844B8366307F599E003153E6 /* PTranslate */;
 		};
@@ -361,6 +362,7 @@
 				DEVELOPMENT_TEAM = 4USZRKF452;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				CODE_SIGN_ENTITLEMENTS = PTranslate/PTranslate.entitlements;
 				INFOPLIST_FILE = PTranslate/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -395,6 +397,7 @@
 				DEVELOPMENT_TEAM = 4USZRKF452;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				CODE_SIGN_ENTITLEMENTS = PTranslate/PTranslate.entitlements;
 				INFOPLIST_FILE = PTranslate/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

@@ -8,6 +8,12 @@ struct BackendError: LocalizedError {
     /// understood the request and refused it, since sending the same thing again gets the same answer.
     let retryable: Bool
 
+    /// The HTTP status of a refusal; 0 when the server was not reached.
+    var status: Int = 0
+
+    /// The server's error code for a refusal, such as "handle_taken".
+    var code: String?
+
     var errorDescription: String? { message }
 }
 
@@ -52,7 +58,8 @@ struct ModelDownload {
     let bytes: URLSession.AsyncBytes
 }
 
-/// The only type that knows the backend's URLs and JSON.
+/// Knows the URLs and JSON of jobs, speech and models. `AccountClient` and `RoomsClient` do the same for accounts
+/// and rooms.
 final class BackendClient: Sendable {
     private let baseURL: URL
     private let session: URLSession
@@ -217,7 +224,7 @@ final class BackendClient: Sendable {
     }
 
     /// What a failed connection becomes. A cancelled task stays cancelled, so that it is never retried.
-    fileprivate static func connectionError(_ error: any Error, _ prefix: String) -> any Error {
+    static func connectionError(_ error: any Error, _ prefix: String) -> any Error {
         if error is CancellationError || (error as? URLError)?.code == .cancelled {
             return CancellationError()
         }
@@ -226,10 +233,13 @@ final class BackendClient: Sendable {
 
     /// A server fault is worth retrying; a request the server understood and refused is not. Nor is 501: the server
     /// cannot do this at all, such as speaking with no voice engine, so asking again gets the same answer.
-    private static func refusal(_ body: Data, _ response: HTTPURLResponse) -> BackendError {
-        BackendError(
-            message: errorMessage(in: body) ?? "The server answered \(response.statusCode)",
-            retryable: response.statusCode >= 500 && response.statusCode != 501
+    static func refusal(_ body: Data, _ response: HTTPURLResponse) -> BackendError {
+        let detail = try? JSONDecoder().decode(ErrorResponse.self, from: body).error
+        return BackendError(
+            message: detail?.message ?? "The server answered \(response.statusCode)",
+            retryable: response.statusCode >= 500 && response.statusCode != 501,
+            status: response.statusCode,
+            code: detail?.code
         )
     }
 
@@ -295,8 +305,8 @@ private extension JobEvent {
     }
 }
 
-/// A `multipart/form-data` body, the form encoding the upload endpoint takes.
-private struct MultipartForm {
+/// A `multipart/form-data` body, the form encoding the upload endpoints take.
+struct MultipartForm {
     private let boundary = "Boundary-\(UUID().uuidString)"
     private var data = Data()
 
@@ -357,6 +367,7 @@ private struct MessagePayload: Decodable {
 
 private struct ErrorResponse: Decodable {
     struct Detail: Decodable {
+        var code: String?
         let message: String
     }
 

@@ -6,11 +6,11 @@ import SwiftUI
 ///
 /// - Parameters:
 ///   - hasOwnVoice: whether the user has recorded their voice, which changes some of the wording.
-///   - onSettingsTapped: opens settings.
+///   - onSettingsTapped: opens settings; nil in the tabbed app, where they are under Profile.
 struct TranslateScreen: View {
     let viewModel: TranslateViewModel
     let hasOwnVoice: Bool
-    let onSettingsTapped: () -> Void
+    var onSettingsTapped: (() -> Void)?
 
     var body: some View {
         InterpreterContent(
@@ -58,7 +58,7 @@ struct InterpreterActions {
     var selectSource: (Language) -> Void
     var selectTarget: (Language) -> Void
     var swap: () -> Void
-    var settings: () -> Void
+    var settings: (() -> Void)?
 }
 
 private enum Side: Identifiable {
@@ -85,7 +85,8 @@ private struct InterpreterContent: View {
             // Settings in a row of its own, so long language names below never run into it.
             HStack {
                 Spacer()
-                Button(action: actions.settings) {
+                if let settings = actions.settings {
+                Button(action: settings) {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 17))
                         .foregroundStyle(Palette.fg2)
@@ -95,7 +96,9 @@ private struct InterpreterContent: View {
                 .buttonBorderShape(.circle)
                 .disabled(!idle)
                 .accessibilityLabel("Settings")
+                }
             }
+            .frame(minHeight: 24)
             .padding(.trailing, -12)
 
             LanguageChips(

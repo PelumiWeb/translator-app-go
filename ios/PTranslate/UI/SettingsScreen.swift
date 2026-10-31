@@ -1,70 +1,5 @@
 import SwiftUI
 
-/// Settings: the user's voice, and under "Advanced" the controls that left the interpreter for being about how it
-/// works rather than what it does.
-///
-/// - Parameters:
-///   - savedVoice: length of the user's saved voice recording, or nil if they have not made one.
-///   - onVoiceTapped: opens the screen where it is recorded, replaced or deleted.
-struct SettingsScreen: View {
-    let viewModel: TranslateViewModel
-    let savedVoice: Duration?
-    let onVoiceTapped: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text(
-                        savedVoice.map { "Recorded, \($0.components.seconds) seconds. Translations are spoken in your voice." }
-                            ?? "Not recorded. Translations are spoken in the phone's voice."
-                    )
-                    .font(.pearlMessage)
-                    Button(savedVoice == nil ? "Record your voice" : "Record again or delete", action: onVoiceTapped)
-                        .font(.pearlMessage)
-                } header: {
-                    sectionHeader("Your voice")
-                }
-                .listRowBackground(Palette.bgRaised)
-
-                Section {
-                    NavigationLink {
-                        AdvancedSettings(viewModel: viewModel)
-                    } label: {
-                        Text("Advanced")
-                            .font(.pearlMessage)
-                    }
-                }
-                .listRowBackground(Palette.bgRaised)
-
-                Section {
-                    Text("Version \(version). Set in IBM Plex Sans, under the SIL Open Font License.")
-                        .font(.pearlSmall)
-                        .foregroundStyle(Palette.fg2)
-                } header: {
-                    sectionHeader("About")
-                }
-                .listRowBackground(Palette.bgRaised)
-            }
-            .foregroundStyle(Palette.fg)
-            .scrollContentBackground(.hidden)
-            .background(Palette.bg)
-            .navigationTitle("Settings")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-
-    private var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-    }
-}
-
 private func sectionHeader(_ title: String) -> some View {
     Text(title)
         .font(.pearlLabel)
@@ -72,8 +7,9 @@ private func sectionHeader(_ title: String) -> some View {
         .textCase(nil)
 }
 
-/// How speech is turned into text, the speech model on the phone, its speed, and the last result's details.
-private struct AdvancedSettings: View {
+/// Advanced, opened from the profile: how speech is turned into text, the speech model on the phone, its speed, and
+/// the last result's details.
+struct AdvancedSettings: View {
     let viewModel: TranslateViewModel
 
     var body: some View {

@@ -6,6 +6,19 @@
 	<string>$(BACKEND_URL)</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>The app records what you say so it can transcribe and translate it.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>The app scans the QR code of someone you want to add.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>pelumi.PTranslate.add</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>timbre</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The app talks to the development server on this network.</string>
 	<key>UIUserInterfaceStyle</key>

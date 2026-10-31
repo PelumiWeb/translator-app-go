@@ -8,6 +8,16 @@ extension Font {
     static let pearlPassageCurrent = medium(25, relativeTo: .title)
     static let pearlPassageOther = regular(16, relativeTo: .body)
     static let pearlTranslation = medium(28, relativeTo: .title)
+    /// The welcome headline.
+    static let pearlHero = medium(34, relativeTo: .largeTitle)
+    /// A screen's large title, as "Rooms". The design asks for 600; Plex is bundled at 400 and 500.
+    static let pearlLargeTitle = medium(32, relativeTo: .largeTitle)
+    /// The question an onboarding step asks.
+    static let pearlScreenTitle = medium(28, relativeTo: .title)
+    /// What is typed in a text field.
+    static let pearlField = regular(18, relativeTo: .body)
+    static let pearlMessageStrong = medium(16, relativeTo: .body)
+    static let pearlLead = regular(17, relativeTo: .body)
     static let pearlTitle = medium(22, relativeTo: .title2)
     static let pearlHeadline = medium(19, relativeTo: .title3)
     static let pearlMessage = regular(16, relativeTo: .body)

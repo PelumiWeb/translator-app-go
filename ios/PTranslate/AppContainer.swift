@@ -30,6 +30,25 @@ final class AppContainer {
 
     let pipeline: SpeechTranslationPipeline
 
+    /// Writes down what was said: on this phone or on the server, as the route and the phone allow.
+    let transcriber: any Transcriber
+
+    /// The signed-in user, kept across launches, the token in the Keychain (ADR 0018).
+    let account: Account
+
+    let rooms: RoomsClient
+
+    /// One stream of room changes for every screen that shows rooms.
+    let roomFeed: RoomFeed
+
+    /// Plays room notes: the sender's voice from the server, or this phone's voice reading the words.
+    let messagePlayer: MessagePlayer
+
+    /// The language the phone is set to, offered first when signing up, if Whisper knows it.
+    let phoneLanguage: Language? = Locale.current.language.languageCode
+        .map { Language($0.identifier == "nb" ? "no" : $0.identifier) }
+        .flatMap { WhisperLanguages.supports($0) ? $0 : nil }
+
     /// The recording of the user's voice, in the app's private files.
     let voice: any VoiceSampleStore = FileVoiceSampleStore(directory: .applicationSupportDirectory.appending(path: "voice"))
     let voiceSetup: any VoiceSetupPreference = UserDefaultsVoiceSetup(defaults: .standard)
@@ -38,7 +57,29 @@ final class AppContainer {
     private let measureWhenReady: Task<Void, Never>
 
     init(bundle: Bundle = .main) {
-        let backend = BackendClient(baseURL: Self.backendURL(in: bundle), session: URLSession(configuration: .default))
+        let session = URLSession(configuration: .default)
+        let backend = BackendClient(baseURL: Self.backendURL(in: bundle), session: session)
+
+        // Requests on behalf of the signed-in user. The token comes from the account, and a session the server says
+        // has ended is forgotten there. The account is made after the client it uses, so the closures reach it
+        // through a box filled in just below.
+        let box = AccountBox()
+        let rest = Rest(
+            baseURL: Self.backendURL(in: bundle),
+            session: session,
+            token: { await box.account?.token },
+            sessionEnded: { await box.account?.forget() }
+        )
+        let account = Account(
+            client: AccountClient(rest: rest),
+            store: KeychainSessionStore(defaults: .standard),
+            progress: UserDefaultsOnboardingProgress(defaults: .standard)
+        )
+        box.account = account
+        self.account = account
+        let rooms = RoomsClient(rest: rest)
+        self.rooms = rooms
+        roomFeed = RoomFeed(rooms: rooms)
         let models = ModelManager(
             backend: backend,
             directory: .applicationSupportDirectory.appending(path: "models"),
@@ -84,6 +125,7 @@ final class AppContainer {
         self.translator = translator
 
         let (voice, player) = (voice, player)
+        let phoneVoice = SystemSpeechSynthesizer()
         let synthesizer = FallbackSpeechSynthesizer(
             preferred: RemoteSpeechSynthesizer(
                 backend: backend,
@@ -91,22 +133,32 @@ final class AppContainer {
                 play: { @MainActor audio in try await player.play(audio) },
                 stopPlaying: { @MainActor in player.stop() }
             ),
-            fallback: SystemSpeechSynthesizer()
+            fallback: phoneVoice
         )
         self.synthesizer = synthesizer
+        messagePlayer = MessagePlayer(rooms: rooms, player: player, phoneVoice: phoneVoice)
 
+        let transcriber = RoutingTranscriber(
+            onDevice: whisper,
+            cloud: RemoteTranscriber(backend: backend),
+            route: route,
+            modelReady: { await models.installedModel != nil },
+            realTimeFactor: { await benchmark.realTimeFactor },
+            thresholds: thresholds
+        )
+        self.transcriber = transcriber
         pipeline = SpeechTranslationPipeline(
-            transcriber: RoutingTranscriber(
-                onDevice: whisper,
-                cloud: RemoteTranscriber(backend: backend),
-                route: route,
-                modelReady: { await models.installedModel != nil },
-                realTimeFactor: { await benchmark.realTimeFactor },
-                thresholds: thresholds
-            ),
+            transcriber: transcriber,
             translator: translator,
             synthesizer: synthesizer
         )
+    }
+
+    /// Signing out, or deleting the account, leaves nothing of the person on this phone: the next person to sign
+    /// in must not speak in their voice. Called by the root view when the session goes.
+    func forgetLocalVoice() async {
+        try? await voice.delete()
+        voiceSetup.skipped = false
     }
 
     isolated deinit {
@@ -139,4 +191,10 @@ final class AppContainer {
     private nonisolated static func read(_ clip: URL) async throws -> PCMAudio {
         try PCMAudio(wav: Data(contentsOf: clip))
     }
+}
+
+/// Lets the request closures reach the account, which is made after them.
+@MainActor
+private final class AccountBox {
+    weak var account: Account?
 }

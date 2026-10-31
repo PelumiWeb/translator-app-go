@@ -12,13 +12,19 @@ private let passageLines = [
     "they can still be spoken in my own voice.",
 ]
 
-/// Where the user records the sample of their voice that translations are spoken in.
+/// Where the user records the sample of their voice that their words are spoken in, and agrees to it being kept.
+/// During sign-up, `step` numbers it and `onBack` goes to the step before.
 struct VoiceSetupScreen: View {
     let viewModel: VoiceSetupViewModel
+    var step: Int?
+    var onBack: (() -> Void)?
     let onDone: () -> Void
 
     var body: some View {
         VoiceSetupContent(
+            step: step,
+            onBack: onBack,
+            keeping: viewModel.keeping,
             stage: viewModel.stage,
             recordingStarted: viewModel.recordingStarted,
             recorded: viewModel.recorded,
@@ -56,6 +62,9 @@ struct VoiceSetupActions {
 
 /// Stateless, so it can be previewed without a view model.
 private struct VoiceSetupContent: View {
+    var step: Int?
+    var onBack: (() -> Void)?
+    var keeping = false
     let stage: VoiceSetupStage
     let recordingStarted: Date?
     let recorded: Duration
@@ -69,21 +78,27 @@ private struct VoiceSetupContent: View {
     @State private var playbackStarted: Date?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                switch stage {
-                case .intro: intro
-                case .recording: recordingInProgress
-                case .review: review
-                }
-                if let error {
-                    Notice(text: error)
+        VStack(spacing: 0) {
+            if let step {
+                OnboardingHeader(step: step, total: onboardingSteps, onBack: onBack)
+                    .padding(.horizontal, 20)
+            }
+            if stage == .review {
+                consent
+            } else {
+                ScrollView {
+                    VStack(spacing: 12) {
+                        if stage == .intro { intro } else { recordingInProgress }
+                        if let error {
+                            Notice(text: error)
+                        }
+                    }
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 24)
                 }
             }
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 24)
         }
         .foregroundStyle(Palette.fg)
         .background(Palette.bg.ignoresSafeArea())
@@ -105,31 +120,15 @@ private struct VoiceSetupContent: View {
         Text(saved == nil ? "Be heard in your own voice" : "Your voice is recorded")
             .font(.pearlTitle)
         Text(
-            saved.map { "\($0.components.seconds) seconds, kept on this phone. Record a new one, keep it, or delete it." }
-                ?? "Read the lines below aloud, at your normal pace. About 20 seconds."
+            saved.map { "\($0.components.seconds) seconds. Record a new one, or keep the one you have." }
+                ?? "Read the lines below aloud, at your normal pace. About 20 seconds. You'll hear it back before anything is kept."
         )
         .font(.pearlBody)
         .foregroundStyle(Palette.fg2)
         Teleprompter(current: 0)
             .padding(.vertical, 16)
         RecordControl(state: .idle, label: saved == nil ? "Start recording" : "Record a new one", action: actions.record)
-        if saved == nil {
-            LinkButton("Not now, use the phone's voice", action: actions.skip)
-        } else {
-            HStack(spacing: 8) {
-                LinkButton("Keep it", action: actions.skip)
-                LinkButton("Delete my voice", action: actions.delete)
-            }
-        }
-        // Said before the user records, in plain words: what happens to it.
-        Text(
-            "The recording stays on this phone. When a translation is spoken, it goes with the text to "
-                + "our server, and from there to Fish Audio, the service that makes the speech. Our server "
-                + "deletes it straight after. You can delete it from this phone at any time."
-        )
-        .font(.pearlMeta)
-        .foregroundStyle(Palette.fg2)
-        .padding(.top, 8)
+        LinkButton(saved == nil ? "Not now, use the phone's voice" : "Keep the one I have", action: actions.skip)
     }
 
     @ViewBuilder
@@ -159,44 +158,81 @@ private struct VoiceSetupContent: View {
         LinkButton("Not now, use the phone's voice", action: actions.skip)
     }
 
-    @ViewBuilder
-    private var review: some View {
-        Text("Recorded")
-            .font(.pearlLabel)
-        Text(clock(recorded))
-            .font(.pearlTimer)
-            .tracking(-0.9)
-            .monospacedDigit()
-        Text(problem == nil ? "Listen back, then keep it." : "This one cannot be kept.")
-            .font(.pearlSmall)
-            .foregroundStyle(Palette.fg2)
-        // While it plays, the played part of the waveform fills in.
-        TimelineView(.animation(paused: !playing)) { context in
-            let total = max(recorded / .seconds(1), 0.1)
-            let played = playbackStarted.map { min(context.date.timeIntervalSince($0) / total, 1) } ?? 1
-            HStack(spacing: 12) {
-                Button(action: actions.listen) {
-                    Image(systemName: playing ? "stop.fill" : "play.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Palette.onYou)
-                        .frame(width: 44, height: 44)
-                        .background(Palette.you, in: Circle())
+    /// After recording: listen back, and agree to the voice being kept, in the design's plain words: what is kept,
+    /// what it is for, how to delete it.
+    private var consent: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(problem == nil ? "That's your voice. Keep it?" : "Let's try that again.")
+                        .font(.pearlScreenTitle)
+                        .accessibilityAddTraits(.isHeader)
+                    // While it plays, the played part of the waveform fills in.
+                    TimelineView(.animation(paused: !playing)) { context in
+                        let total = max(recorded / .seconds(1), 0.1)
+                        let played = playbackStarted.map { min(context.date.timeIntervalSince($0) / total, 1) } ?? 1
+                        HStack(spacing: 12) {
+                            Button(action: actions.listen) {
+                                Image(systemName: playing ? "pause.fill" : "play.fill")
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(Palette.you)
+                                    .frame(width: 44, height: 44)
+                                    .background(Palette.onYou, in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(playing ? "Stop listening" : "Listen")
+                            DotWaveform(levels: levels, color: Palette.onYou, played: played)
+                            Text(clock(recorded)).font(.pearlMeta).monospacedDigit().foregroundStyle(Palette.onYou)
+                        }
+                        .padding(12)
+                        .background(Palette.you, in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    if let problem {
+                        Hint(text: problem, systemImage: "ear")
+                    } else {
+                        ConsentBlock(title: "What we keep", text: "This \(recorded.components.seconds)-second recording, on our server.")
+                        ConsentBlock(
+                            title: "What it's for",
+                            text: "Only to speak your own words, when someone plays a message you sent. Fish Audio makes the speech for us."
+                        )
+                        ConsentBlock(title: "Delete it any time", text: "In Profile, under Your voice. Your messages will then use the phone's voice.")
+                    }
+                    if let error {
+                        Notice(text: error)
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(playing ? "Stop listening" : "Listen")
-                DotWaveform(levels: levels, color: Palette.you, played: played)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 16)
             }
+            VStack(spacing: 10) {
+                if problem == nil {
+                    Button(keeping ? "Keeping…" : "Keep my voice", action: actions.use)
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(keeping)
+                    Button("Record again", action: actions.record)
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(keeping)
+                } else {
+                    Button("Record again", action: actions.record).buttonStyle(PrimaryButtonStyle())
+                }
+                LinkButton(saved == nil ? "Use the phone's voice instead" : "Keep the one I have", action: actions.skip)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
         }
-        .padding(.vertical, 16)
-        if let problem {
-            Notice(text: problem)
+    }
+}
+
+private struct ConsentBlock: View {
+    let title: String
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.custom("IBMPlexSans-Medm", size: 17, relativeTo: .body)).foregroundStyle(Palette.fg)
+            Text(text).font(.pearlLead).foregroundStyle(Palette.fg2).lineSpacing(4)
         }
-        Button("Use this recording", action: actions.use)
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(problem != nil)
-            .padding(.top, 8)
-        LinkButton("Record again", action: actions.record)
-        LinkButton(saved == nil ? "Not now, use the phone's voice" : "Cancel, keep my saved voice", action: actions.skip)
     }
 }
 

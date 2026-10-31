@@ -7,6 +7,8 @@ struct PTranslateApp: App {
     private let container: AppContainer
     @State private var translate: TranslateViewModel
     @State private var voiceSetup: VoiceSetupViewModel
+    /// An ID from a timbre://add link that opened the app, waiting to be offered.
+    @State private var addHandle: String?
 
     init() {
         let container = AppContainer()
@@ -30,6 +32,7 @@ struct PTranslateApp: App {
                 player: container.player,
                 samples: container.voice,
                 preference: container.voiceSetup,
+                account: container.account,
                 requestMicrophone: requestMicrophone
             )
         )
@@ -37,13 +40,11 @@ struct PTranslateApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppRoot(
-                voice: container.voice,
-                voiceSetupSkipped: container.voiceSetup.skipped,
-                translate: translate,
-                voiceSetup: voiceSetup
-            )
-            .modifier(LanguagePackDownloads(downloads: container.translationDownloads))
+            AppRoot(container: container, translate: translate, voiceSetup: voiceSetup, addHandle: $addHandle)
+                .modifier(LanguagePackDownloads(downloads: container.translationDownloads))
+                .onOpenURL { url in
+                    if let handle = handle(fromCode: url.absoluteString) { addHandle = handle }
+                }
         }
     }
 }

@@ -2,14 +2,16 @@
 /// src/whisper.cpp). The cloud path is held to the same list so that a recording can always fall back from one to
 /// the other.
 enum WhisperLanguages {
-    private static let tags = Set(
+    /// In whisper.cpp's order, roughly most spoken first.
+    static let all: [Language] =
         ("en zh de es ru ko fr ja pt tr pl ca nl ar sv it id hi fi vi he uk el ms cs ro da hu ta no "
             + "th ur hr bg lt la mi ml cy sk te fa lv bn sr az sl kn et mk br eu is hy ne mn bs kk sq sw "
             + "gl mr pa si km sn yo so af oc ka be tg sd gu am yi lo uz fo ht ps tk nn mt sa lb my bo tl "
             + "mg as tt haw ln ha ba jw su yue")
             .split(separator: " ")
-            .map(String.init)
-    )
+            .map { Language(String($0)) }
+
+    private static let tags = Set(all.map(\.tag))
 
     static func supports(_ language: Language) -> Bool {
         tags.contains(language.tag)

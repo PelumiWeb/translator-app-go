@@ -9,7 +9,8 @@ enum VoiceSetupStage {
     case review
 }
 
-/// Records, reviews and saves the sample of the user's voice.
+/// Records, reviews and keeps the sample of the user's voice: on the server, with their consent, so the people they
+/// talk to hear them in it (ADR 0016), and on the phone, for the interpreter.
 @MainActor
 @Observable
 final class VoiceSetupViewModel {
@@ -30,6 +31,9 @@ final class VoiceSetupViewModel {
     private(set) var playing = false
     private(set) var error: String?
 
+    /// The recording is being kept: uploaded, then saved on the phone.
+    private(set) var keeping = false
+
     /// Set when the user is finished here, one way or another.
     private(set) var finished = false
 
@@ -45,6 +49,7 @@ final class VoiceSetupViewModel {
     @ObservationIgnored private let player: any AudioPlayer
     @ObservationIgnored private let samples: any VoiceSampleStore
     @ObservationIgnored private let preference: any VoiceSetupPreference
+    @ObservationIgnored private let account: Account?
     @ObservationIgnored private let requestMicrophone: () async -> Bool
     @ObservationIgnored private let maxRecording: Duration
 
@@ -58,9 +63,11 @@ final class VoiceSetupViewModel {
         player: any AudioPlayer,
         samples: any VoiceSampleStore,
         preference: any VoiceSetupPreference,
+        account: Account? = nil,
         requestMicrophone: @escaping () async -> Bool,
         maxRecording: Duration = .seconds(30)
     ) {
+        self.account = account
         self.recorder = recorder
         self.player = player
         self.samples = samples
@@ -100,13 +107,25 @@ final class VoiceSetupViewModel {
         }
     }
 
-    /// Keeps the recording under review as the user's voice.
+    /// Keeps the recording under review as the user's voice: the user has just agreed, on this screen, to it being
+    /// kept on the server. The server first, so that a failed upload changes nothing.
     func useTapped() {
-        guard let audio = candidate, problem == nil else { return }
+        guard let audio = candidate, problem == nil, !keeping else { return }
         stopPlayback()
+        keeping = true
+        error = nil
         work = Task {
+            defer { keeping = false }
             do {
+                if let account, account.session != nil {
+                    _ = try await account.keepVoice(audio.wavData())
+                }
                 try await samples.save(audio)
+            } catch let failure as BackendError {
+                self.error = failure.status == 0
+                    ? "No connection, so your voice couldn't be kept. Check you're online, then try again."
+                    : "Your voice couldn't be kept just now. Please try again."
+                return
             } catch {
                 self.error = "The recording could not be saved"
                 return
@@ -128,11 +147,14 @@ final class VoiceSetupViewModel {
         finished = true
     }
 
-    /// Deletes the saved recording from the phone.
+    /// Deletes the voice, from the server and from the phone.
     func deleteTapped() {
         discardRecording()
         work = Task {
             do {
+                if let account, account.session != nil {
+                    try await account.deleteVoice()
+                }
                 try await samples.delete()
             } catch {
                 self.error = "The recording could not be deleted"
