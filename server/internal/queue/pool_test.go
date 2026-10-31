@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider"
@@ -104,11 +105,18 @@ func startPoolWith(t *testing.T, store *Store, p provider.Provider, audio AudioS
 // choosing, nil included.
 func startPoolWithSynthesizer(t *testing.T, store *Store, p provider.Provider, s provider.Synthesizer, audio AudioStore, cfg Config) (stop func()) {
 	t.Helper()
+	return startPoolWithDeliverer(t, store, p, s, nil, audio, cfg)
+}
+
+// startPoolWithDeliverer is startPoolWithSynthesizer with a deliverer of room
+// messages too.
+func startPoolWithDeliverer(t *testing.T, store *Store, p provider.Provider, s provider.Synthesizer, d Deliverer, audio AudioStore, cfg Config) (stop func()) {
+	t.Helper()
 	cfg.Workers = 2
 	cfg.PollInterval = 10 * time.Millisecond
 	// Retries almost at once, so tests of retrying finish in milliseconds.
 	cfg.Backoff = func(int) time.Duration { return 5 * time.Millisecond }
-	pool := NewPool(store, p, s, audio, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
+	pool := NewPool(store, p, s, d, audio, slog.New(slog.NewTextHandler(io.Discard, nil)), cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan struct{})
@@ -692,5 +700,121 @@ func TestPoolDeletesGeneratedAudioAfterItsTimeIsUp(t *testing.T) {
 			t.Fatal("the audio file was not deleted")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// fakeDeliverer records what it is asked to deliver, failing with errs[attempt-1]
+// while there is one.
+type fakeDeliverer struct {
+	mu        sync.Mutex
+	errs      []error
+	delivered []string // "message lang attempt"
+	failed    []string // "message lang: reason"
+}
+
+func (d *fakeDeliverer) Deliver(_ context.Context, messageID, lang string, attempt int) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.delivered = append(d.delivered, fmt.Sprintf("%s %s %d", messageID, lang, attempt))
+	if attempt <= len(d.errs) {
+		return d.errs[attempt-1]
+	}
+	return nil
+}
+
+func (d *fakeDeliverer) DeliveryFailed(_ context.Context, messageID, lang, reason string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.failed = append(d.failed, messageID+" "+lang+": "+reason)
+	return nil
+}
+
+func (d *fakeDeliverer) calls() (delivered, failed []string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.delivered), slices.Clone(d.failed)
+}
+
+// enqueueDelivery adds a message from a new user in a new room, and a job to
+// deliver it in Spanish.
+func enqueueDelivery(t *testing.T, db *pgxpool.Pool, store *Store) (jobID, messageID string) {
+	t.Helper()
+	ctx := context.Background()
+	err := db.QueryRow(ctx, `
+		WITH u AS (INSERT INTO users DEFAULT VALUES RETURNING id),
+		     r AS (INSERT INTO rooms DEFAULT VALUES RETURNING id)
+		INSERT INTO messages (room_id, sender_id, lang, transcript, audio_key, duration_ms)
+		SELECT r.id, u.id, 'en', 'hello', 'message.wav', 1000 FROM u, r
+		RETURNING id`,
+	).Scan(&messageID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		return store.EnqueueDeliveries(ctx, tx, messageID, []string{"es"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(ctx, `SELECT id FROM jobs WHERE message_id = $1`, messageID).Scan(&jobID); err != nil {
+		t.Fatal(err)
+	}
+	return jobID, messageID
+}
+
+func TestPoolDeliversARoomMessage(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+	audio := &fakeAudio{}
+	deliverer := &fakeDeliverer{errs: []error{errors.New("translation service busy")}}
+
+	id, message := enqueueDelivery(t, db, store)
+	startPoolWithDeliverer(t, store, fake.Provider{}, nil, deliverer, audio, Config{Lease: testLease, ShutdownGrace: time.Second})
+
+	row := waitForStatus(t, db, id, "done")
+	if row.Attempts != 2 {
+		t.Errorf("attempts = %d, want 2: the first failure was temporary", row.Attempts)
+	}
+	delivered, failed := deliverer.calls()
+	if want := []string{message + " es 1", message + " es 2"}; !slices.Equal(delivered, want) {
+		t.Errorf("delivered = %v, want %v", delivered, want)
+	}
+	if len(failed) != 0 {
+		t.Errorf("failed = %v, want none", failed)
+	}
+	// A delivery has no audio of its own to clean up.
+	if got := audio.deletedKeys(); len(got) != 0 {
+		t.Errorf("deleted = %v, want nothing", got)
+	}
+}
+
+func TestPoolTellsTheDelivererWhenADeliveryFailsForGood(t *testing.T) {
+	tests := []struct {
+		name         string
+		errs         []error
+		wantAttempts int
+	}{
+		{"a permanent failure, at once", []error{provider.Permanent(errors.New("unsupported language pair"))}, 1},
+		{"temporary failures, after the last attempt", []error{errors.New("busy"), errors.New("busy"), errors.New("still busy")}, 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := testdb.New(t)
+			store := NewStore(db)
+			deliverer := &fakeDeliverer{errs: tt.errs}
+
+			id, message := enqueueDelivery(t, db, store)
+			startPoolWithDeliverer(t, store, fake.Provider{}, nil, deliverer, &fakeAudio{}, Config{Lease: testLease, ShutdownGrace: time.Second})
+
+			row := waitForStatus(t, db, id, "failed")
+			if row.Attempts != tt.wantAttempts {
+				t.Errorf("attempts = %d, want %d", row.Attempts, tt.wantAttempts)
+			}
+			_, failed := deliverer.calls()
+			last := tt.errs[len(tt.errs)-1].Error()
+			if want := []string{message + " es: " + last}; !slices.Equal(failed, want) {
+				t.Errorf("failed = %v, want %v", failed, want)
+			}
+		})
 	}
 }

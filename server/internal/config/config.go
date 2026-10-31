@@ -11,6 +11,8 @@ type Config struct {
 	HTTPAddr    string
 	DatabaseURL string
 	AudioDir    string
+	VoicesDir   string // users' kept voice samples, apart from job audio
+	MessagesDir string // the audio of room messages
 	ModelsDir   string
 	Workers     int
 
@@ -33,6 +35,23 @@ type Config struct {
 	// FishAudioModel picks one of their models; empty for their default.
 	FishAudioAPIKey string
 	FishAudioModel  string
+
+	// TranslateEngine names the service that translates room messages:
+	// "google" for Google Cloud Translation; "fake", which marks the text
+	// with the language instead, for development; or empty for none, in
+	// which case messages reach only listeners of the language they were
+	// said in. A Google Translate key on its own chooses "google".
+	TranslateEngine string
+	// GoogleTranslateKey is secret, like the Fish Audio key: server/.env.
+	GoogleTranslateKey string
+
+	// AppleAudience is the iOS app's bundle ID, which Sign in with Apple
+	// writes into every identity token it issues for the app.
+	AppleAudience string
+	// GoogleClientID is the "web" OAuth client ID from the Google Cloud
+	// project, which Google writes into the tokens it issues for the Android
+	// app. Empty turns Sign in with Google off.
+	GoogleClientID string
 }
 
 // Load is called once from main. Nothing else in the server reads the
@@ -44,6 +63,8 @@ func Load() Config {
 		// and pgx defaults the user to the current OS user.
 		DatabaseURL: env("DATABASE_URL", "postgres://localhost:5432/voice_translation?sslmode=disable"),
 		AudioDir:    env("AUDIO_DIR", "data/audio"),
+		VoicesDir:   env("VOICES_DIR", "data/voices"),
+		MessagesDir: env("MESSAGES_DIR", "data/messages"),
 		ModelsDir:   env("MODELS_DIR", "data/models"),
 		Workers:     envInt("WORKERS", 4),
 
@@ -55,6 +76,12 @@ func Load() Config {
 		VoiceEngine:     env("VOICE_ENGINE", ""),
 		FishAudioAPIKey: env("FISH_AUDIO_API_KEY", ""),
 		FishAudioModel:  env("FISH_AUDIO_MODEL", ""),
+
+		TranslateEngine:    env("TRANSLATE_ENGINE", ""),
+		GoogleTranslateKey: env("GOOGLE_TRANSLATE_KEY", ""),
+
+		AppleAudience:  env("APPLE_AUDIENCE", "pelumi.PTranslate"),
+		GoogleClientID: env("GOOGLE_CLIENT_ID", ""),
 	}
 }
 

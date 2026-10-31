@@ -1,6 +1,7 @@
 // Package provider defines what the server needs from the outside engines it
-// uses: a speech-to-text service and a voice-cloning speech synthesizer.
-// Implementations live in sub-packages (fake, and real ones later).
+// uses: a speech-to-text service, a voice-cloning speech synthesizer, and a
+// translation service. Implementations live in sub-packages: fake, fish
+// (Fish Audio) and google (Google Cloud Translation).
 package provider
 
 import (
@@ -43,6 +44,12 @@ type SynthesisOptions struct {
 // straight into storage without holding it all in memory.
 type Synthesizer interface {
 	Synthesize(ctx context.Context, voice io.Reader, opts SynthesisOptions, out io.Writer) error
+}
+
+// Translator turns text written in one language into another. Languages
+// are BCP 47 codes, as the phones send them.
+type Translator interface {
+	Translate(ctx context.Context, text, from, to string) (string, error)
 }
 
 // permanentError marks a failure that trying again cannot fix: audio the

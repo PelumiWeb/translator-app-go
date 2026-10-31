@@ -18,13 +18,17 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/PelumiWeb/translator-app-go/server/internal/accounts"
 	"github.com/PelumiWeb/translator-app-go/server/internal/api"
+	"github.com/PelumiWeb/translator-app-go/server/internal/auth"
 	"github.com/PelumiWeb/translator-app-go/server/internal/config"
 	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fake"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fish"
+	"github.com/PelumiWeb/translator-app-go/server/internal/provider/google"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
+	"github.com/PelumiWeb/translator-app-go/server/internal/rooms"
 	"github.com/PelumiWeb/translator-app-go/server/internal/storage"
 	"github.com/PelumiWeb/translator-app-go/server/migrations"
 )
@@ -95,6 +99,16 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer audio.Close()
+	voices, err := storage.NewLocal(cfg.VoicesDir)
+	if err != nil {
+		return err
+	}
+	defer voices.Close()
+	messages, err := storage.NewLocal(cfg.MessagesDir)
+	if err != nil {
+		return err
+	}
+	defer messages.Close()
 
 	catalog, err := models.Load(cfg.ModelsDir)
 	if err != nil {
@@ -137,7 +151,15 @@ func run(logger *slog.Logger) error {
 	}
 	logger.Info("voice engine", "engine", cmp.Or(engine, "none"))
 
+	translator, translatorName, err := newTranslator(cfg)
+	if err != nil {
+		return err
+	}
+	logger.Info("translation", "engine", translatorName)
+
 	store := queue.NewStore(pool)
+	accountStore := accounts.NewStore(pool)
+	roomStore := rooms.NewStore(pool, store)
 
 	// Everything started below runs until ctx is cancelled. On any way out
 	// of this function, cancel it and wait for all of it to finish.
@@ -153,7 +175,15 @@ func run(logger *slog.Logger) error {
 	wake := func() {}
 
 	if role.runsWorkers() {
-		workers := queue.NewPool(store, transcriber, synthesizer, audio, logger, queue.Config{
+		deliverer := &rooms.Deliverer{
+			Store:      roomStore,
+			Translator: translator,
+			Speaker:    synthesizer,
+			Voices:     accountStore,
+			Files:      voices,
+			Messages:   messages,
+		}
+		workers := queue.NewPool(store, transcriber, synthesizer, deliverer, audio, logger, queue.Config{
 			Workers:       cfg.Workers,
 			PollInterval:  time.Second,
 			Lease:         cfg.JobLease,
@@ -182,12 +212,23 @@ func run(logger *slog.Logger) error {
 	bus := queue.NewBus()
 	listener := queue.NewListener(pool, store, bus, logger)
 	background.Go(func() { listener.Run(ctx) })
-	select {
-	case <-listener.Ready(): // do not serve streams before events can be heard
-	case <-ctx.Done():
-		return nil
+	// Changes to rooms take the same road, on a channel of their own.
+	hub := rooms.NewHub(pool, logger)
+	background.Go(func() { hub.Run(ctx) })
+	for _, ready := range []<-chan struct{}{listener.Ready(), hub.Ready()} {
+		select {
+		case <-ready: // do not serve streams before events can be heard
+		case <-ctx.Done():
+			return nil
+		}
 	}
 
+	// Left as a nil interface, not a nil *auth.Verifier, when there is no
+	// client ID: the API checks for nil to refuse Google sign-ins.
+	var google api.TokenVerifier
+	if cfg.GoogleClientID != "" {
+		google = auth.NewGoogleVerifier(cfg.GoogleClientID)
+	}
 	handlers := &api.API{
 		Logger:         logger,
 		DB:             pool,
@@ -200,6 +241,13 @@ func run(logger *slog.Logger) error {
 		MaxUploadBytes: maxUploadBytes,
 		Heartbeat:      15 * time.Second,
 		CanSpeak:       synthesizer != nil,
+		Accounts:       accountStore,
+		Apple:          auth.NewAppleVerifier(cfg.AppleAudience),
+		Google:         google,
+		Voices:         voices,
+		Rooms:          roomStore,
+		Changes:        hub,
+		Messages:       messages,
 	}
 
 	srv := &http.Server{
@@ -250,4 +298,27 @@ func run(logger *slog.Logger) error {
 
 	logger.Info("server stopped cleanly")
 	return nil
+}
+
+// newTranslator picks the service that translates room messages. A nil
+// interface value means there is none: messages then reach only listeners of
+// the language they were said in. A Google key on its own chooses Google.
+func newTranslator(cfg config.Config) (provider.Translator, string, error) {
+	engine := cfg.TranslateEngine
+	if engine == "" && cfg.GoogleTranslateKey != "" {
+		engine = "google"
+	}
+	switch engine {
+	case "":
+		return nil, "none", nil
+	case "google":
+		if cfg.GoogleTranslateKey == "" {
+			return nil, "", errors.New("TRANSLATE_ENGINE=google needs GOOGLE_TRANSLATE_KEY (put it in server/.env)")
+		}
+		return google.Translator{APIKey: cfg.GoogleTranslateKey}, engine, nil
+	case "fake":
+		return fake.Translator{}, engine, nil
+	default:
+		return nil, "", fmt.Errorf("unknown TRANSLATE_ENGINE %q: want google, fake, or nothing for none", cfg.TranslateEngine)
+	}
 }

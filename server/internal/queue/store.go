@@ -21,11 +21,12 @@ var (
 	ErrNotReady      = errors.New("queue: the job has not produced its result yet")
 )
 
-// Kinds of job. Both travel through the same queue; a worker looks at the
+// Kinds of job. All travel through the same queue; a worker looks at the
 // kind to decide what to do with one.
 const (
 	KindTranscribe = "transcribe"
 	KindSynthesize = "synthesize"
+	KindDeliver    = "deliver" // a room message, for the listeners of one language
 )
 
 // Job statuses, as stored in jobs.status.
@@ -48,15 +49,17 @@ const (
 // Job is what a worker needs to process one claimed job.
 type Job struct {
 	ID   string
-	Kind string // KindTranscribe or KindSynthesize
+	Kind string // KindTranscribe, KindSynthesize or KindDeliver
 
 	// AudioKey is the stored audio the job works from: the speech to
-	// transcribe, or the voice sample to imitate.
+	// transcribe, or the voice sample to imitate. Empty for a delivery,
+	// whose message keeps its own audio.
 	AudioKey string
 
 	SourceLang string // transcription: the language spoken
-	TargetLang string // synthesis: the language to speak in
+	TargetLang string // synthesis and delivery: the language to speak in
 	Text       string // synthesis: what to say
+	MessageID  string // delivery: the message to deliver
 
 	Attempt     int // 1 on the first try
 	MaxAttempts int // the job fails for good once Attempt reaches this
@@ -103,6 +106,29 @@ func (s *Store) EnqueueOnce(ctx context.Context, sourceLang, audioKey, idempoten
 // in the stored sample voiceKey. The idempotency key works as in EnqueueOnce.
 func (s *Store) EnqueueSynthesis(ctx context.Context, targetLang, text, voiceKey, idempotencyKey string) (id string, created bool, err error) {
 	return s.enqueue(ctx, Job{Kind: KindSynthesize, TargetLang: targetLang, Text: text, AudioKey: voiceKey}, idempotencyKey)
+}
+
+// EnqueueDeliveries adds a job for each language in langs, to deliver the
+// message to the listeners of that language. It runs in the caller's
+// transaction, the one that adds the message, so that a message never exists
+// without the work to deliver it, nor the work without the message.
+func (s *Store) EnqueueDeliveries(ctx context.Context, tx pgx.Tx, messageID string, langs []string) error {
+	for _, lang := range langs {
+		var id string
+		err := tx.QueryRow(ctx, `
+			INSERT INTO jobs (status, kind, audio_path, target_lang, message_id)
+			VALUES ('queued', $1, '', $2, $3)
+			RETURNING id`,
+			KindDeliver, lang, messageID,
+		).Scan(&id)
+		if err != nil {
+			return fmt.Errorf("enqueueing a delivery: %w", err)
+		}
+		if _, err := insertEvent(ctx, tx, id, EventQueued, struct{}{}); err != nil {
+			return fmt.Errorf("enqueueing a delivery: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) enqueue(ctx context.Context, job Job, idempotencyKey string) (id string, created bool, err error) {
@@ -165,10 +191,11 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (Job, error) {
 				LIMIT 1
 			)
 			RETURNING id, kind, audio_path, attempts, max_attempts,
-			          COALESCE(source_lang, ''), COALESCE(target_lang, ''), COALESCE(input_text, '')`,
+			          COALESCE(source_lang, ''), COALESCE(target_lang, ''), COALESCE(input_text, ''),
+			          COALESCE(message_id::text, '')`,
 			lease,
 		).Scan(&job.ID, &job.Kind, &job.AudioKey, &job.Attempt, &job.MaxAttempts,
-			&job.SourceLang, &job.TargetLang, &job.Text)
+			&job.SourceLang, &job.TargetLang, &job.Text, &job.MessageID)
 		if err != nil {
 			return err
 		}
@@ -225,6 +252,18 @@ func (s *Store) CompleteSynthesis(ctx context.Context, job Job, resultKey string
 		WHERE id = $1 AND status = 'processing' AND attempts = $2`,
 		[]any{resultKey},
 		// No URL here: where the audio is served from is the API's business.
+		EventDone, struct{}{},
+	)
+}
+
+// CompleteDelivery marks a delivery job as done. What it delivered is
+// recorded with the message, by the rooms package.
+func (s *Store) CompleteDelivery(ctx context.Context, job Job) error {
+	return s.finish(ctx, job, `
+		UPDATE jobs
+		SET status = 'done', locked_until = NULL, updated_at = now()
+		WHERE id = $1 AND status = 'processing' AND attempts = $2`,
+		nil,
 		EventDone, struct{}{},
 	)
 }

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"crypto/rand"
 	"errors"
 	"net/http"
 	"strings"
@@ -24,13 +23,13 @@ type createSpeechResponse struct {
 
 // handleCreateSpeech asks for a text to be spoken in a given voice.
 //
-// It accepts multipart/form-data with a "voice" file (a WAV sample of the
-// voice to imitate), the "text" to say, and its language as "lang". Like a
-// transcription, it is queued and answered at once with 202 Accepted: follow
-// events_url for progress, then fetch audio_url.
+// It accepts multipart/form-data with the "text" to say, its language as
+// "lang", and the voice to say it in: a "voice" file (a WAV sample of the
+// voice to imitate), or, when the request is signed in and has no file, the
+// user's kept voice. Like a transcription, it is queued and answered at once
+// with 202 Accepted: follow events_url for progress, then fetch audio_url.
 //
-// The voice sample is used for this one request and deleted when the job
-// ends. The server keeps no voices.
+// The job works on its own copy of the voice and deletes it when it ends.
 func (a *API) handleCreateSpeech(w http.ResponseWriter, r *http.Request) {
 	if !a.CanSpeak {
 		// 501 rather than 503: this is not a passing fault, so asking again
@@ -75,21 +74,8 @@ func (a *API) handleCreateSpeech(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, _, err := r.FormFile("voice")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "missing_voice", `the "voice" sample is required`)
-		return
-	}
-	defer file.Close()
-	if !isWAV(file) {
-		writeError(w, http.StatusBadRequest, "unsupported_audio", "the voice sample must be a WAV file")
-		return
-	}
-
-	key := rand.Text() + ".wav"
-	if err := a.Audio.Put(key, file); err != nil {
-		a.Logger.Error("storing voice sample", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal", "could not store the voice sample")
+	key, ok := a.speechVoice(w, r)
+	if !ok {
 		return
 	}
 

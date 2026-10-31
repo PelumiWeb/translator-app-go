@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/PelumiWeb/translator-app-go/server/internal/accounts"
 	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 )
@@ -57,6 +58,20 @@ type API struct {
 	Audio  AudioStore
 	Models ModelCatalog
 
+	Accounts AccountStore
+	Apple    TokenVerifier
+	// Google is nil when the server has no Google client ID; signing in
+	// with Google is then refused.
+	Google TokenVerifier
+	// Voices holds users' kept voice samples, apart from job audio (ADR 0016).
+	Voices AudioStore
+
+	Rooms   RoomStore
+	Changes RoomChanges
+	// Messages holds the audio of room messages: the senders' recordings and
+	// the translations spoken in their voices.
+	Messages AudioStore
+
 	// Wake nudges an idle worker after a job is enqueued.
 	Wake func()
 	// Stopping is closed when the server begins to shut down. Event streams
@@ -80,6 +95,28 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/jobs/{id}/events", a.handleJobEvents)
 	mux.HandleFunc("POST /v1/speech", a.handleCreateSpeech)
 	mux.HandleFunc("GET /v1/jobs/{id}/audio", a.handleJobAudio)
+	mux.HandleFunc("POST /v1/sessions/apple", a.handleSignIn(accounts.ProviderApple, a.Apple))
+	mux.HandleFunc("POST /v1/sessions/google", a.handleSignIn(accounts.ProviderGoogle, a.Google))
+	mux.HandleFunc("DELETE /v1/sessions/current", a.signedIn(a.handleSignOut))
+	mux.HandleFunc("GET /v1/me", a.signedIn(a.handleGetMe))
+	mux.HandleFunc("PATCH /v1/me", a.signedIn(a.handleUpdateMe))
+	mux.HandleFunc("DELETE /v1/me", a.signedIn(a.handleDeleteMe))
+	mux.HandleFunc("PUT /v1/me/voice", a.signedIn(a.handlePutVoice))
+	mux.HandleFunc("GET /v1/me/voice", a.signedIn(a.handleGetVoice))
+	mux.HandleFunc("GET /v1/me/voice/audio", a.signedIn(a.handleVoiceAudio))
+	mux.HandleFunc("DELETE /v1/me/voice", a.signedIn(a.handleDeleteVoice))
+	mux.HandleFunc("GET /v1/handles/{handle}", a.signedIn(a.handleCheckHandle))
+	mux.HandleFunc("GET /v1/users/{handle}", a.signedIn(a.handleFindUser))
+	mux.HandleFunc("GET /v1/me/events", a.signedIn(a.handleRoomChanges))
+	mux.HandleFunc("POST /v1/rooms", a.signedIn(a.handleOpenRoom))
+	mux.HandleFunc("GET /v1/rooms", a.signedIn(a.handleListRooms))
+	mux.HandleFunc("GET /v1/rooms/{id}", a.signedIn(a.handleGetRoom))
+	mux.HandleFunc("GET /v1/rooms/{id}/messages", a.signedIn(a.handleListMessages))
+	mux.HandleFunc("POST /v1/rooms/{id}/messages", a.signedIn(a.handleSendMessage))
+	mux.HandleFunc("POST /v1/rooms/{id}/read", a.signedIn(a.handleMarkRead))
+	mux.HandleFunc("GET /v1/messages/{id}", a.signedIn(a.handleGetMessage))
+	mux.HandleFunc("POST /v1/messages/{id}/retry", a.signedIn(a.handleRetryMessage))
+	mux.HandleFunc("GET /v1/messages/{id}/audio", a.signedIn(a.handleMessageAudio))
 	mux.HandleFunc("GET /v1/models/manifest", a.handleModelManifest)
 	mux.HandleFunc("GET /v1/models/{id}", a.handleModelDownload)
 	return mux

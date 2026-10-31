@@ -14,6 +14,16 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider"
 )
 
+// Deliverer delivers a room message to the listeners of one language: the
+// rooms package does the work, and the queue runs it, with its leases and
+// retries.
+type Deliverer interface {
+	Deliver(ctx context.Context, messageID, lang string, attempt int) error
+	// DeliveryFailed is told when a delivery has failed for good, so that the
+	// message can say so.
+	DeliveryFailed(ctx context.Context, messageID, lang, reason string) error
+}
+
 // AudioStore is what the workers need from audio storage.
 type AudioStore interface {
 	Open(key string) (io.ReadSeekCloser, error)
@@ -45,13 +55,14 @@ type Pool struct {
 	store       *Store
 	provider    provider.Provider
 	synthesizer provider.Synthesizer
+	deliverer   Deliverer
 	audio       AudioStore
 	logger      *slog.Logger
 	cfg         Config
 	wake        chan struct{}
 }
 
-func NewPool(store *Store, p provider.Provider, synthesizer provider.Synthesizer, audio AudioStore, logger *slog.Logger, cfg Config) *Pool {
+func NewPool(store *Store, p provider.Provider, synthesizer provider.Synthesizer, deliverer Deliverer, audio AudioStore, logger *slog.Logger, cfg Config) *Pool {
 	if cfg.Backoff == nil {
 		cfg.Backoff = ExponentialBackoff(2*time.Second, time.Minute)
 	}
@@ -68,6 +79,7 @@ func NewPool(store *Store, p provider.Provider, synthesizer provider.Synthesizer
 		store:       store,
 		provider:    p,
 		synthesizer: synthesizer,
+		deliverer:   deliverer,
 		audio:       audio,
 		logger:      logger,
 		cfg:         cfg,
@@ -265,6 +277,8 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 	switch job.Kind {
 	case KindSynthesize:
 		record, err = p.synthesize(workCtx, job)
+	case KindDeliver:
+		record, err = p.deliver(workCtx, job)
 	default:
 		record, err = p.transcribe(workCtx, logger, job)
 	}
@@ -318,12 +332,35 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 			return
 		}
 		logger.Warn("job failed", "error", err, "attempt", job.Attempt)
+		if job.Kind == KindDeliver && p.deliverer != nil {
+			if err := p.deliverer.DeliveryFailed(finishCtx, job.MessageID, job.TargetLang, err.Error()); err != nil {
+				logger.Error("recording a failed delivery", "error", err)
+			}
+		}
 	}
 
 	// Reached only for done and failed jobs: the audio is no longer needed.
+	// A delivery has none of its own; the message keeps its audio.
+	if job.AudioKey == "" {
+		return
+	}
 	if err := p.audio.Delete(job.AudioKey); err != nil {
 		logger.Warn("deleting audio", "error", err)
 	}
+}
+
+// deliver hands a room message to the deliverer. It returns the function that
+// marks the job done.
+func (p *Pool) deliver(ctx context.Context, job Job) (record func(context.Context) error, err error) {
+	if p.deliverer == nil {
+		return nil, provider.Permanent(errors.New("this worker cannot deliver messages"))
+	}
+	if err := p.deliverer.Deliver(ctx, job.MessageID, job.TargetLang, job.Attempt); err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context) error {
+		return p.store.CompleteDelivery(ctx, job)
+	}, nil
 }
 
 // transcribe turns the job's audio into text. It returns the function that

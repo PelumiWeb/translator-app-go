@@ -12,7 +12,7 @@ func TestApplyCreatesTables(t *testing.T) {
 	pool := testdb.New(t) // already applies the migrations once
 	ctx := context.Background()
 
-	for _, table := range []string{"jobs", "job_events", "schema_migrations"} {
+	for _, table := range []string{"jobs", "job_events", "users", "identities", "sessions", "voices", "rooms", "room_members", "messages", "renditions", "schema_migrations"} {
 		var exists bool
 		// to_regclass returns NULL when the name does not resolve to a table.
 		err := pool.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", table).Scan(&exists)
@@ -37,7 +37,7 @@ func TestApplyIsIdempotent(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("counting applied migrations: %v", err)
 	}
-	if count != 3 {
-		t.Errorf("schema_migrations has %d rows, want 3", count)
+	if count != 6 {
+		t.Errorf("schema_migrations has %d rows, want 6", count)
 	}
 }
