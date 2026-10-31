@@ -101,7 +101,7 @@ Server layout:
 cmd/server           main: wiring, config, graceful shutdown
 internal/api         HTTP handlers, SSE
 internal/queue       job store (Postgres), worker pool, event listener and bus
-internal/provider    Provider and Synthesizer interfaces, fakes for both
+internal/provider    Provider and Synthesizer interfaces, fakes for both, Fish Audio (fish/)
 internal/models      manifest and model file serving
 internal/storage     audio blob storage
 migrations/          plain SQL, embedded in the binary
@@ -192,7 +192,8 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make server-test-race` | the same with the race detector, each test run 3 times |
 | `make server-lint` | `go vet` and `gofmt -l` |
 | `make sample-job` | upload a test clip to the running server and stream its events |
-| `make sample-speech` | ask the running server to speak a sentence, and play the result |
+| `make voice-check` | one real request to Fish Audio (key from `server/.env`), then plays what it made |
+| `make sample-speech` | ask the running server to speak a sentence, and play the result; start the server with `VOICE_ENGINE=fake make server-run`, since without a voice engine it refuses |
 | `make android-build` | `./gradlew assembleDebug` |
 | `make android-test` | JVM unit tests |
 | `make android-install` | install the debug build on the connected device and open it |
@@ -204,6 +205,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make ios-whisper` | build whisper.cpp for iOS into `ios/build/` (once after cloning, about a minute; Xcode needs it) |
 | `make ios-build` | build the iOS app for the simulator |
 | `make ios-test` | iOS tests on the simulator (`IOS_SIM="..."` picks another one); the Whisper test needs `make model-download` |
+| `make ios-device` | build, install and open the app on the connected iPhone, pointed at this Mac's server (start it first); `MAC_HOST=<ip>` if the `.local` name does not resolve |
 
 The Android app calls `http://localhost:8080`. `adb reverse` forwards that to
 this machine, on the emulator and on a phone over USB alike. The iOS

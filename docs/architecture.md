@@ -245,8 +245,11 @@ translation to `POST /v1/speech`, follows the job like a transcription, then
 downloads the audio and plays it. `FallbackSpeechSynthesizer` tries it first
 and the phone's voice second: with no voice recorded, no network, or a failed
 job, the phone's voice says it instead, so the translation is always heard.
-Until a real voice-cloning engine arrives (checkpoint 9.4), the server's fake
-engine answers with one beep per word.
+The server speaks with Fish Audio when it has a key for it (checkpoint 9.4,
+ADR 0010), or with a fake that answers with one beep per word when started
+with `VOICE_ENGINE=fake`. A server with no engine refuses requests to speak
+with `501` (`no_voice_engine`), which the phones do not retry: the phone's
+voice speaks at once.
 
 ### 2.10 The user's voice
 
@@ -386,9 +389,14 @@ The simulator shares the Mac's network, so `http://localhost:8080` works as on
 the Android emulator. A real iPhone has no `adb reverse`: it uses the Mac's
 address on the same Wi-Fi, such as `http://<mac-name>.local:8080`. The server
 already listens on every interface (`HTTP_ADDR` defaults to `:8080`). The
-address is a build setting. Plain HTTP is allowed only to local addresses,
-through App Transport Security's `NSAllowsLocalNetworking`, and iOS asks the
-user once for permission to reach the local network.
+address is a build setting, `BACKEND_URL`: `localhost` for the simulator, and
+for iPhone builds the owner's Mac by its Bonjour name
+(`http://OgundipePelumi.local:8080`). `make ios-device` reads the Mac's name
+afresh, builds, installs on the connected iPhone and opens the app;
+`MAC_HOST=<address>` overrides the name, for a network where Bonjour names do
+not resolve. Plain HTTP is allowed only to local addresses, through App
+Transport Security's `NSAllowsLocalNetworking`, and iOS asks the user once
+for permission to reach the local network.
 
 ### 3.6 Simulator and iPhone
 
@@ -459,7 +467,9 @@ a transcription it is queued and answered with `202 Accepted`:
 Progress comes over the same events endpoint (`queued`, `processing`, `done`
 or `error`). The voice sample is used for that one job and deleted when it
 ends; the server keeps no voices. Milestone 13 changes this: each user's voice
-is kept, and requests to speak use it (section 9).
+is kept, and requests to speak use it (section 9). A server with no voice
+engine answers `501 Not Implemented` with code `no_voice_engine` instead of
+queuing the request.
 
 **`GET /v1/jobs/{id}/audio`**: the generated speech, a WAV file, with range
 support. `409` with code `not_ready` while the job has no audio: it is
@@ -621,7 +631,11 @@ type Synthesizer interface {
 }
 ```
 
-Its fake answers with one beep per word. Both kinds of work run through the
+Two implementations: `fish.Synthesizer` calls Fish Audio (ADR 0010), sending
+the voice sample with each request along with its transcript, the passage the
+phones ask users to read (`provider.OnboardingPassage`); and a fake that
+answers with one beep per word, for tests and for working without a key.
+Both kinds of work run through the
 one queue: a job row has a `kind`, and a worker looks at it to choose the
 provider. Claiming, leases, heartbeats, retries, fencing and events are shared
 and know nothing about which kind they are handling.
@@ -634,7 +648,10 @@ implementation. Audio is deleted when its job reaches `done` or `failed`.
 ### 4.7 Configuration and logging
 
 Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
-`WORKERS`, `AUDIO_DIR`, `MODELS_DIR`, `JOB_LEASE`, `SWEEP_INTERVAL`). Structured logs with `log/slog`, with
+`WORKERS`, `AUDIO_DIR`, `MODELS_DIR`, `JOB_LEASE`, `SWEEP_INTERVAL`,
+`VOICE_ENGINE`, `FISH_AUDIO_API_KEY`, `FISH_AUDIO_MODEL`). Secrets live in
+`server/.env`, which git ignores and the Makefile's server targets load.
+Structured logs with `log/slog`, with
 the job id on every line that concerns a job.
 
 ## 5. Testing
@@ -660,6 +677,7 @@ in the original spec; the owner approved them on 2026-10-04.
 | Go standard library | HTTP, routing, logging, tests |
 | Postgres 16, Homebrew `postgresql@16` (*added*) | database and queue. Installed locally instead of Docker to save disk and RAM on the dev machine. |
 | `github.com/jackc/pgx/v5` (*added*) | Postgres driver and connection pool. A driver is unavoidable; pgx is the standard one and supports `LISTEN/NOTIFY`. |
+| Fish Audio API (*added* 2026-10-31) | the voice-cloning engine, a paid service (ADR 0010). Called with `net/http` and a small MessagePack encoder of our own: no Go module. |
 
 No router (Go 1.22+ `ServeMux` covers method and path patterns, so chi is not
 needed), no migration tool (SQL files embedded with `embed`, applied by a small
@@ -709,7 +727,7 @@ Written in the milestone where the decision is implemented.
 | 0007 | Fallback policy and thresholds | 6 |
 | 0008 | Speech output with the phone's voices (written) | 8 |
 | 0009 | Cloud transcription provider | 7 |
-| 0010 | Voice-cloning engine | 9 |
+| 0010 | Voice-cloning engine: Fish Audio (written) | 9 |
 | 0004 addendum | whisper.cpp on iOS: the build, GPU or CPU | 10 |
 | 0011 | A native iOS app on the same server | 10 |
 | 0012 | Translation on iOS | 10 |

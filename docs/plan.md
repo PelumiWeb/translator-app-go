@@ -431,24 +431,43 @@ is spoken in that voice.
   the fake engine's audio came back and decoded (0.92 s, a beep per word)
 - With the fake engine the "own voice" is beeps until 9.4
 - Verify: `make android-test` and `make ios-test`. Then `make db-up` and
-  `make server-run`; on the emulator or an iPhone, record your voice, then
-  record a sentence with a target language other than the source: the
-  translation is heard as beeps. Stop the server and record again: the
-  phone's voice says it instead
+  `VOICE_ENGINE=fake make server-run`; on the emulator or an iPhone, record
+  your voice, then record a sentence with a target language other than the
+  source: the translation is heard as beeps. Stop the server and record
+  again: the phone's voice says it instead
+
+**Fix after 9.3** (2026-10-31)
+- On the owner's iPhone the translation was heard as beeps, the fake engine,
+  which reads as broken. A server now has no voice engine unless started
+  with `VOICE_ENGINE=fake`; without one it refuses requests to speak with
+  `501` (`no_voice_engine`), and both phones treat 501 as final, so the
+  phone's own voice speaks at once instead of after retries. A worker with
+  no engine fails a speech job at once
+- Tests: the refusal and the worker's failure on the server, and one case on
+  each phone. Android 139 pass; iOS 161 pass, 1 skipped
 
 **Checkpoint 9.4: a real voice engine** (the server, then the wording on both
-phones)
+phones) (done)
 - Changed on 2026-10-31: a paid hosted engine straight away, instead of the
   free public demo planned first, since the app is now a product (ADR 0015)
-- A `provider.Synthesizer` that sends the engine the voice sample, its
-  transcript (the passage read at onboarding) and the text, behind the same
-  interface as the fake. The fake stays, for tests and for working without a
-  key
-- The engine's key is read from the environment and never committed
-- The onboarding screen's description of what happens to the recording
-  changes on both phones: the engine's company receives it with each request
-- ADR 0010 for the engine
-- Which engine is the owner's choice (open question 2)
+- Fish Audio, chosen by the owner on 2026-10-31 (ADR 0010): `fish.Synthesizer`
+  sends the voice sample, its transcript (`provider.OnboardingPassage`, the
+  passage read at onboarding) and the text, and gets 16 kHz PCM back, which
+  the server wraps as WAV. A small MessagePack encoder of our own, since
+  Fish Audio takes an inline sample only in MessagePack: no Go dependency
+- The key is `FISH_AUDIO_API_KEY` in `server/.env` (git-ignored), loaded by
+  the Makefile's server targets; a key on its own chooses Fish Audio. The
+  free model `s2.1-pro-free` is used until API credit is added
+- Failures: 429 and 5xx are retried; others (a bad key, no credit, a bad
+  request) fail the job at once, and the phone's voice speaks instead
+- The onboarding screen on both phones now says the recording goes on to
+  Fish Audio, the service that makes the speech
+- Tests: the encoder against the MessagePack specification, the request and
+  the WAV it produces, each kind of failure, and a live test that runs only
+  with a key (`make voice-check`). Checked live: 2.7 s of Spanish in the
+  sample's voice in 4.4 s, and the whole path through the server
+- Verify: `make voice-check`; then `make server-run` and, on the iPhone,
+  record a sentence with a voice recorded: it is spoken in your voice
 
 Later, not planned in detail:
 - The owner's long-run idea: a free engine for free users and a paid one for
@@ -624,7 +643,8 @@ translate; speak the translation; record your voice.
   target language other than the source, and listen
 
 Done on 2026-10-29. Translation and speech, which the simulator cannot run,
-are still to be seen working on an iPhone.
+are still to be seen working on an iPhone. First installed on the owner's
+iPhone 14 Pro on 2026-10-31, with `make ios-device`.
 
 ---
 
@@ -855,8 +875,8 @@ milestone 11 and makes push notifications possible on iOS.
 Still open:
 
 1. Which real cloud transcription provider (milestone 7).
-2. Which voice-cloning engine (checkpoint 9.4). A paid service and a new
-   dependency: the owner chooses, and provides its key.
+2. When to add API credit on Fish Audio, to move from the free model to the
+   paid one (checkpoint 9.4).
 3. The profile's details beyond name, ID and language (milestone 13).
 4. Codes sent by email need an email-sending service and a domain to send
    from (milestone 13).
