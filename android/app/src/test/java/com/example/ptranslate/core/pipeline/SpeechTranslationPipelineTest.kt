@@ -51,6 +51,7 @@ class SpeechTranslationPipelineTest {
                 PipelineEvent.Transcribed(transcript),
                 PipelineEvent.Translating,
                 PipelineEvent.Translated("[en>es] hello world"),
+                PipelineEvent.PreparingSpeech,
                 PipelineEvent.Speaking,
                 PipelineEvent.Spoken,
             ),
@@ -73,6 +74,7 @@ class SpeechTranslationPipelineTest {
                 PipelineEvent.DownloadingLanguages,
                 PipelineEvent.Translating,
                 PipelineEvent.Translated("[en>es] hello world"),
+                PipelineEvent.PreparingSpeech,
                 PipelineEvent.Speaking,
                 PipelineEvent.Spoken,
             ),
@@ -146,7 +148,7 @@ class SpeechTranslationPipelineTest {
         assertEquals(
             listOf(
                 PipelineEvent.Translated("[en>es] hello world"),
-                PipelineEvent.Speaking,
+                PipelineEvent.PreparingSpeech,
                 PipelineEvent.SpeechFailed("This phone has no voice for Spanish"),
             ),
             events.takeLast(3),

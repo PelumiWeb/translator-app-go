@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -133,7 +135,13 @@ private fun TranslateContent(
         Button(onClick = onRecordClick, enabled = state.phase != Phase.WORKING) {
             Text(if (state.phase == Phase.RECORDING) "Stop" else "Record")
         }
-        Text(text = state.status, style = MaterialTheme.typography.labelLarge)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // While something is being worked on and nothing can be heard yet.
+            if (state.phase == Phase.WORKING && !state.speaking) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            }
+            Text(text = state.status, style = MaterialTheme.typography.labelLarge)
+        }
 
         if (state.text.isNotEmpty()) {
             Text(

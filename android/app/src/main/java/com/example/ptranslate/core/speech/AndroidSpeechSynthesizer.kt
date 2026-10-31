@@ -36,11 +36,13 @@ class AndroidSpeechSynthesizer(
     // One utterance at a time, and the engine is created only once.
     private val mutex = Mutex()
 
-    // Callers waiting for their utterance to end, by utterance id. Written
-    // from the caller's thread, completed from the engine's callback thread.
+    // Callers waiting for their utterance to start and to end, by utterance
+    // id. Written from the caller's thread, used from the engine's callback
+    // thread.
     private val waiting = ConcurrentHashMap<String, CancellableContinuation<Unit>>()
+    private val starting = ConcurrentHashMap<String, () -> Unit>()
 
-    override suspend fun speak(text: String, language: Language) = mutex.withLock {
+    override suspend fun speak(text: String, language: Language, onStart: () -> Unit) = mutex.withLock {
         val tts = engine ?: connect().also { engine = it }
 
         val locale = Locale.forLanguageTag(language.tag)
@@ -55,7 +57,7 @@ class AndroidSpeechSynthesizer(
         var attempt = 1
         while (true) {
             try {
-                speakOnce(tts, text)
+                speakOnce(tts, text, onStart)
                 return@withLock
             } catch (e: EngineError) {
                 if (!isVoiceNotReady(e.code) || attempt >= voiceAttempts) {
@@ -68,19 +70,24 @@ class AndroidSpeechSynthesizer(
     }
 
     /** Speaks once and waits for the engine to report the end. */
-    private suspend fun speakOnce(tts: TextToSpeech, text: String) {
+    private suspend fun speakOnce(tts: TextToSpeech, text: String, onStart: () -> Unit) {
         val id = UUID.randomUUID().toString()
-        suspendCancellableCoroutine { continuation ->
-            waiting[id] = continuation
-            continuation.invokeOnCancellation {
-                waiting.remove(id)
-                tts.stop()
+        starting[id] = onStart
+        try {
+            suspendCancellableCoroutine { continuation ->
+                waiting[id] = continuation
+                continuation.invokeOnCancellation {
+                    waiting.remove(id)
+                    tts.stop()
+                }
+                // QUEUE_FLUSH: replace anything still queued rather than wait behind it.
+                if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
+                    waiting.remove(id)
+                    continuation.resumeWithException(EngineError(TextToSpeech.ERROR))
+                }
             }
-            // QUEUE_FLUSH: replace anything still queued rather than wait behind it.
-            if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
-                waiting.remove(id)
-                continuation.resumeWithException(EngineError(TextToSpeech.ERROR))
-            }
+        } finally {
+            starting.remove(id)
         }
     }
 
@@ -113,7 +120,9 @@ class AndroidSpeechSynthesizer(
     }
 
     private val listener = object : UtteranceProgressListener() {
-        override fun onStart(utteranceId: String) = Unit
+        override fun onStart(utteranceId: String) {
+            starting.remove(utteranceId)?.invoke()
+        }
 
         override fun onDone(utteranceId: String) {
             waiting.remove(utteranceId)?.resume(Unit)

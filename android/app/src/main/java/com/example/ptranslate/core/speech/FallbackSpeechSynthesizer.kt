@@ -13,11 +13,11 @@ class FallbackSpeechSynthesizer(
     private val fallback: SpeechSynthesizer,
 ) : SpeechSynthesizer {
 
-    override suspend fun speak(text: String, language: Language) {
+    override suspend fun speak(text: String, language: Language, onStart: () -> Unit) {
         try {
-            preferred.speak(text, language)
+            preferred.speak(text, language, onStart)
         } catch (_: SpeechException) {
-            fallback.speak(text, language)
+            fallback.speak(text, language, onStart)
         }
     }
 

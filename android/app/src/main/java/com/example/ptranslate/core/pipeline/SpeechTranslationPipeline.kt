@@ -9,8 +9,12 @@ import com.example.ptranslate.core.stt.Transcript
 import com.example.ptranslate.core.stt.TranscriptEvent
 import com.example.ptranslate.core.stt.TranscriptionStage
 import com.example.ptranslate.core.translate.Translator
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.selects.select
 
 /**
  * Everything that happens to a recording after it is made: transcribe it,
@@ -67,9 +71,19 @@ class SpeechTranslationPipeline(
         emit(PipelineEvent.Translated(translation))
 
         if (!speak) return@flow
-        emit(PipelineEvent.Speaking)
+        emit(PipelineEvent.PreparingSpeech)
         try {
-            synthesizer.speak(translation, target)
+            coroutineScope {
+                // Speaking runs alongside, so that this coroutine, the only
+                // one a flow lets emit, can say when the speech is heard.
+                val started = CompletableDeferred<Unit>()
+                val speaking = async { synthesizer.speak(translation, target) { started.complete(Unit) } }
+                select {
+                    started.onAwait { emit(PipelineEvent.Speaking) }
+                    speaking.onAwait {} // finished without ever being heard
+                }
+                speaking.await()
+            }
             emit(PipelineEvent.Spoken)
         } catch (e: SpeechException) {
             emit(PipelineEvent.SpeechFailed(e.message ?: "The translation could not be spoken"))
@@ -86,6 +100,12 @@ sealed interface PipelineEvent {
     data object DownloadingLanguages : PipelineEvent
     data object Translating : PipelineEvent
     data class Translated(val text: String) : PipelineEvent
+
+    /**
+     * The speech is being made, before anything can be heard. Seconds, for a
+     * voice made on the server.
+     */
+    data object PreparingSpeech : PipelineEvent
 
     /** The translation is being said aloud. */
     data object Speaking : PipelineEvent

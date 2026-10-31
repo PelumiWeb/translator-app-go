@@ -31,7 +31,7 @@ class RemoteSpeechSynthesizer(
     private val retryDelayMs: (attempt: Int) -> Long = { attempt -> attempt * 1000L },
 ) : SpeechSynthesizer {
 
-    override suspend fun speak(text: String, language: Language) {
+    override suspend fun speak(text: String, language: Language, onStart: () -> Unit) {
         val sample = try {
             voice.loadWav()
         } catch (e: IOException) {
@@ -55,6 +55,7 @@ class RemoteSpeechSynthesizer(
         } catch (e: IllegalArgumentException) {
             throw SpeechException("The server sent audio that cannot be played", e)
         }
+        onStart()
         player.play(audio)
     }
 

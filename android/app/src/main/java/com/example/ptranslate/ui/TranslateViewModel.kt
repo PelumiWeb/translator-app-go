@@ -57,6 +57,8 @@ data class TranslateUiState(
     val measuringSpeed: Boolean = false,
     /** True when [deviceSpeed] is over the limit the automatic route allows. */
     val deviceTooSlow: Boolean = false,
+    /** True while the translation can be heard; the screen shows progress at other times of a run. */
+    val speaking: Boolean = false,
 )
 
 class TranslateViewModel(
@@ -230,8 +232,9 @@ class TranslateViewModel(
                     status = "Done",
                     translation = if (translating) event.text else "",
                 )
-                PipelineEvent.Speaking -> it.copy(status = "Speaking")
-                PipelineEvent.Spoken -> it.copy(status = "Done")
+                PipelineEvent.PreparingSpeech -> it.copy(status = "Preparing speech")
+                PipelineEvent.Speaking -> it.copy(status = "Speaking", speaking = true)
+                PipelineEvent.Spoken -> it.copy(status = "Done", speaking = false)
                 // The translation is on screen; only the voice is missing.
                 is PipelineEvent.SpeechFailed -> it.copy(status = "Done", error = event.reason)
             }
@@ -263,7 +266,12 @@ class TranslateViewModel(
         _state.update {
             // With no new error, one already on screen stays: a result can be
             // complete and still carry a note, such as "could not be spoken".
-            it.copy(phase = Phase.IDLE, status = if (error == null) it.status else "Failed", error = error ?: it.error)
+            it.copy(
+                phase = Phase.IDLE,
+                status = if (error == null) it.status else "Failed",
+                error = error ?: it.error,
+                speaking = false,
+            )
         }
     }
 

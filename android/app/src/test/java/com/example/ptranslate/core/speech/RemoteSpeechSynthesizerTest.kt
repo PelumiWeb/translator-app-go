@@ -98,8 +98,11 @@ class RemoteSpeechSynthesizerTest {
 
     private fun sse(seq: Int, type: String, data: String = "{}") = "id: $seq\nevent: $type\ndata: $data\n\n"
 
+    /** How many sounds the player had already been given each time the speech said it started. */
+    private val startedAfter = mutableListOf<Int>()
+
     private fun speak(synthesizer: RemoteSpeechSynthesizer = synthesizer()) =
-        runBlocking { synthesizer.speak("buenos días", Language("es")) }
+        runBlocking { synthesizer.speak("buenos días", Language("es")) { startedAfter += player.played.size } }
 
     private fun speakFails(synthesizer: RemoteSpeechSynthesizer = synthesizer()): SpeechException =
         assertThrows(SpeechException::class.java) { speak(synthesizer) }
@@ -125,6 +128,8 @@ class RemoteSpeechSynthesizerTest {
         val played = player.played.single()
         assertArrayEquals(spoken.samples, played.samples)
         assertEquals(22_050, played.sampleRate)
+        // Reported as started once, just before it plays: not while the voice is being made.
+        assertEquals(listOf(0), startedAfter)
     }
 
     @Test
@@ -164,6 +169,7 @@ class RemoteSpeechSynthesizerTest {
 
         assertEquals("the voice engine is down", error.message)
         assertEquals(0, player.played.size)
+        assertEquals(emptyList<Int>(), startedAfter)
     }
 
     @Test

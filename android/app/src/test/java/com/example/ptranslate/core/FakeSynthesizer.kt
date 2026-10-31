@@ -10,12 +10,17 @@ class FakeSynthesizer : SpeechSynthesizer {
     var failure: SpeechException? = null
     var stops = 0
 
-    /** When set, speak() waits here until [stop] or the test completes it. */
+    /** When set, speak() waits here, before anything is heard, until the test completes it. */
+    var preparing: CompletableDeferred<Unit>? = null
+
+    /** When set, speak() waits here, while speaking, until [stop] or the test completes it. */
     var hold: CompletableDeferred<Unit>? = null
 
-    override suspend fun speak(text: String, language: Language) {
+    override suspend fun speak(text: String, language: Language, onStart: () -> Unit) {
         failure?.let { throw it }
         spoken += "${language.tag}: $text"
+        preparing?.await()
+        onStart()
         hold?.await()
     }
 

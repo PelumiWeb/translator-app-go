@@ -373,10 +373,31 @@ class TranslateViewModelTest {
 
         assertEquals(listOf("es: [en>es] good morning"), synthesizer.spoken)
         assertEquals("Speaking", viewModel.state.value.status)
+        assertEquals(true, viewModel.state.value.speaking)
         assertEquals("[en>es] good morning", viewModel.state.value.translation)
         assertEquals(Phase.WORKING, viewModel.state.value.phase)
 
         synthesizer.hold?.complete(Unit) // it finishes
+        runCurrent()
+
+        assertEquals("Done", viewModel.state.value.status)
+        assertEquals(Phase.IDLE, viewModel.state.value.phase)
+    }
+
+    @Test
+    fun `says the speech is being prepared, with progress, until it can be heard`() = runTest(dispatcher) {
+        synthesizer.preparing = CompletableDeferred() // a voice still being made on the server
+        val viewModel = newViewModel(FakeRecorder(), saying("good morning"))
+
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+
+        assertEquals("Preparing speech", viewModel.state.value.status)
+        assertEquals(false, viewModel.state.value.speaking) // so the screen shows progress
+        assertEquals("[en>es] good morning", viewModel.state.value.translation)
+
+        synthesizer.preparing?.complete(Unit) // it can be heard now
         runCurrent()
 
         assertEquals("Done", viewModel.state.value.status)
