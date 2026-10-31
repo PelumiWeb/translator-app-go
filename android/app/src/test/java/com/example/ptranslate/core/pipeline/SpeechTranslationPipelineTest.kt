@@ -5,6 +5,7 @@ import com.example.ptranslate.core.FakeTranslator
 import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.audio.PcmAudio
 import com.example.ptranslate.core.speech.SpeechException
+import com.example.ptranslate.core.speech.SpeechVoice
 import com.example.ptranslate.core.stt.Transcriber
 import com.example.ptranslate.core.stt.Transcript
 import com.example.ptranslate.core.stt.TranscriptEvent
@@ -52,7 +53,7 @@ class SpeechTranslationPipelineTest {
                 PipelineEvent.Translating,
                 PipelineEvent.Translated("[en>es] hello world"),
                 PipelineEvent.PreparingSpeech,
-                PipelineEvent.Speaking,
+                PipelineEvent.Speaking(SpeechVoice.PHONE),
                 PipelineEvent.Spoken,
             ),
             events,
@@ -60,6 +61,15 @@ class SpeechTranslationPipelineTest {
         assertEquals(listOf("translate en>es"), translator.calls)
         // Spoken in the listener's language, not the speaker's.
         assertEquals(listOf("es: [en>es] hello world"), synthesizer.spoken)
+    }
+
+    @Test
+    fun `says whose voice the translation is spoken in`() = runBlocking {
+        synthesizer.voice = SpeechVoice.OWN
+
+        val events = SpeechTranslationPipeline(speaking, FakeTranslator(), synthesizer).process(audio, english, spanish).toList()
+
+        assertEquals(PipelineEvent.Speaking(SpeechVoice.OWN), events[events.size - 2])
     }
 
     @Test
@@ -75,7 +85,7 @@ class SpeechTranslationPipelineTest {
                 PipelineEvent.Translating,
                 PipelineEvent.Translated("[en>es] hello world"),
                 PipelineEvent.PreparingSpeech,
-                PipelineEvent.Speaking,
+                PipelineEvent.Speaking(SpeechVoice.PHONE),
                 PipelineEvent.Spoken,
             ),
             events.drop(2),

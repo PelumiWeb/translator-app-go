@@ -23,6 +23,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** As many dots as the design's waveform has. */
+const val WAVEFORM_DOTS = 22
+
 enum class VoiceSetupStage {
     /** Explaining, and waiting for the user to start. */
     INTRO,
@@ -40,6 +43,8 @@ data class VoiceSetupUiState(
     val recordedMs: Long = 0,
     /** What is wrong with the recording under review; null means it will do. */
     val problem: String? = null,
+    /** How loud each part of the recording under review is, for drawing its waveform. */
+    val levels: List<Float> = emptyList(),
     val playing: Boolean = false,
     /** Length of the recording already saved on this phone, if there is one. */
     val savedMs: Long? = null,
@@ -127,6 +132,7 @@ class VoiceSetupViewModel(
                     stage = VoiceSetupStage.REVIEW,
                     recordedMs = audio.durationMs,
                     problem = VoiceSampleRules.problemWith(audio),
+                    levels = audio.levels(WAVEFORM_DOTS),
                 )
             }
         }

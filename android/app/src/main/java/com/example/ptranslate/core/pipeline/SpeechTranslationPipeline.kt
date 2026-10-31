@@ -4,6 +4,7 @@ import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.audio.PcmAudio
 import com.example.ptranslate.core.speech.SpeechException
 import com.example.ptranslate.core.speech.SpeechSynthesizer
+import com.example.ptranslate.core.speech.SpeechVoice
 import com.example.ptranslate.core.stt.Transcriber
 import com.example.ptranslate.core.stt.Transcript
 import com.example.ptranslate.core.stt.TranscriptEvent
@@ -76,10 +77,10 @@ class SpeechTranslationPipeline(
             coroutineScope {
                 // Speaking runs alongside, so that this coroutine, the only
                 // one a flow lets emit, can say when the speech is heard.
-                val started = CompletableDeferred<Unit>()
-                val speaking = async { synthesizer.speak(translation, target) { started.complete(Unit) } }
+                val started = CompletableDeferred<SpeechVoice>()
+                val speaking = async { synthesizer.speak(translation, target) { started.complete(it) } }
                 select {
-                    started.onAwait { emit(PipelineEvent.Speaking) }
+                    started.onAwait { voice -> emit(PipelineEvent.Speaking(voice)) }
                     speaking.onAwait {} // finished without ever being heard
                 }
                 speaking.await()
@@ -89,6 +90,9 @@ class SpeechTranslationPipeline(
             emit(PipelineEvent.SpeechFailed(e.message ?: "The translation could not be spoken"))
         }
     }
+
+    /** Stops the translation being spoken, if one is. The run then carries on to its end. */
+    fun stopSpeaking() = synthesizer.stop()
 }
 
 sealed interface PipelineEvent {
@@ -107,8 +111,8 @@ sealed interface PipelineEvent {
      */
     data object PreparingSpeech : PipelineEvent
 
-    /** The translation is being said aloud. */
-    data object Speaking : PipelineEvent
+    /** The translation is being said aloud, in [voice]. */
+    data class Speaking(val voice: SpeechVoice) : PipelineEvent
 
     /** It has been said, or was stopped part way. */
     data object Spoken : PipelineEvent

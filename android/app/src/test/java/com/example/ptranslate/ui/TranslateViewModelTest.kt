@@ -11,6 +11,7 @@ import com.example.ptranslate.core.model.ModelInstaller
 import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
 import com.example.ptranslate.core.speech.SpeechException
+import com.example.ptranslate.core.speech.SpeechVoice
 import com.example.ptranslate.core.stt.DeviceSpeed
 import com.example.ptranslate.core.stt.RoutingNote
 import com.example.ptranslate.core.stt.Transcriber
@@ -148,7 +149,7 @@ class TranslateViewModelTest {
 
         transcriber.events.send(TranscriptEvent.StageChanged(TranscriptionStage.QUEUED))
         runCurrent()
-        assertEquals("Queued", viewModel.state.value.status)
+        assertEquals(InterpreterStage.QUEUED, viewModel.state.value.stage)
 
         transcriber.events.send(TranscriptEvent.Partial("hello"))
         runCurrent()
@@ -162,7 +163,7 @@ class TranslateViewModelTest {
 
         val state = viewModel.state.value
         assertEquals(Phase.IDLE, state.phase)
-        assertEquals("Done", state.status)
+        assertEquals(InterpreterStage.DONE, state.stage)
         assertEquals("hello world", state.text)
         assertNull(state.error)
     }
@@ -181,7 +182,7 @@ class TranslateViewModelTest {
 
         val state = viewModel.state.value
         assertEquals(Phase.IDLE, state.phase)
-        assertEquals("Failed", state.status)
+        assertEquals(InterpreterStage.FAILED, state.stage)
         assertEquals("provider exploded", state.error)
     }
 
@@ -358,7 +359,7 @@ class TranslateViewModelTest {
         val state = viewModel.state.value
         assertEquals("good morning", state.text)
         assertEquals("[en>fr] good morning", state.translation)
-        assertEquals("Done", state.status)
+        assertEquals(InterpreterStage.DONE, state.stage)
         assertEquals(Phase.IDLE, state.phase)
     }
 
@@ -372,15 +373,15 @@ class TranslateViewModelTest {
         runCurrent()
 
         assertEquals(listOf("es: [en>es] good morning"), synthesizer.spoken)
-        assertEquals("Speaking", viewModel.state.value.status)
-        assertEquals(true, viewModel.state.value.speaking)
+        assertEquals(InterpreterStage.SPEAKING, viewModel.state.value.stage)
+        assertEquals(SpeechVoice.PHONE, viewModel.state.value.speakingVoice)
         assertEquals("[en>es] good morning", viewModel.state.value.translation)
         assertEquals(Phase.WORKING, viewModel.state.value.phase)
 
         synthesizer.hold?.complete(Unit) // it finishes
         runCurrent()
 
-        assertEquals("Done", viewModel.state.value.status)
+        assertEquals(InterpreterStage.DONE, viewModel.state.value.stage)
         assertEquals(Phase.IDLE, viewModel.state.value.phase)
     }
 
@@ -393,15 +394,47 @@ class TranslateViewModelTest {
         viewModel.onRecordClicked()
         runCurrent()
 
-        assertEquals("Preparing speech", viewModel.state.value.status)
-        assertEquals(false, viewModel.state.value.speaking) // so the screen shows progress
+        assertEquals(InterpreterStage.PREPARING_SPEECH, viewModel.state.value.stage)
+        assertNull(viewModel.state.value.speakingVoice)
         assertEquals("[en>es] good morning", viewModel.state.value.translation)
 
         synthesizer.preparing?.complete(Unit) // it can be heard now
         runCurrent()
 
-        assertEquals("Done", viewModel.state.value.status)
+        assertEquals(InterpreterStage.DONE, viewModel.state.value.stage)
         assertEquals(Phase.IDLE, viewModel.state.value.phase)
+    }
+
+    @Test
+    fun `stopping the speech ends the run as usual`() = runTest(dispatcher) {
+        synthesizer.hold = CompletableDeferred() // keep it talking until told otherwise
+        val viewModel = newViewModel(FakeRecorder(), saying("good morning"))
+        viewModel.onRecordClicked()
+        viewModel.onRecordClicked()
+        runCurrent()
+        assertEquals(InterpreterStage.SPEAKING, viewModel.state.value.stage)
+
+        viewModel.onStopSpeakingClicked()
+        runCurrent()
+
+        assertEquals(1, synthesizer.stops)
+        assertEquals(InterpreterStage.DONE, viewModel.state.value.stage)
+        assertEquals(Phase.IDLE, viewModel.state.value.phase)
+    }
+
+    @Test
+    fun `swaps the languages when each can take the other's place`() = runTest(dispatcher) {
+        val viewModel = newViewModel(FakeRecorder(), FakeTranscriber())
+
+        viewModel.onSwapLanguagesClicked()
+        assertEquals(Language("es"), viewModel.state.value.source)
+        assertEquals(Language("en"), viewModel.state.value.target)
+
+        // French can be translated into, but not spoken: it cannot become the source.
+        viewModel.onTargetSelected(Language("fr"))
+        viewModel.onSwapLanguagesClicked()
+        assertEquals(Language("es"), viewModel.state.value.source)
+        assertEquals(Language("fr"), viewModel.state.value.target)
     }
 
     @Test
@@ -415,7 +448,7 @@ class TranslateViewModelTest {
 
         val state = viewModel.state.value
         assertEquals("[en>es] good morning", state.translation)
-        assertEquals("Done", state.status)
+        assertEquals(InterpreterStage.DONE, state.stage)
         assertEquals("This phone has no voice for Spanish", state.error)
         assertEquals(Phase.IDLE, state.phase)
     }
@@ -431,7 +464,7 @@ class TranslateViewModelTest {
 
         assertEquals("good morning", viewModel.state.value.text)
         assertEquals("", viewModel.state.value.translation)
-        assertEquals("Done", viewModel.state.value.status)
+        assertEquals(InterpreterStage.DONE, viewModel.state.value.stage)
     }
 
     @Test

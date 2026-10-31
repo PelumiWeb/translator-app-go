@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Ptranslate" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Dark, and petrol behind the first frame, so the app opens straight into the
+         Pearl design with no white flash. Only dark is designed. -->
+    <style name="Theme.Ptranslate" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF0E2426</item>
+    </style>
 </resources>

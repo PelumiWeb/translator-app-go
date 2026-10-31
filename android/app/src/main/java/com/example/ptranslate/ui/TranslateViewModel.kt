@@ -15,6 +15,7 @@ import com.example.ptranslate.core.model.ModelInstaller
 import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.pipeline.PipelineEvent
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
+import com.example.ptranslate.core.speech.SpeechVoice
 import com.example.ptranslate.core.stt.DeviceSpeed
 import com.example.ptranslate.core.stt.FallbackThresholds
 import com.example.ptranslate.core.stt.RoutingNote
@@ -33,9 +34,26 @@ import java.util.Locale
 
 enum class Phase { IDLE, RECORDING, WORKING }
 
+/** Where a run is, in more detail than [Phase]; the screen words each one. */
+enum class InterpreterStage {
+    IDLE,
+    RECORDING,
+    PREPARING_AUDIO,
+    UPLOADING,
+    QUEUED,
+    TRANSCRIBING,
+    RECONNECTING,
+    DOWNLOADING_LANGUAGE,
+    TRANSLATING,
+    PREPARING_SPEECH,
+    SPEAKING,
+    DONE,
+    FAILED,
+}
+
 data class TranslateUiState(
     val phase: Phase = Phase.IDLE,
-    val status: String = "Tap Record and speak",
+    val stage: InterpreterStage = InterpreterStage.IDLE,
     /** What was said, in the source language. */
     val text: String = "",
     /** The same, in the target language. Empty until translated. */
@@ -57,8 +75,8 @@ data class TranslateUiState(
     val measuringSpeed: Boolean = false,
     /** True when [deviceSpeed] is over the limit the automatic route allows. */
     val deviceTooSlow: Boolean = false,
-    /** True while the translation can be heard; the screen shows progress at other times of a run. */
-    val speaking: Boolean = false,
+    /** Whose voice the translation is being spoken in, while it is. */
+    val speakingVoice: SpeechVoice? = null,
 )
 
 class TranslateViewModel(
@@ -152,6 +170,19 @@ class TranslateViewModel(
         _state.update { it.copy(target = language) }
     }
 
+    /** Swaps the two languages, when each can take the other's place. */
+    fun onSwapLanguagesClicked() {
+        val state = _state.value
+        if (state.phase != Phase.IDLE) return
+        if (state.target !in state.sourceLanguages || state.source !in state.targetLanguages) return
+        _state.update { it.copy(source = state.target, target = state.source) }
+    }
+
+    /** Stops the translation being spoken; the run then ends as usual. */
+    fun onStopSpeakingClicked() {
+        if (_state.value.stage == InterpreterStage.SPEAKING) pipeline.stopSpeaking()
+    }
+
     fun onPermissionDenied() {
         _state.update { it.copy(error = "Microphone permission is needed to record") }
     }
@@ -167,7 +198,7 @@ class TranslateViewModel(
         _state.update {
             it.copy(
                 phase = Phase.RECORDING,
-                status = "Recording. Tap Stop when done",
+                stage = InterpreterStage.RECORDING,
                 text = "",
                 translation = "",
                 details = null,
@@ -185,7 +216,7 @@ class TranslateViewModel(
     private fun stopAndProcess() {
         val finished = recording ?: return
         recording = null
-        _state.update { it.copy(phase = Phase.WORKING, status = "Preparing audio") }
+        _state.update { it.copy(phase = Phase.WORKING, stage = InterpreterStage.PREPARING_AUDIO) }
         // Read once, so the whole run uses the languages chosen at this moment.
         val (source, target) = _state.value.let { it.source to it.target }
 
@@ -216,27 +247,26 @@ class TranslateViewModel(
     private fun show(event: PipelineEvent, audioMs: Long, startedAt: Long, translating: Boolean) {
         _state.update {
             when (event) {
-                is PipelineEvent.Transcribing -> it.copy(status = event.stage.label())
+                is PipelineEvent.Transcribing -> it.copy(stage = event.stage.toInterpreterStage())
                 is PipelineEvent.PartialTranscript -> it.copy(text = event.text)
                 is PipelineEvent.Transcribed -> it.copy(
-                    status = "Transcribed",
                     text = event.transcript.text,
                     details = describe(event.transcript, audioMs, elapsedMs = now() - startedAt),
                     routing = event.transcript.note?.explanation(),
                 )
-                PipelineEvent.DownloadingLanguages -> it.copy(status = "Downloading language pack")
-                PipelineEvent.Translating -> it.copy(status = "Translating")
+                PipelineEvent.DownloadingLanguages -> it.copy(stage = InterpreterStage.DOWNLOADING_LANGUAGE)
+                PipelineEvent.Translating -> it.copy(stage = InterpreterStage.TRANSLATING)
                 // With the same language on both sides there is nothing to
                 // show twice.
                 is PipelineEvent.Translated -> it.copy(
-                    status = "Done",
+                    stage = InterpreterStage.DONE,
                     translation = if (translating) event.text else "",
                 )
-                PipelineEvent.PreparingSpeech -> it.copy(status = "Preparing speech")
-                PipelineEvent.Speaking -> it.copy(status = "Speaking", speaking = true)
-                PipelineEvent.Spoken -> it.copy(status = "Done", speaking = false)
+                PipelineEvent.PreparingSpeech -> it.copy(stage = InterpreterStage.PREPARING_SPEECH)
+                is PipelineEvent.Speaking -> it.copy(stage = InterpreterStage.SPEAKING, speakingVoice = event.voice)
+                PipelineEvent.Spoken -> it.copy(stage = InterpreterStage.DONE, speakingVoice = null)
                 // The translation is on screen; only the voice is missing.
-                is PipelineEvent.SpeechFailed -> it.copy(status = "Done", error = event.reason)
+                is PipelineEvent.SpeechFailed -> it.copy(stage = InterpreterStage.DONE, error = event.reason)
             }
         }
     }
@@ -268,9 +298,9 @@ class TranslateViewModel(
             // complete and still carry a note, such as "could not be spoken".
             it.copy(
                 phase = Phase.IDLE,
-                status = if (error == null) it.status else "Failed",
+                stage = if (error == null) it.stage else InterpreterStage.FAILED,
                 error = error ?: it.error,
-                speaking = false,
+                speakingVoice = null,
             )
         }
     }
@@ -310,9 +340,9 @@ private fun RoutingNote.explanation(): String = when (this) {
     RoutingNote.CLOUD_UNAVAILABLE -> "This device's result was kept: the server could not be reached"
 }
 
-private fun TranscriptionStage.label(): String = when (this) {
-    TranscriptionStage.UPLOADING -> "Uploading"
-    TranscriptionStage.QUEUED -> "Queued"
-    TranscriptionStage.PROCESSING -> "Transcribing"
-    TranscriptionStage.RECONNECTING -> "Connection lost. Reconnecting"
+private fun TranscriptionStage.toInterpreterStage(): InterpreterStage = when (this) {
+    TranscriptionStage.UPLOADING -> InterpreterStage.UPLOADING
+    TranscriptionStage.QUEUED -> InterpreterStage.QUEUED
+    TranscriptionStage.PROCESSING -> InterpreterStage.TRANSCRIBING
+    TranscriptionStage.RECONNECTING -> InterpreterStage.RECONNECTING
 }

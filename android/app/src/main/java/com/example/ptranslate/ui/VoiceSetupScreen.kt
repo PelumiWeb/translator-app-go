@@ -4,43 +4,67 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ptranslate.core.voice.VoiceSampleRules
+import com.example.ptranslate.ui.components.DotWaveform
+import com.example.ptranslate.ui.components.LinkButton
+import com.example.ptranslate.ui.components.Notice
+import com.example.ptranslate.ui.components.PearlIcons
+import com.example.ptranslate.ui.components.PrimaryButton
+import com.example.ptranslate.ui.components.RecordControl
+import com.example.ptranslate.ui.components.RecordControlState
+import com.example.ptranslate.ui.components.RoundIconButton
+import com.example.ptranslate.ui.theme.Pearl
+import com.example.ptranslate.ui.theme.PearlType
 import com.example.ptranslate.ui.theme.PtranslateTheme
 
 /**
  * About twenty seconds when read aloud at an ordinary pace. Varied sounds and
  * a natural rhythm give a voice-cloning engine more to work with than a list
- * of words would.
+ * of words would. Split into the lines the teleprompter shows; joined, it must
+ * stay word for word the same as on iOS and on the server
+ * (`provider.OnboardingPassage`), which tells the voice engine what was said.
  */
-private const val PASSAGE =
-    "When I travel, I like to talk with the people I meet about their food, their music, and the places " +
-        "they love. A good conversation makes the world feel smaller. I am recording this so that when my " +
-        "words are translated, they can still be spoken in my own voice."
+private val PASSAGE_LINES = listOf(
+    "When I travel, I like to talk with the people I meet",
+    "about their food, their music, and the places they love.",
+    "A good conversation makes the world feel smaller.",
+    "I am recording this so that when my words are translated,",
+    "they can still be spoken in my own voice.",
+)
 
 /** Where the user records the sample of their voice that translations are spoken in. */
 @Composable
@@ -93,81 +117,87 @@ private fun VoiceSetupContent(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
+        modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 28.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Record your voice", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "Your translations can be spoken in your own voice. To do that, the app needs a short " +
-                "recording of you reading the passage below.",
-        )
-        // Said before the user records, in plain words: what happens to it.
-        Text(
-            "The recording stays on this phone. When a translation is spoken, it goes with the text to " +
-                "our server, and from there to Fish Audio, the service that makes the speech. Our server " +
-                "deletes it straight after. You can delete it from this phone at any time.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-
-        Surface(tonalElevation = 2.dp, shape = MaterialTheme.shapes.medium) {
-            Text(PASSAGE, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp))
-        }
-
         when (state.stage) {
             VoiceSetupStage.INTRO -> Intro(state, onRecordClick, onSkipClick, onDeleteClick)
-            VoiceSetupStage.RECORDING -> Recording(state, onRecordClick)
+            VoiceSetupStage.RECORDING -> Recording(state, onRecordClick, onSkipClick)
             VoiceSetupStage.REVIEW -> Review(state, onRecordClick, onListenClick, onUseClick, onSkipClick)
         }
-
-        state.error?.let {
-            Text(text = it, color = MaterialTheme.colorScheme.error)
-        }
+        state.error?.let { Notice(it) }
     }
 }
 
 @Composable
-private fun Intro(
-    state: VoiceSetupUiState,
-    onRecordClick: () -> Unit,
-    onSkipClick: () -> Unit,
-    onDeleteClick: () -> Unit,
-) {
+private fun Intro(state: VoiceSetupUiState, onRecordClick: () -> Unit, onSkipClick: () -> Unit, onDeleteClick: () -> Unit) {
+    val colors = Pearl.colors
     val saved = state.savedMs
-    if (saved != null) {
-        Text("A recording of your voice (${saved / 1000} s) is saved on this phone.")
-    }
-    Button(onClick = onRecordClick) {
-        Text(if (saved == null) "Start recording" else "Record a new one")
-    }
+    Text("Your voice", style = PearlType.label, color = colors.fg)
+    Text(
+        if (saved == null) "Be heard in your own voice" else "Your voice is recorded",
+        style = PearlType.title,
+        color = colors.fg,
+        textAlign = TextAlign.Center,
+    )
+    Text(
+        if (saved == null) {
+            "Read the lines below aloud, at your normal pace. About 20 seconds."
+        } else {
+            "${saved / 1000} seconds, kept on this phone. Record a new one, keep it, or delete it."
+        },
+        style = PearlType.body,
+        color = colors.fg2,
+        textAlign = TextAlign.Center,
+    )
+    Teleprompter(current = 0, modifier = Modifier.padding(vertical = 16.dp))
+    RecordControl(
+        state = RecordControlState.IDLE,
+        label = if (saved == null) "Start recording" else "Record a new one",
+        onClick = onRecordClick,
+    )
     if (saved == null) {
-        TextButton(onClick = onSkipClick) { Text("Not now, use the phone's voice") }
+        LinkButton("Not now, use the phone's voice", onClick = onSkipClick)
     } else {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onSkipClick) { Text("Keep it") }
-            TextButton(onClick = onDeleteClick) { Text("Delete my voice") }
+            LinkButton("Keep it", onClick = onSkipClick)
+            LinkButton("Delete my voice", onClick = onDeleteClick)
         }
     }
+    // Said before the user records, in plain words: what happens to it.
+    Text(
+        "The recording stays on this phone. When a translation is spoken, it goes with the text to " +
+            "our server, and from there to Fish Audio, the service that makes the speech. Our server " +
+            "deletes it straight after. You can delete it from this phone at any time.",
+        style = PearlType.meta,
+        color = colors.fg2,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = 8.dp),
+    )
 }
 
 @Composable
-private fun Recording(state: VoiceSetupUiState, onStopClick: () -> Unit) {
-    val enough = state.elapsedMs >= VoiceSampleRules.TARGET_MS
+private fun Recording(state: VoiceSetupUiState, onStopClick: () -> Unit, onSkipClick: () -> Unit) {
+    val colors = Pearl.colors
+    val elapsed = state.elapsedMs
+    Text("Listening", style = PearlType.label, color = colors.fg)
+    Text(clock(elapsed), style = PearlType.timer, color = colors.fg)
     Text(
-        text = "Recording: ${state.elapsedMs / 1000} s",
-        style = MaterialTheme.typography.titleMedium,
+        when {
+            elapsed < VoiceSampleRules.MIN_MS -> "Keep going. A few more seconds."
+            elapsed < VoiceSampleRules.TARGET_MS -> "Keep going. Read to the end."
+            else -> "That's enough. Tap to stop."
+        },
+        style = PearlType.small,
+        color = colors.fg2,
     )
-    LinearProgressIndicator(
-        progress = { (state.elapsedMs.toFloat() / VoiceSampleRules.TARGET_MS).coerceIn(0f, 1f) },
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Text(
-        text = if (enough) "That is enough. You can stop" else "Read the passage aloud, at your normal pace",
-        style = MaterialTheme.typography.bodySmall,
-    )
-    Button(onClick = onStopClick) { Text("Stop") }
+    Teleprompter(current = lineAt(elapsed), modifier = Modifier.padding(vertical = 24.dp))
+    RecordControl(state = RecordControlState.RECORDING, label = "Stop recording", onClick = onStopClick, value = clock(elapsed))
+    LinkButton("Not now, use the phone's voice", onClick = onSkipClick)
 }
 
 @Composable
@@ -178,28 +208,94 @@ private fun Review(
     onUseClick: () -> Unit,
     onSkipClick: () -> Unit,
 ) {
-    Text("Recorded ${state.recordedMs / 1000} seconds", style = MaterialTheme.typography.titleMedium)
-    state.problem?.let {
-        Text(text = it, color = MaterialTheme.colorScheme.error)
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onListenClick) {
-            Text(if (state.playing) "Stop listening" else "Listen")
+    val colors = Pearl.colors
+    // While it plays, the played part of the waveform fills in.
+    val played = remember { Animatable(1f) }
+    LaunchedEffect(state.playing) {
+        if (state.playing) {
+            played.snapTo(0f)
+            played.animateTo(1f, tween(state.recordedMs.toInt().coerceAtLeast(1), easing = LinearEasing))
+        } else {
+            played.snapTo(1f)
         }
-        OutlinedButton(onClick = onRecordClick) { Text("Record again") }
     }
-    Button(onClick = onUseClick, enabled = state.problem == null) {
-        Text("Use this recording")
+
+    Text("Recorded", style = PearlType.label, color = colors.fg)
+    Text(clock(state.recordedMs), style = PearlType.timer, color = colors.fg)
+    Text(
+        if (state.problem == null) "Listen back, then keep it." else "This one cannot be kept.",
+        style = PearlType.small,
+        color = colors.fg2,
+    )
+    Spacer(Modifier.height(16.dp))
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        RoundIconButton(
+            icon = PearlIcons.Play,
+            label = if (state.playing) "Stop listening" else "Listen",
+            onClick = onListenClick,
+        )
+        DotWaveform(levels = state.levels, color = colors.you, played = played.value, modifier = Modifier.weight(1f))
     }
-    TextButton(onClick = onSkipClick) {
-        Text(if (state.savedMs == null) "Not now, use the phone's voice" else "Cancel, keep my saved voice")
+    state.problem?.let { Notice(it, Modifier.padding(top = 8.dp)) }
+    Spacer(Modifier.height(16.dp))
+    PrimaryButton("Use this recording", onClick = onUseClick, enabled = state.problem == null)
+    LinkButton("Record again", onClick = onRecordClick)
+    LinkButton(if (state.savedMs == null) "Not now, use the phone's voice" else "Cancel, keep my saved voice", onClick = onSkipClick)
+}
+
+/**
+ * The passage as a teleprompter: the line to read now, large, between the
+ * line just read and the one coming next.
+ */
+@Composable
+private fun Teleprompter(current: Int, modifier: Modifier = Modifier) {
+    val colors = Pearl.colors
+    AnimatedContent(
+        targetState = current,
+        transitionSpec = {
+            (slideInVertically { it / 3 } + fadeIn()) togetherWith (slideOutVertically { -it / 3 } + fadeOut())
+        },
+        label = "teleprompter",
+        modifier = modifier.fillMaxWidth(),
+    ) { line ->
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.height(48.dp), contentAlignment = Alignment.BottomCenter) {
+                PASSAGE_LINES.getOrNull(line - 1)?.let {
+                    Text(it, style = PearlType.passageOther, color = colors.fg4, textAlign = TextAlign.Center)
+                }
+            }
+            Text(PASSAGE_LINES[line], style = PearlType.passageCurrent, color = colors.fg, textAlign = TextAlign.Center)
+            Box(Modifier.height(48.dp), contentAlignment = Alignment.TopCenter) {
+                PASSAGE_LINES.getOrNull(line + 1)?.let {
+                    Text(it, style = PearlType.passageOther, color = colors.fg3, textAlign = TextAlign.Center)
+                }
+            }
+        }
     }
 }
 
-@Preview(showBackground = true)
+/**
+ * Which line the reader has probably reached: the passage is paced to take
+ * the target time, each line its share by length. There is no listening for
+ * the words; a reader ahead or behind still has the lines around it.
+ */
+private fun lineAt(elapsedMs: Long): Int {
+    val total = PASSAGE_LINES.sumOf { it.length }
+    val reached = elapsedMs.toDouble() / VoiceSampleRules.TARGET_MS * total
+    var end = 0
+    PASSAGE_LINES.forEachIndexed { index, line ->
+        end += line.length
+        if (reached < end) return index
+    }
+    return PASSAGE_LINES.lastIndex
+}
+
+private fun clock(ms: Long): String = "%d:%02d".format(ms / 60_000, ms / 1000 % 60)
+
+@Preview
 @Composable
 private fun VoiceSetupRecordingPreview() {
-    PtranslateTheme {
+    PtranslateTheme(darkTheme = true) {
         VoiceSetupContent(
             state = VoiceSetupUiState(stage = VoiceSetupStage.RECORDING, elapsedMs = 12_000),
             onRecordClick = {}, onListenClick = {}, onUseClick = {}, onSkipClick = {}, onDeleteClick = {},
@@ -207,14 +303,15 @@ private fun VoiceSetupRecordingPreview() {
     }
 }
 
-@Preview(showBackground = true)
+@Preview
 @Composable
 private fun VoiceSetupReviewPreview() {
-    PtranslateTheme {
+    PtranslateTheme(darkTheme = true) {
         VoiceSetupContent(
             state = VoiceSetupUiState(
                 stage = VoiceSetupStage.REVIEW,
                 recordedMs = 4_000,
+                levels = List(22) { (it % 5) / 4f },
                 problem = "That was only 4 seconds. About 20 are needed: please read the whole passage",
             ),
             onRecordClick = {}, onListenClick = {}, onUseClick = {}, onSkipClick = {}, onDeleteClick = {},

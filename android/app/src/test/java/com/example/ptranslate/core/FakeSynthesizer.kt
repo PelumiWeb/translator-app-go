@@ -2,6 +2,7 @@ package com.example.ptranslate.core
 
 import com.example.ptranslate.core.speech.SpeechException
 import com.example.ptranslate.core.speech.SpeechSynthesizer
+import com.example.ptranslate.core.speech.SpeechVoice
 import kotlinx.coroutines.CompletableDeferred
 
 /** Records what it was asked to say. Speaking ends at once unless [hold] is set. */
@@ -16,11 +17,14 @@ class FakeSynthesizer : SpeechSynthesizer {
     /** When set, speak() waits here, while speaking, until [stop] or the test completes it. */
     var hold: CompletableDeferred<Unit>? = null
 
-    override suspend fun speak(text: String, language: Language, onStart: () -> Unit) {
+    /** The voice it reports speaking in. */
+    var voice = SpeechVoice.PHONE
+
+    override suspend fun speak(text: String, language: Language, onStart: (SpeechVoice) -> Unit) {
         failure?.let { throw it }
         spoken += "${language.tag}: $text"
         preparing?.await()
-        onStart()
+        onStart(voice)
         hold?.await()
     }
 

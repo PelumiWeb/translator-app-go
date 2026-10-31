@@ -42,7 +42,7 @@ class AndroidSpeechSynthesizer(
     private val waiting = ConcurrentHashMap<String, CancellableContinuation<Unit>>()
     private val starting = ConcurrentHashMap<String, () -> Unit>()
 
-    override suspend fun speak(text: String, language: Language, onStart: () -> Unit) = mutex.withLock {
+    override suspend fun speak(text: String, language: Language, onStart: (SpeechVoice) -> Unit) = mutex.withLock {
         val tts = engine ?: connect().also { engine = it }
 
         val locale = Locale.forLanguageTag(language.tag)
@@ -57,7 +57,7 @@ class AndroidSpeechSynthesizer(
         var attempt = 1
         while (true) {
             try {
-                speakOnce(tts, text, onStart)
+                speakOnce(tts, text) { onStart(SpeechVoice.PHONE) }
                 return@withLock
             } catch (e: EngineError) {
                 if (!isVoiceNotReady(e.code) || attempt >= voiceAttempts) {

@@ -9,6 +9,21 @@ class PcmAudio(val samples: ShortArray, val sampleRate: Int = SAMPLE_RATE_HZ) {
     val durationMs: Long
         get() = samples.size * 1000L / sampleRate
 
+    /**
+     * How loud each of [count] equal slices of the audio is, from 0 to 1
+     * relative to the loudest slice: the heights of a waveform drawing.
+     */
+    fun levels(count: Int): List<Float> {
+        if (samples.isEmpty() || count <= 0) return List(count.coerceAtLeast(0)) { 0f }
+        val rms = List(count) { slice ->
+            val from = samples.size * slice / count
+            val to = (samples.size * (slice + 1) / count).coerceAtLeast(from + 1).coerceAtMost(samples.size)
+            sqrt((from until to).sumOf { samples[it].toDouble() * samples[it] } / (to - from))
+        }
+        val loudest = rms.max()
+        return if (loudest == 0.0) List(count) { 0f } else rms.map { (it / loudest).toFloat() }
+    }
+
     /** The samples scaled to the range -1 to 1, the form Whisper takes. */
     fun toFloatSamples(): FloatArray = FloatArray(samples.size) { samples[it] / 32768f }
 
