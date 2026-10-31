@@ -1,17 +1,20 @@
 # Voice Translation
 
-Record speech on a phone, transcribe it, translate it into a target language
-chosen for the receiver. Portfolio piece that must prove three things: native
-mobile apps (Android and iOS), on-device inference, and Go backend services.
+Record speech on a phone, transcribe it, translate it into the listener's
+language, and speak it in the speaker's own voice. Native mobile apps (Android
+and iOS), on-device inference, and Go backend services.
 
-The aim is speech-to-speech interpretation: each user speaks in one language
-and hears the translation in another, in their own voice. It is being built in
-steps; text output comes first, spoken output is milestones 8 and 9 in the
-plan.
+Since 2026-10-31 it is a product, not a portfolio piece: a social app where
+people talk to anyone in the world without sharing a language. Each person
+signs up with their name and their voice; what they say reaches the other side
+in the listener's language and the speaker's voice. Voice notes first, then
+text messages, later calls for premium users. `docs/plan.md` has the order
+(milestones 13 onwards) and `docs/architecture.md` section 9 the direction.
 
 The Android app came first. The iOS app was added on 2026-10-14: a native
-Swift app on the same Go server, built to the same design. Milestone 10 brings
-it level with Android; after that, every phone feature is built on both.
+Swift app on the same Go server, built to the same design. Milestone 10
+brought it level with Android (2026-10-29); every phone feature is built on
+both. The owner has a paid Apple Developer account (2026-10-31).
 
 Read `docs/architecture.md` for the design and `docs/plan.md` for the current
 milestone before starting any work.
@@ -211,9 +214,10 @@ on the same Wi-Fi (architecture, section 3.5).
 
 Do not build, scaffold, or add placeholders for any of these:
 
-- auth, accounts, billing
+- billing and premium plans (they come with calls, milestone 17)
 - multi-region
 
-Voice keyboards (an Android IME and an iOS keyboard extension) are planned as
-milestone 11. Until then, do not build them; only keep `core/` and `Core/`
-reusable for them.
+Accounts and sign-in stopped being non-goals on 2026-10-31: they are
+milestone 13. Voice keyboards (an Android IME and an iOS keyboard extension)
+are milestone 11, after the social milestones; until then, do not build them,
+only keep `core/` and `Core/` reusable for them.

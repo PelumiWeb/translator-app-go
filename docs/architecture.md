@@ -1,6 +1,8 @@
 # Architecture
 
 Status: approved 2026-10-04. Section 3 (iOS) added and approved 2026-10-14.
+Section 9 (the social product) added 2026-10-31: the direction from milestone
+13 on, which changes some of what sections 1 to 4 say, as noted where it does.
 
 ## 1. What the system does
 
@@ -43,7 +45,8 @@ Two things to notice:
 
 - Translation always runs on the device, on both paths. The backend only
   produces a transcript. This keeps the server small and means one translation
-  code path to test.
+  code path to test. Messages between people (milestone 14) will be translated
+  on the server instead (section 9, ADR 0017).
 - The backend is also the model distribution point (manifest and model files).
 
 ## 2. Android
@@ -262,7 +265,8 @@ The user records one once, by reading a passage of about 20 seconds on a
   device. A guest's words would be spoken in the owner's voice.
 - It never leaves the phone by any other route: it is excluded from cloud
   backup and from transfer to a new phone (Android's backup rules, iOS's
-  backup exclusion). So are the Whisper model, which can be downloaded again,
+  backup exclusion). From milestone 13 the server keeps each user's voice,
+  with their consent (section 9, ADR 0016). So are the Whisper model, which can be downloaded again,
   and Android's `device` preferences, which describe this phone only.
 
 The app has two screens and no navigation library: `AppRoot` shows one or the
@@ -454,7 +458,8 @@ a transcription it is queued and answered with `202 Accepted`:
 
 Progress comes over the same events endpoint (`queued`, `processing`, `done`
 or `error`). The voice sample is used for that one job and deleted when it
-ends; the server keeps no voices.
+ends; the server keeps no voices. Milestone 13 changes this: each user's voice
+is kept, and requests to speak use it (section 9).
 
 **`GET /v1/jobs/{id}/audio`**: the generated speech, a WAV file, with range
 support. `409` with code `not_ready` while the job has no audio: it is
@@ -709,13 +714,18 @@ Written in the milestone where the decision is implemented.
 | 0011 | A native iOS app on the same server | 10 |
 | 0012 | Translation on iOS | 10 |
 | 0013 | Voice keyboards, and recording for the iPhone keyboard | 11 |
-| 0014 | Voice notes from other apps: how they come in and how the reply goes out | 12 |
+| 0014 | Voice notes from other apps (not written: milestone 12 was dropped) | 12 |
+| 0015 | From a portfolio piece to a social product (written) | 13 |
+| 0016 | Users' voices are kept on the server (written) | 13 |
+| 0017 | Messages are translated on the server (written) | 14 |
+| 0018 | Sign-in and sessions | 13 |
 
 ## 8. Known limits
 
 - No auth: anyone who can reach the server can upload audio and download
   models. Job ids are random UUIDs, so one client cannot guess another's event
   stream, and uploads are size-limited. Not suitable for a public deployment.
+  Accounts arrive with milestone 13.
 - ML Kit translation covers about 59 languages and translates through English
   when neither side is English, so quality between two non-English languages is
   modest.
@@ -726,3 +736,51 @@ Written in the milestone where the decision is implemented.
 - Recordings are limited to 30 seconds.
 - The low-confidence fallback makes the user wait twice: once for the device,
   then for the cloud.
+
+## 9. The social product (direction)
+
+Added 2026-10-31, when the app became a product (ADR 0015). This is the
+direction, not yet the design: each milestone from 13 on designs its part,
+and sections 1 to 4 are corrected as it lands.
+
+People sign up with their name and their voice, and can talk to anyone, each
+in their own language: what one says reaches the other in the listener's
+language and the speaker's voice. Voice notes first (milestone 14), then text
+messages (15), later live calls for premium users (17).
+
+What stays: the two native apps and their seams; transcription on the phone
+with the server as the fallback; the Go server, Postgres, the job queue and
+its events. The interpreter screen built so far stays, and keeps translating
+on the phone.
+
+What changes:
+
+- **Accounts** (milestone 13). A user has a display name, a handle others
+  find them by, and the language they speak. They sign in with Apple, with
+  Google, or with a one-time code sent to their email. The phone keeps a
+  session token; the server keeps only a hash of it.
+- **Voices on the server** (milestone 13, ADR 0016). The sample recorded at
+  onboarding is uploaded once, with the user's explicit consent, and kept
+  until they replace or delete it, or delete their account. It is used only
+  to speak that user's own words. The "stays on this phone" promise of
+  section 2.10 ends here, and the onboarding screens say so.
+- **Translation on the server, for messages** (milestone 14, ADR 0017). A
+  message is translated into its listener's language before it is spoken in
+  the sender's voice, which happens on the server. Apple's translator cannot
+  run on a server, so this needs a translation service.
+- **A voice note's path.** The sender's phone records and transcribes it, as
+  today, and uploads the audio, the transcript and its language. The server
+  stores the message, translates the transcript for the listener, speaks the
+  translation in the sender's voice, stores that audio, and notifies the
+  listener's phone (APNs, FCM). That phone plays it and shows both texts.
+  Translating and speaking are jobs on the existing queue, with its retries,
+  leases and events.
+- **Safety** (milestone 16): block, report, and acting on reports, before
+  anyone can be found at random.
+- **Calls** (milestone 17): a stream, not jobs; designed when they come.
+- **Going live** (milestone 18): a public HTTPS server, storage for audio,
+  and a privacy policy that covers voices.
+
+Every voice note costs money: a translation and a synthesis per listener.
+The engine is chosen per request (section 4.5), so a cheaper engine for free
+users stays possible.

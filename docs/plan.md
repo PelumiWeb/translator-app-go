@@ -8,20 +8,27 @@ longer stops at each one: Claude carries on until a decision is needed from
 the owner, then lists the commits to make, with what each contains, how to
 verify it, and a message. The owner reviews and commits them in batches.
 
-Status: `[ ]` not started, `[~]` in progress, `[x]` approved.
+Status: `[ ]` not started, `[~]` in progress, `[x]` done, `[-]` dropped.
 
 Milestones are numbered in the order they were planned, not the order they
-are built. The order of work, as of 2026-10-29:
+are built. On 2026-10-31 the app became a product, a social app where people
+talk across languages (ADR 0015), and the order changed. The order of work,
+as of 2026-10-31:
 
-1. Milestone 10: the iOS app catches up with Android (to checkpoint 9.2)
-2. The rest of milestone 9, on both phones
-3. Milestone 11: voice keyboards
-4. Milestone 7 and checkpoint 8.2, in an order still to agree
-5. Milestone 12: voice notes, interpret and reply (added 2026-10-29; whether
-   it moves ahead of milestone 11 is an open question)
+1. Checkpoint 9.4: a real voice engine
+2. Milestone 13: accounts, profile, and your voice on the server
+3. Milestone 14: voice notes between people
+4. Milestone 15: text messages
+5. Milestone 16: safety and discovery
+6. Milestone 18: going live
+7. Milestone 17: calls, for premium users
+8. Milestone 11: voice keyboards
+9. Milestone 7 and checkpoint 8.2, in an order still to agree
 
-From milestone 10 on, a checkpoint with phone work is done on Android, then
-on iOS, stopping after each for a commit.
+Milestone 10 was done on 2026-10-29. Milestone 12 was dropped on 2026-10-31:
+voice notes now live inside the app (milestone 14).
+
+A checkpoint with phone work is done on Android, then on iOS.
 
 ---
 
@@ -429,27 +436,30 @@ is spoken in that voice.
   translation is heard as beeps. Stop the server and record again: the
   phone's voice says it instead
 
-**Checkpoint 9.4: a real engine, as a free trial**
-- A provider that calls a public Hugging Face Spaces demo of an open
-  voice-cloning model. Free and nothing to install; slow, shared, and liable
-  to change, and the test recordings go to a public demo. For trying the flow,
-  not for real users
-- The onboarding screen's description of what happens to the recording must
-  change with this, on both phones: it currently says the server uses it once and deletes it,
-  which stops being the whole truth when a third party's demo receives it
-- ADR for the voice-cloning engine
+**Checkpoint 9.4: a real voice engine** (the server, then the wording on both
+phones)
+- Changed on 2026-10-31: a paid hosted engine straight away, instead of the
+  free public demo planned first, since the app is now a product (ADR 0015)
+- A `provider.Synthesizer` that sends the engine the voice sample, its
+  transcript (the passage read at onboarding) and the text, behind the same
+  interface as the fake. The fake stays, for tests and for working without a
+  key
+- The engine's key is read from the environment and never committed
+- The onboarding screen's description of what happens to the recording
+  changes on both phones: the engine's company receives it with each request
+- ADR 0010 for the engine
+- Which engine is the owner's choice (open question 2)
 
 Later, not planned in detail:
-- A paid hosted engine (about $5 a month tier) when reliability matters
 - The owner's long-run idea: a free engine for free users and a paid one for
-  paying users. That needs accounts and billing, both non-goals today; the
-  engine is chosen per request so it stays possible
-- A guest mode: with one enrolled voice per phone, a guest's words come out in
-  the owner's voice
+  paying users. Accounts arrive with milestone 13 and billing with milestone
+  17; the engine is chosen per request, so this stays possible
+- A guest mode: with one voice per phone, a guest's words come out in the
+  owner's voice. Less pressing once each person has an account
 
 ---
 
-## [~] Milestone 10: The iOS app catches up
+## [x] Milestone 10: The iOS app catches up
 
 Added on 2026-10-14 at the owner's request, and next. The app should exist on
 iPhone as well, and from here on be built on both phones together. A native
@@ -613,6 +623,9 @@ translate; speak the translation; record your voice.
 - Verify: `make ios-test`, which speaks briefly. On the iPhone, record with a
   target language other than the source, and listen
 
+Done on 2026-10-29. Translation and speech, which the simulator cannot run,
+are still to be seen working on an iPhone.
+
 ---
 
 ## [ ] Milestone 11: Voice keyboards
@@ -638,14 +651,20 @@ Checkpoints, to be detailed when the milestone starts:
   `InputMethodService` with a record button that types the transcript
 - 11.2 iPhone, a throwaway test on the owner's iPhone. iOS does not let a
   keyboard use the microphone, so the main app records in the background and
-  passes the words to the keyboard through a shared App Group. Apple documents
+  passes the words to the keyboard through a shared App Group (possible since
+  the owner joined the Apple Developer Program, 2026-10-31). Apple documents
   none of this. This checkpoint decides whether 11.3 happens
 - 11.3 iPhone: `Core/` moves into a shared framework; the keyboard extension
 - ADR 0013
 
 ---
 
-## [ ] Milestone 12: Voice notes, interpret and reply
+## [-] Milestone 12: Voice notes, interpret and reply
+
+Dropped on 2026-10-31. The social app brings voice notes into the app itself
+(milestone 14), where they arrive already in the listener's language and the
+sender's voice, so there is nothing to bring in from WhatsApp. Kept below as
+the record of what was considered.
 
 Added on 2026-10-29 at the owner's request. A user receives a voice note in
 another app, such as WhatsApp, and reads or hears it in their own language.
@@ -720,6 +739,86 @@ Known before starting:
 
 ---
 
+## [ ] Milestone 13: Accounts, profile, and your voice on the server
+
+Added on 2026-10-31, when the app became a product (ADR 0015). The first
+step of the social app: each person has an account, a profile others can
+find, and their voice kept on the server, so that others can hear their
+words in it (ADR 0016). Architecture section 9 has the direction.
+
+**Demo**: on both phones, sign up with Apple, Google or a code sent by email;
+enter your name, choose your ID and your language; record your voice and
+agree to it being kept. Sign in on a second phone: the same profile and
+voice are there. Delete your voice, then your account: both are gone from
+the server.
+
+Checkpoints, to be detailed when the milestone starts:
+
+- 13.1 Server: users, sign-in identities and sessions in Postgres; checking
+  Apple and Google sign-in tokens; codes sent by email; the profile; handles
+  that are unique; deleting an account
+- 13.2 Server: each user's voice sample, kept with a record of their
+  consent, replaceable and deletable; requests to speak use it instead of an
+  upload
+- 13.3 Android, 13.4 iOS: sign in, the profile, the voice with consent, sign
+  out, delete the account
+- ADR for sign-in and sessions
+
+---
+
+## [ ] Milestone 14: Voice notes between people
+
+**Demo**: two phones, one set to English and one to Spanish. Add each other
+by ID or QR code. Send a voice note in English: the other phone is notified,
+and plays it in Spanish, in the sender's voice, with the original words and
+the translation on screen. Reply in Spanish the other way.
+
+Checkpoints, to be detailed when the milestone starts:
+
+- 14.1 Server: contacts, conversations and messages. A voice note is the
+  sender's audio and transcript; the server translates it into the
+  listener's language and speaks it in the sender's voice, as jobs on the
+  queue (ADR 0017)
+- 14.2 Server: push notifications, through APNs and FCM
+- 14.3 Android, 14.4 iOS: contacts, a conversation, record and send, receive
+  and play
+
+---
+
+## [ ] Milestone 15: Text messages
+
+**Demo**: type in English; the other side reads it in Spanish, and can tap
+it to hear it in the sender's voice.
+
+---
+
+## [ ] Milestone 16: Safety and discovery
+
+Block and report, and a way to act on reports; then finding people beyond
+those whose ID you know, including at random. Block and report come first:
+both app stores require them in apps where people contact each other, and
+contact at random invites abuse without them.
+
+---
+
+## [ ] Milestone 17: Calls, for premium users
+
+Live calls, each side hearing the other in their own language and the
+speaker's voice. Starts with a research checkpoint: recognising, translating
+and speaking as a stream, within about two seconds, and what a minute costs.
+Premium only, so it brings billing: in-app purchases on both stores.
+
+---
+
+## [ ] Milestone 18: Going live
+
+A public server (hosting, a domain, HTTPS, storage for audio), a privacy
+policy and terms that cover voices, and listings on the App Store and Google
+Play. Before the first outside users, and after milestone 16, since the
+stores require block and report.
+
+---
+
 ## Open questions
 
 Answered on 2026-10-04: dependencies approved; Postgres through Homebrew
@@ -746,22 +845,21 @@ then the rest of milestone 9 on both phones; then voice keyboards on both
 (milestone 11). The keyboard types the original words, not a translation.
 iOS and the keyboard were non-goals until this date.
 
-Still open, not blocking yet:
+Decided on 2026-10-31: the app is a product, a social app where people talk
+across languages in their own voices (ADR 0015). Voices are kept on the
+server (ADR 0016). Sign-in by email, Sign in with Apple, or Sign in with
+Google. The order of work above, with milestone 12 dropped. The owner now
+has a paid Apple Developer account, which answers the App Group question of
+milestone 11 and makes push notifications possible on iOS.
 
-1. Which real cloud provider (milestone 7).
-2. Which paid voice-cloning engine to use once the free trial is not enough
-   (milestone 9). A new dependency to approve.
-3. Whether a free Apple ID can share an App Group between the app and its
-   keyboard. If not, the iPhone keyboard needs the Apple Developer Program,
-   $99 a year (milestone 11). The owner plans to subscribe later
-   (2026-10-17).
-4. Whether milestone 12 moves ahead of milestone 11. It stays last for now
-   (2026-10-29); to ask before milestone 11 starts.
-5. The share sheet instead of the keyboard for voice notes (milestone 12):
-   proposed because a keyboard can do neither half; the owner's answer is
-   pending.
-6. How an incoming voice note is given to the user: as text only, or also
-   read aloud in the phone's voice (milestone 12). Proposed: never in the
-   sender's own voice, although the note is a voice sample, because that
-   copies the voice of someone who never agreed.
-7. The longest incoming voice note to accept (milestone 12).
+Still open:
+
+1. Which real cloud transcription provider (milestone 7).
+2. Which voice-cloning engine (checkpoint 9.4). A paid service and a new
+   dependency: the owner chooses, and provides its key.
+3. The profile's details beyond name, ID and language (milestone 13).
+4. Codes sent by email need an email-sending service and a domain to send
+   from (milestone 13).
+5. Sign in with Google: the libraries each phone uses (milestone 13).
+6. Which translation service the server uses for messages (milestone 14).
+7. Hosting, the domain, and storage for audio (milestone 18).
