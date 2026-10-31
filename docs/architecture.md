@@ -227,7 +227,9 @@ release builds do not.
 
 ```kotlin
 interface SpeechSynthesizer {
-    suspend fun speak(text: String, language: Language)   // returns when finished or stopped
+    // Returns when finished or stopped. onStart is called when the speech
+    // becomes audible, which can be seconds later for a voice made on the server.
+    suspend fun speak(text: String, language: Language, onStart: () -> Unit = {})
     fun stop()
 }
 ```

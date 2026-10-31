@@ -15,7 +15,7 @@ are built. On 2026-10-31 the app became a product, a social app where people
 talk across languages (ADR 0015), and the order changed. The order of work,
 as of 2026-10-31:
 
-1. Checkpoint 9.4: a real voice engine
+1. Milestone 19: the design, by Claude Design, then built into both apps
 2. Milestone 13: accounts, profile, and your voice on the server
 3. Milestone 14: voice notes between people
 4. Milestone 15: text messages
@@ -24,6 +24,8 @@ as of 2026-10-31:
 7. Milestone 17: calls, for premium users
 8. Milestone 11: voice keyboards
 9. Milestone 7 and checkpoint 8.2, in an order still to agree
+
+Checkpoint 9.4, the real voice engine, was done on 2026-10-31.
 
 Milestone 10 was done on 2026-10-29. Milestone 12 was dropped on 2026-10-31:
 voice notes now live inside the app (milestone 14).
@@ -306,7 +308,7 @@ low, goes to the cloud, and the screen says which path produced the result.
 model handles badly, falls back to a real cloud transcription.
 
 - One real `Provider` implementation (choice needs approval; ADR 0008)
-- UI pass: the app stops being ugly
+- UI pass: the app stops being ugly (replaced by milestone 19, 2026-10-31)
 - README with a demo recording, an architecture diagram, and how to run it
 - CI: Go tests with a Postgres service, Android unit tests and build
 
@@ -468,6 +470,22 @@ phones) (done)
   sample's voice in 4.4 s, and the whole path through the server
 - Verify: `make voice-check`; then `make server-run` and, on the iPhone,
   record a sentence with a voice recorded: it is spoken in your voice
+- Heard by the owner on their iPhone on 2026-10-31: their own voice, in
+  another language
+
+**Fix after 9.4** (2026-10-31)
+- The owner noticed seconds of silence while their voice was being made,
+  with "Speaking" already on screen. `SpeechSynthesizer.speak` now takes an
+  `onStart`, called when the speech becomes audible; the pipeline reports
+  `PreparingSpeech` before it and `Speaking` at that moment. Both screens
+  say "Preparing speech", with a spinner beside the status during every wait
+  of a run, and none while the translation is heard
+- On Android the pipeline stays a plain `flow`, with the speech running
+  alongside: a `channelFlow` would drop the transcript when translation
+  fails, which the tests caught
+- Tests: the new stage in the pipeline and on both screens, and both real
+  synthesizers reporting their start. Android 140 pass; iOS 162 pass,
+  1 skipped
 
 Later, not planned in detail:
 - The owner's long-run idea: a free engine for free users and a paid one for
@@ -836,6 +854,26 @@ A public server (hosting, a domain, HTTPS, storage for audio), a privacy
 policy and terms that cover voices, and listings on the App Store and Google
 Play. Before the first outside users, and after milestone 16, since the
 stores require block and report.
+
+---
+
+## [ ] Milestone 19: The design
+
+Added on 2026-10-31: the owner hands the app's design to Claude Design, to
+make it look great before more features are built. The brief is
+`docs/design/brief.md`: the product, its users, both platforms, every state
+of a translation with real timings, the screens of version 1, and what to
+ask for.
+
+Checkpoints, to be detailed when the design arrives:
+
+- 19.1 The owner works with Claude Design: a style direction chosen, then
+  tokens, components and screens
+- 19.2 The design tokens and components in both apps, in SwiftUI and Compose
+- 19.3 The existing screens rebuilt to the design: recording your voice, the
+  interpreter, and settings, with the developer controls under "Advanced"
+- The new screens (sign-in, conversations, and so on) are built to the
+  design in their own milestones
 
 ---
 
