@@ -51,12 +51,17 @@ struct SpeechTranslationPipeline: Sendable {
             guard speak else { return }
             events.yield(.preparingSpeech)
             do throws(SpeechError) {
-                try await synthesizer.speak(translation, language: target, onStart: { events.yield(.speaking) })
+                try await synthesizer.speak(translation, language: target, onStart: { events.yield(.speaking($0)) })
                 events.yield(.spoken)
             } catch {
                 events.yield(.speechFailed(error.message))
             }
         }
+    }
+
+    /// Stops the translation being spoken, if one is. The run then carries on to its end.
+    func stopSpeaking() async {
+        await synthesizer.stop()
     }
 }
 
@@ -74,8 +79,8 @@ enum PipelineEvent: Equatable, Sendable {
     /// The speech is being made, before anything can be heard. Seconds, for a voice made on the server.
     case preparingSpeech
 
-    /// The translation is being said aloud.
-    case speaking
+    /// The translation is being said aloud, in this voice.
+    case speaking(SpeechVoice)
 
     /// It has been said, or was stopped part way.
     case spoken

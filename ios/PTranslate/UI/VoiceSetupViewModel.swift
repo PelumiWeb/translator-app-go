@@ -24,6 +24,9 @@ final class VoiceSetupViewModel {
     /// What is wrong with the recording under review; nil means it will do.
     private(set) var problem: String?
 
+    /// How loud each part of the recording under review is, for drawing its waveform.
+    private(set) var levels: [Float] = []
+
     private(set) var playing = false
     private(set) var error: String?
 
@@ -192,7 +195,11 @@ final class VoiceSetupViewModel {
         recordingStarted = nil
         recorded = audio.duration
         problem = VoiceSampleRules.problem(with: audio)
+        levels = audio.levels(Self.waveformDots)
     }
+
+    /// As many dots as the design's waveform has.
+    static let waveformDots = 22
 
     private func discardRecording() {
         stopPlayback()

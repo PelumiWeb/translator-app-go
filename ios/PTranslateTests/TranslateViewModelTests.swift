@@ -53,7 +53,7 @@ struct TranslateViewModelTests {
 
         await tap(viewModel)
         #expect(viewModel.phase == .idle)
-        #expect(viewModel.status == "Done")
+        #expect(viewModel.stage == .done)
         #expect(viewModel.text == "hello")
         #expect(viewModel.error == nil)
     }
@@ -79,7 +79,7 @@ struct TranslateViewModelTests {
         await tap(viewModel)
 
         #expect(viewModel.phase == .idle)
-        #expect(viewModel.status == "Failed")
+        #expect(viewModel.stage == .failed)
         #expect(viewModel.error == "provider exploded")
     }
 
@@ -215,7 +215,7 @@ struct TranslateViewModelTests {
 
         #expect(viewModel.text == "good morning")
         #expect(viewModel.translation == "[en>fr] good morning")
-        #expect(viewModel.status == "Done")
+        #expect(viewModel.stage == .done)
         #expect(viewModel.phase == .idle)
     }
 
@@ -232,20 +232,19 @@ struct TranslateViewModelTests {
         viewModel.recordTapped() // stop
         await synthesizer.untilSpeaking()
         // The view model reads the events on the main actor; let it catch up with the ones already sent.
-        for _ in 0..<100 where viewModel.status != "Speaking" {
+        for _ in 0..<100 where viewModel.stage != .speaking(.phone) {
             await Task.yield()
         }
 
         #expect(synthesizer.spoken == ["es: [en>es] good morning"])
-        #expect(viewModel.status == "Speaking")
-        #expect(viewModel.speaking)
+        #expect(viewModel.stage == .speaking(.phone))
         #expect(viewModel.translation == "[en>es] good morning")
         #expect(viewModel.phase == .working)
 
         synthesizer.finish()
         await viewModel.work?.value
 
-        #expect(viewModel.status == "Done")
+        #expect(viewModel.stage == .done)
         #expect(viewModel.phase == .idle)
     }
 
@@ -261,19 +260,62 @@ struct TranslateViewModelTests {
         await tap(viewModel)
         viewModel.recordTapped() // stop
         await synthesizer.untilSpeaking()
-        for _ in 0..<100 where viewModel.status != "Preparing speech" {
+        for _ in 0..<100 where viewModel.stage != .preparingSpeech {
             await Task.yield()
         }
 
-        #expect(viewModel.status == "Preparing speech")
-        #expect(!viewModel.speaking) // so the screen shows progress
+        #expect(viewModel.stage == .preparingSpeech)
         #expect(viewModel.translation == "[en>es] good morning")
 
         synthesizer.finish() // it can be heard now
         await viewModel.work?.value
 
-        #expect(viewModel.status == "Done")
+        #expect(viewModel.stage == .done)
         #expect(viewModel.phase == .idle)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func stoppingTheSpeechEndsTheRunAsUsual() async {
+        let synthesizer = FakeSynthesizer(holds: true) // keeps talking until told otherwise
+        let viewModel = makeViewModel(
+            recorder: FakeRecorder(audio: oneSecond),
+            transcriber: saying("good morning"),
+            synthesizer: synthesizer
+        )
+        await tap(viewModel)
+        viewModel.recordTapped() // stop
+        await synthesizer.untilSpeaking()
+        for _ in 0..<100 where viewModel.stage != .speaking(.phone) {
+            await Task.yield()
+        }
+
+        viewModel.stopSpeakingTapped()
+        await viewModel.stopping?.value
+        await viewModel.work?.value
+
+        #expect(synthesizer.stops == 1)
+        #expect(viewModel.stage == .done)
+        #expect(viewModel.phase == .idle)
+    }
+
+    @Test func swapsTheLanguagesWhenEachCanTakeTheOthersPlace() async {
+        let translator = FakeTranslator(languages: [Language("en"), Language("eo"), Language("es")])
+        let viewModel = makeViewModel(
+            recorder: FakeRecorder(audio: oneSecond),
+            transcriber: FakeTranscriber(events: []),
+            translator: translator
+        )
+        await viewModel.loadLanguages()
+
+        viewModel.swapLanguagesTapped()
+        #expect(viewModel.source == .spanish)
+        #expect(viewModel.target == .english)
+
+        // Esperanto can be translated into, but not spoken: Whisper cannot hear it.
+        viewModel.targetSelected(Language("eo"))
+        viewModel.swapLanguagesTapped()
+        #expect(viewModel.source == .spanish)
+        #expect(viewModel.target == Language("eo"))
     }
 
     @Test func aTranslationThatCannotBeSpokenStaysOnScreenWithTheReason() async {
@@ -287,7 +329,7 @@ struct TranslateViewModelTests {
         await tap(viewModel)
 
         #expect(viewModel.translation == "[en>es] good morning")
-        #expect(viewModel.status == "Done")
+        #expect(viewModel.stage == .done)
         #expect(viewModel.error == "This iPhone has no voice for Spanish")
         #expect(viewModel.phase == .idle)
     }
@@ -301,7 +343,7 @@ struct TranslateViewModelTests {
 
         #expect(viewModel.text == "good morning")
         #expect(viewModel.translation == "")
-        #expect(viewModel.status == "Done")
+        #expect(viewModel.stage == .done)
     }
 
     @Test func aFailedTranslationKeepsTheTranscriptOnScreen() async {

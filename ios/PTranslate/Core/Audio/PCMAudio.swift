@@ -18,6 +18,21 @@ struct PCMAudio: Equatable, Sendable {
     }
 
     /// The samples scaled to the range -1 to 1, the form Whisper takes.
+    /// How loud each of `count` equal slices of the audio is, from 0 to 1 relative to the loudest slice: the heights of
+    /// a waveform drawing.
+    func levels(_ count: Int) -> [Float] {
+        guard count > 0 else { return [] }
+        guard !samples.isEmpty else { return Array(repeating: 0, count: count) }
+        let rms: [Double] = (0..<count).map { slice in
+            let from = samples.count * slice / count
+            let to = min(max(samples.count * (slice + 1) / count, from + 1), samples.count)
+            let squares = samples[from..<to].reduce(0.0) { $0 + Double($1) * Double($1) }
+            return (squares / Double(to - from)).squareRoot()
+        }
+        guard let loudest = rms.max(), loudest > 0 else { return Array(repeating: 0, count: count) }
+        return rms.map { Float($0 / loudest) }
+    }
+
     var floatSamples: [Float] {
         samples.map { Float($0) / 32768 }
     }

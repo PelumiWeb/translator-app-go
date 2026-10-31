@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// Chooses between the app's two screens. With only two, a boolean does the job a navigation stack would.
+/// Chooses between the interpreter and recording the voice, with settings as a sheet over the interpreter. With so
+/// few screens, state values do the job a navigation stack would.
 struct AppRoot: View {
     let voice: any VoiceSampleStore
     let translate: TranslateViewModel
     let voiceSetup: VoiceSetupViewModel
 
     @State private var settingUpVoice: Bool
+    @State private var showingSettings = false
+    @State private var voiceOpenedFromSettings = false
 
     init(
         voice: any VoiceSampleStore,
@@ -23,14 +26,29 @@ struct AppRoot: View {
     }
 
     var body: some View {
-        if settingUpVoice {
-            VoiceSetupScreen(viewModel: voiceSetup, onDone: { settingUpVoice = false })
-        } else {
-            TranslateScreen(
-                viewModel: translate,
-                savedVoice: voice.state.duration,
-                onVoiceTapped: { settingUpVoice = true }
-            )
+        Group {
+            if settingUpVoice {
+                VoiceSetupScreen(viewModel: voiceSetup, onDone: {
+                    settingUpVoice = false
+                    // Back to where the user came from.
+                    showingSettings = voiceOpenedFromSettings
+                    voiceOpenedFromSettings = false
+                })
+            } else {
+                TranslateScreen(
+                    viewModel: translate,
+                    hasOwnVoice: voice.state.duration != nil,
+                    onSettingsTapped: { showingSettings = true }
+                )
+                .sheet(isPresented: $showingSettings) {
+                    SettingsScreen(viewModel: translate, savedVoice: voice.state.duration, onVoiceTapped: {
+                        showingSettings = false
+                        voiceOpenedFromSettings = true
+                        settingUpVoice = true
+                    })
+                }
+            }
         }
+        .tint(Palette.them)
     }
 }

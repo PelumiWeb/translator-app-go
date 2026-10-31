@@ -7,11 +7,28 @@ enum RecordingPhase {
     case working
 }
 
+/// Where a run is, in more detail than `RecordingPhase`; the screen words each one.
+enum InterpreterStage: Equatable {
+    case idle
+    case recording
+    case preparingAudio
+    case uploading
+    case queued
+    case transcribing
+    case reconnecting
+    case downloadingLanguage
+    case translating
+    case preparingSpeech
+    case speaking(SpeechVoice)
+    case done
+    case failed
+}
+
 @MainActor
 @Observable
 final class TranslateViewModel {
     private(set) var phase = RecordingPhase.idle
-    private(set) var status = "Tap Record and speak"
+    private(set) var stage = InterpreterStage.idle
 
     /// What was said, in the source language.
     private(set) var text = ""
@@ -24,9 +41,6 @@ final class TranslateViewModel {
 
     /// Why the result came from where it did, when that needs saying.
     private(set) var routing: String?
-
-    /// True while the translation can be heard; the screen shows progress at other times of a run.
-    private(set) var speaking = false
 
     private(set) var error: String?
     private(set) var route: TranscriptionRoute
@@ -55,6 +69,7 @@ final class TranslateViewModel {
     @ObservationIgnored private(set) var work: Task<Void, Never>?
     @ObservationIgnored private(set) var download: Task<Void, Never>?
     @ObservationIgnored private(set) var measurement: Task<Void, Never>?
+    @ObservationIgnored private(set) var stopping: Task<Void, Never>?
 
     @ObservationIgnored private let recorder: any AudioRecorder
     @ObservationIgnored private let pipeline: SpeechTranslationPipeline
@@ -134,6 +149,18 @@ final class TranslateViewModel {
         target = language
     }
 
+    /// Swaps the two languages, when each can take the other's place.
+    func swapLanguagesTapped() {
+        guard phase == .idle, sourceLanguages.contains(target), targetLanguages.contains(source) else { return }
+        (source, target) = (target, source)
+    }
+
+    /// Stops the translation being spoken; the run then ends as usual.
+    func stopSpeakingTapped() {
+        guard case .speaking = stage else { return }
+        stopping = Task { await pipeline.stopSpeaking() }
+    }
+
     /// Fills the "From" and "To" lists. A language can be spoken only if Whisper transcribes it and the translator
     /// translates from it.
     func loadLanguages() async {
@@ -174,7 +201,7 @@ final class TranslateViewModel {
             return
         }
         phase = .recording
-        status = "Recording. Tap Stop when done"
+        stage = .recording
         // A new recording clears the previous result but keeps the settings.
         text = ""
         translation = ""
@@ -198,7 +225,7 @@ final class TranslateViewModel {
         autoStop?.cancel()
         autoStop = nil
         phase = .working
-        status = "Preparing audio"
+        stage = .preparingAudio
         // Read once, so the whole run uses the languages chosen at this moment.
         let (source, target) = (source, target)
 
@@ -220,34 +247,31 @@ final class TranslateViewModel {
 
     private func show(_ event: PipelineEvent, audio: Duration, startedAt: Duration, translating: Bool) {
         switch event {
-        case .transcribing(let stage):
-            status = stage.label
+        case .transcribing(let transcriptionStage):
+            stage = transcriptionStage.interpreterStage
         case .partialTranscript(let partial):
             text = partial
         case .transcribed(let transcript):
-            status = "Transcribed"
             text = transcript.text
             details = Self.describe(transcript, audio: audio, elapsed: now() - startedAt)
             routing = transcript.note?.explanation
         case .downloadingLanguages:
-            status = "Downloading language pack"
+            stage = .downloadingLanguage
         case .translating:
-            status = "Translating"
+            stage = .translating
         case .translated(let translated):
-            status = "Done"
+            stage = .done
             // With the same language on both sides there is nothing to show twice.
             translation = translating ? translated : ""
         case .preparingSpeech:
-            status = "Preparing speech"
-        case .speaking:
-            status = "Speaking"
-            speaking = true
+            stage = .preparingSpeech
+        case .speaking(let voice):
+            stage = .speaking(voice)
         case .spoken:
-            status = "Done"
-            speaking = false
+            stage = .done
         case .speechFailed(let reason):
             // The translation is on screen; only the voice is missing.
-            status = "Done"
+            stage = .done
             error = reason
         }
     }
@@ -271,12 +295,13 @@ final class TranslateViewModel {
 
     private func finish(error: String?) {
         phase = .idle
-        speaking = false
         // With no new error, one already on screen stays: a result can be complete and still carry a note, such
         // as "could not be spoken".
         if let error {
-            status = "Failed"
+            stage = .failed
             self.error = error
+        } else if case .speaking = stage {
+            stage = .done
         }
     }
 
@@ -301,12 +326,12 @@ private extension RoutingNote {
 }
 
 private extension TranscriptionStage {
-    var label: String {
+    var interpreterStage: InterpreterStage {
         switch self {
-        case .uploading: "Uploading"
-        case .queued: "Queued"
-        case .processing: "Transcribing"
-        case .reconnecting: "Connection lost. Reconnecting"
+        case .uploading: .uploading
+        case .queued: .queued
+        case .processing: .transcribing
+        case .reconnecting: .reconnecting
         }
     }
 }

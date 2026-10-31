@@ -8,20 +8,24 @@ import Testing
 struct RemoteSpeechSynthesizerTests {
     /// Stands in for the player: records what it was given to play.
     private final class Speaker: Sendable {
-        private let state = Mutex<(played: [PCMAudio], stops: Int, startedAfter: [Int])>(([], 0, []))
+        private let state = Mutex<(played: [PCMAudio], stops: Int, startedAfter: [Int], startedIn: [SpeechVoice])>(([], 0, [], []))
 
         var played: [PCMAudio] { state.withLock { $0.played } }
         var stops: Int { state.withLock { $0.stops } }
 
-        /// How many sounds had been played each time the speech said it started.
+        /// How many sounds had been played each time the speech said it started, and in what voice.
         var startedAfter: [Int] { state.withLock { $0.startedAfter } }
+        var startedIn: [SpeechVoice] { state.withLock { $0.startedIn } }
 
         func play(_ audio: PCMAudio) {
             state.withLock { $0.played.append(audio) }
         }
 
-        func started() {
-            state.withLock { $0.startedAfter.append($0.played.count) }
+        func started(in voice: SpeechVoice) {
+            state.withLock {
+                $0.startedAfter.append($0.played.count)
+                $0.startedIn.append(voice)
+            }
         }
 
         func stop() {
@@ -67,7 +71,7 @@ struct RemoteSpeechSynthesizerTests {
     }
 
     private func speak(with synthesizer: RemoteSpeechSynthesizer) async throws(SpeechError) {
-        try await synthesizer.speak("buenos días", language: Language("es"), onStart: { [speaker] in speaker.started() })
+        try await synthesizer.speak("buenos días", language: Language("es"), onStart: { [speaker] in speaker.started(in: $0) })
     }
 
     @Test func sendsTheVoiceSampleAndTheTextThenPlaysWhatTheServerMade() async throws {
@@ -91,6 +95,7 @@ struct RemoteSpeechSynthesizerTests {
         #expect(speaker.played == [spoken])
         // Reported as started once, just before it plays: not while the voice is being made.
         #expect(speaker.startedAfter == [0])
+        #expect(speaker.startedIn == [.own])
     }
 
     @Test func reconnectsToTheEventStreamAndStillPlaysTheResult() async throws {

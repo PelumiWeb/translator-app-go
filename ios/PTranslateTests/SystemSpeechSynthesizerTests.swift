@@ -11,12 +11,12 @@ struct SystemSpeechSynthesizerTests {
 
     @Test(.timeLimit(.minutes(1)))
     func speaksAndReturnsWhenFinished() async throws {
-        let started = Mutex(0)
+        let started = Mutex<[SpeechVoice]>([])
 
         // Returning at all, without an error, is the result: a voice was found and the utterance reported done.
-        try await synthesizer.speak("Good morning.", language: .english, onStart: { started.withLock { $0 += 1 } })
+        try await synthesizer.speak("Good morning.", language: .english, onStart: { voice in started.withLock { $0.append(voice) } })
 
-        #expect(started.withLock { $0 } == 1, "reported as started once")
+        #expect(started.withLock { $0 } == [.phone], "reported as started once, in the phone's voice")
     }
 
     @Test(.timeLimit(.minutes(1)))

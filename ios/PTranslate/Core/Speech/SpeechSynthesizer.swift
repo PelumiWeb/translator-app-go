@@ -7,9 +7,9 @@ protocol SpeechSynthesizer: Sendable {
     /// caller stops it too, as far as each implementation can. Fails if it cannot be spoken, for example because
     /// the phone has no voice for that language.
     ///
-    /// `onStart` is called once, when the speech becomes audible. That can be seconds after the call: a voice made
-    /// on the server takes that long. It may be called on another thread.
-    func speak(_ text: String, language: Language, onStart: @escaping @Sendable () -> Void) async throws(SpeechError)
+    /// `onStart` is called once, when the speech becomes audible, with the voice it is in. That can be seconds after
+    /// the call: a voice made on the server takes that long. It may be called on another thread.
+    func speak(_ text: String, language: Language, onStart: @escaping @Sendable (SpeechVoice) -> Void) async throws(SpeechError)
 
     /// Stops whatever is being spoken. Does nothing if nothing is. Async, unlike Android's, because a voice may be
     /// playing on the main actor, which another thread can reach only by waiting for it.
@@ -18,8 +18,17 @@ protocol SpeechSynthesizer: Sendable {
 
 extension SpeechSynthesizer {
     func speak(_ text: String, language: Language) async throws(SpeechError) {
-        try await speak(text, language: language, onStart: {})
+        try await speak(text, language: language, onStart: { _ in })
     }
+}
+
+/// Whose voice a translation is spoken in.
+enum SpeechVoice: Equatable, Sendable {
+    /// The user's own, made on the server from their recording.
+    case own
+
+    /// One of the phone's built-in voices.
+    case phone
 }
 
 /// Why something could not be spoken, in words for the user.

@@ -184,18 +184,20 @@ final class FakeSynthesizer: SpeechSynthesizer {
     private let failure: SpeechError?
     private let holds: Bool
     private let holdsBeforeStart: Bool
+    private let voice: SpeechVoice
     private let state = Mutex(State())
 
-    init(failure: SpeechError? = nil, holds: Bool = false, holdsBeforeStart: Bool = false) {
+    init(failure: SpeechError? = nil, holds: Bool = false, holdsBeforeStart: Bool = false, voice: SpeechVoice = .phone) {
         self.failure = failure
         self.holds = holds
         self.holdsBeforeStart = holdsBeforeStart
+        self.voice = voice
     }
 
     var spoken: [String] { state.withLock { $0.spoken } }
     var stops: Int { state.withLock { $0.stops } }
 
-    func speak(_ text: String, language: Language, onStart: @escaping @Sendable () -> Void) async throws(SpeechError) {
+    func speak(_ text: String, language: Language, onStart: @escaping @Sendable (SpeechVoice) -> Void) async throws(SpeechError) {
         if let failure {
             throw failure
         }
@@ -203,7 +205,7 @@ final class FakeSynthesizer: SpeechSynthesizer {
         if holdsBeforeStart {
             await hold()
         }
-        onStart()
+        onStart(voice)
         if holds {
             await hold()
         }

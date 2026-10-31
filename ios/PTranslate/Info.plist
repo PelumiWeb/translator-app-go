@@ -8,6 +8,13 @@
 	<string>The app records what you say so it can transcribe and translate it.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The app talks to the development server on this network.</string>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>IBMPlexSans-Regular.ttf</string>
+		<string>IBMPlexSans-Medium.ttf</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

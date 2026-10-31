@@ -15,7 +15,7 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthe
 
     private struct Waiting {
         let ended: CheckedContinuation<Void, Never>
-        var started: (@Sendable () -> Void)?
+        var started: (@Sendable (SpeechVoice) -> Void)?
     }
 
     override init() {
@@ -24,7 +24,7 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthe
         synthesizer.withLock { $0.delegate = self }
     }
 
-    func speak(_ text: String, language: Language, onStart: @escaping @Sendable () -> Void) async throws(SpeechError) {
+    func speak(_ text: String, language: Language, onStart: @escaping @Sendable (SpeechVoice) -> Void) async throws(SpeechError) {
         guard let voice = Self.voice(for: language) else {
             throw SpeechError(message: "This iPhone has no voice for \(Self.name(of: language))")
         }
@@ -85,7 +85,7 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthe
             defer { waiting[ObjectIdentifier(utterance)]?.started = nil }
             return waiting[ObjectIdentifier(utterance)]?.started
         }
-        started?()
+        started?(.phone)
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {

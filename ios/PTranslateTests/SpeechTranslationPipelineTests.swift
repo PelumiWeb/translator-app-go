@@ -50,12 +50,18 @@ struct SpeechTranslationPipelineTests {
             .translating,
             .translated("[en>es] hello world"),
             .preparingSpeech,
-            .speaking,
+            .speaking(.phone),
             .spoken,
         ])
         #expect(translator.calls == ["translate en>es"])
         // Spoken in the listener's language, not the speaker's.
         #expect(synthesizer.spoken == ["es: [en>es] hello world"])
+    }
+
+    @Test func saysWhoseVoiceTheTranslationIsSpokenIn() async {
+        let (events, _) = await run(pipeline(synthesizer: FakeSynthesizer(voice: .own)), target: spanish)
+
+        #expect(events.suffix(2).first == .speaking(.own))
     }
 
     @Test func downloadsTheLanguagePackFirstWhenItIsMissing() async {
@@ -69,7 +75,7 @@ struct SpeechTranslationPipelineTests {
             .translating,
             .translated("[en>es] hello world"),
             .preparingSpeech,
-            .speaking,
+            .speaking(.phone),
             .spoken,
         ])
         #expect(translator.calls == ["prepare en>es", "translate en>es"])

@@ -1,12 +1,16 @@
 import SwiftUI
 
-/// About twenty seconds when read aloud at an ordinary pace. Varied sounds and a natural rhythm give a
-/// voice-cloning engine more to work with than a list of words would. The same passage as on Android.
-private let passage = """
-    When I travel, I like to talk with the people I meet about their food, their music, and the places they love. \
-    A good conversation makes the world feel smaller. I am recording this so that when my words are translated, \
-    they can still be spoken in my own voice.
-    """
+/// About twenty seconds when read aloud at an ordinary pace. Varied sounds and a natural rhythm give a voice-cloning
+/// engine more to work with than a list of words would. Split into the lines the teleprompter shows; joined, it must
+/// stay word for word the same as on Android and on the server (`provider.OnboardingPassage`), which tells the voice
+/// engine what was said.
+private let passageLines = [
+    "When I travel, I like to talk with the people I meet",
+    "about their food, their music, and the places they love.",
+    "A good conversation makes the world feel smaller.",
+    "I am recording this so that when my words are translated,",
+    "they can still be spoken in my own voice.",
+]
 
 /// Where the user records the sample of their voice that translations are spoken in.
 struct VoiceSetupScreen: View {
@@ -18,6 +22,7 @@ struct VoiceSetupScreen: View {
             stage: viewModel.stage,
             recordingStarted: viewModel.recordingStarted,
             recorded: viewModel.recorded,
+            levels: viewModel.levels,
             problem: viewModel.problem,
             playing: viewModel.playing,
             saved: viewModel.saved,
@@ -54,106 +59,183 @@ private struct VoiceSetupContent: View {
     let stage: VoiceSetupStage
     let recordingStarted: Date?
     let recorded: Duration
+    let levels: [Float]
     let problem: String?
     let playing: Bool
     let saved: Duration?
     let error: String?
     let actions: VoiceSetupActions
 
+    @State private var playbackStarted: Date?
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Record your voice")
-                    .font(.title2.bold())
-                Text(
-                    "Your translations can be spoken in your own voice. To do that, the app needs a short "
-                        + "recording of you reading the passage below."
-                )
-                // Said before the user records, in plain words: what happens to it.
-                Text(
-                    "The recording stays on this phone. When a translation is spoken, it goes with the text to "
-                        + "our server, and from there to Fish Audio, the service that makes the speech. Our server "
-                        + "deletes it straight after. You can delete it from this phone at any time."
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-                Text(passage)
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
-
+            VStack(spacing: 12) {
                 switch stage {
                 case .intro: intro
                 case .recording: recordingInProgress
                 case .review: review
                 }
-
                 if let error {
-                    Text(error)
-                        .foregroundStyle(.red)
+                    Notice(text: error)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
+        }
+        .foregroundStyle(Palette.fg)
+        .background(Palette.bg.ignoresSafeArea())
+        .sensoryFeedback(trigger: stage) { old, new in
+            // A light tap when recording starts, a confirmation when it stops, as the design asks.
+            if new == .recording { return .impact(weight: .light) }
+            if old == .recording { return .success }
+            return nil
+        }
+        .onChange(of: playing) { _, playing in
+            playbackStarted = playing ? .now : nil
         }
     }
 
     @ViewBuilder
     private var intro: some View {
-        if let saved {
-            Text("A recording of your voice (\(saved.components.seconds) s) is saved on this phone.")
-        }
-        Button(saved == nil ? "Start recording" : "Record a new one", action: actions.record)
-            .buttonStyle(.borderedProminent)
+        Text("Your voice")
+            .font(.pearlLabel)
+        Text(saved == nil ? "Be heard in your own voice" : "Your voice is recorded")
+            .font(.pearlTitle)
+        Text(
+            saved.map { "\($0.components.seconds) seconds, kept on this phone. Record a new one, keep it, or delete it." }
+                ?? "Read the lines below aloud, at your normal pace. About 20 seconds."
+        )
+        .font(.pearlBody)
+        .foregroundStyle(Palette.fg2)
+        Teleprompter(current: 0)
+            .padding(.vertical, 16)
+        RecordControl(state: .idle, label: saved == nil ? "Start recording" : "Record a new one", action: actions.record)
         if saved == nil {
-            Button("Not now, use the phone's voice", action: actions.skip)
+            LinkButton("Not now, use the phone's voice", action: actions.skip)
         } else {
-            HStack(spacing: 12) {
-                Button("Keep it", action: actions.skip)
-                    .buttonStyle(.bordered)
-                Button("Delete my voice", role: .destructive, action: actions.delete)
+            HStack(spacing: 8) {
+                LinkButton("Keep it", action: actions.skip)
+                LinkButton("Delete my voice", action: actions.delete)
             }
         }
+        // Said before the user records, in plain words: what happens to it.
+        Text(
+            "The recording stays on this phone. When a translation is spoken, it goes with the text to "
+                + "our server, and from there to Fish Audio, the service that makes the speech. Our server "
+                + "deletes it straight after. You can delete it from this phone at any time."
+        )
+        .font(.pearlMeta)
+        .foregroundStyle(Palette.fg2)
+        .padding(.top, 8)
     }
 
     @ViewBuilder
     private var recordingInProgress: some View {
-        // Redrawn ten times a second while recording; the elapsed time is never stored anywhere.
-        TimelineView(.periodic(from: recordingStarted ?? .now, by: 0.1)) { context in
-            let elapsed = context.date.timeIntervalSince(recordingStarted ?? context.date)
-            let target = VoiceSampleRules.target / .seconds(1)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Recording: \(Int(elapsed)) s")
-                    .font(.headline)
-                ProgressView(value: min(elapsed / target, 1))
-                Text(elapsed >= target ? "That is enough. You can stop" : "Read the passage aloud, at your normal pace")
-                    .font(.footnote)
+        // Redrawn five times a second while recording; the elapsed time is never stored anywhere.
+        TimelineView(.periodic(from: recordingStarted ?? .now, by: 0.2)) { context in
+            let elapsed = Duration.seconds(context.date.timeIntervalSince(recordingStarted ?? context.date))
+            VStack(spacing: 12) {
+                Text("Listening")
+                    .font(.pearlLabel)
+                Text(clock(elapsed))
+                    .font(.pearlTimer)
+                    .tracking(-0.9)
+                    .monospacedDigit()
+                Text(
+                    elapsed < VoiceSampleRules.minimum ? "Keep going. A few more seconds."
+                        : elapsed < VoiceSampleRules.target ? "Keep going. Read to the end."
+                        : "That's enough. Tap to stop."
+                )
+                .font(.pearlSmall)
+                .foregroundStyle(Palette.fg2)
+                Teleprompter(current: lineAt(elapsed))
+                    .padding(.vertical, 24)
+                RecordControl(state: .recording, label: "Stop recording", value: clock(elapsed), action: actions.record)
             }
         }
-        Button("Stop", action: actions.record)
-            .buttonStyle(.borderedProminent)
+        LinkButton("Not now, use the phone's voice", action: actions.skip)
     }
 
     @ViewBuilder
     private var review: some View {
-        Text("Recorded \(recorded.components.seconds) seconds")
-            .font(.headline)
-        if let problem {
-            Text(problem)
-                .foregroundStyle(.red)
+        Text("Recorded")
+            .font(.pearlLabel)
+        Text(clock(recorded))
+            .font(.pearlTimer)
+            .tracking(-0.9)
+            .monospacedDigit()
+        Text(problem == nil ? "Listen back, then keep it." : "This one cannot be kept.")
+            .font(.pearlSmall)
+            .foregroundStyle(Palette.fg2)
+        // While it plays, the played part of the waveform fills in.
+        TimelineView(.animation(paused: !playing)) { context in
+            let total = max(recorded / .seconds(1), 0.1)
+            let played = playbackStarted.map { min(context.date.timeIntervalSince($0) / total, 1) } ?? 1
+            HStack(spacing: 12) {
+                Button(action: actions.listen) {
+                    Image(systemName: playing ? "stop.fill" : "play.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Palette.onYou)
+                        .frame(width: 44, height: 44)
+                        .background(Palette.you, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(playing ? "Stop listening" : "Listen")
+                DotWaveform(levels: levels, color: Palette.you, played: played)
+            }
         }
-        HStack(spacing: 12) {
-            Button(playing ? "Stop listening" : "Listen", action: actions.listen)
-                .buttonStyle(.bordered)
-            Button("Record again", action: actions.record)
-                .buttonStyle(.bordered)
+        .padding(.vertical, 16)
+        if let problem {
+            Notice(text: problem)
         }
         Button("Use this recording", action: actions.use)
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(problem != nil)
-        Button(saved == nil ? "Not now, use the phone's voice" : "Cancel, keep my saved voice", action: actions.skip)
+            .padding(.top, 8)
+        LinkButton("Record again", action: actions.record)
+        LinkButton(saved == nil ? "Not now, use the phone's voice" : "Cancel, keep my saved voice", action: actions.skip)
     }
+}
+
+/// The passage as a teleprompter: the line to read now, large, between the line just read and the one coming next.
+private struct Teleprompter: View {
+    let current: Int
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text(current > 0 ? passageLines[current - 1] : " ")
+                .font(.pearlPassageOther)
+                .foregroundStyle(Palette.fg4)
+                .frame(minHeight: 44, alignment: .bottom)
+            Text(passageLines[current])
+                .font(.pearlPassageCurrent)
+                .tracking(-0.25)
+                .foregroundStyle(Palette.fg)
+            Text(current + 1 < passageLines.count ? passageLines[current + 1] : " ")
+                .font(.pearlPassageOther)
+                .foregroundStyle(Palette.fg3)
+                .frame(minHeight: 44, alignment: .top)
+        }
+        .multilineTextAlignment(.center)
+        .animation(.easeInOut(duration: 0.4), value: current)
+        .contentTransition(.opacity)
+    }
+}
+
+/// Which line the reader has probably reached: the passage is paced to take the target time, each line its share by
+/// length. There is no listening for the words; a reader ahead or behind still has the lines around it.
+private func lineAt(_ elapsed: Duration) -> Int {
+    let total = passageLines.reduce(0) { $0 + $1.count }
+    let reached = elapsed / VoiceSampleRules.target * Double(total)
+    var end = 0
+    for (index, line) in passageLines.enumerated() {
+        end += line.count
+        if reached < Double(end) { return index }
+    }
+    return passageLines.count - 1
 }
 
 private extension VoiceSetupActions {
@@ -163,15 +245,17 @@ private extension VoiceSetupActions {
 
 #Preview("Recording") {
     VoiceSetupContent(
-        stage: .recording, recordingStarted: .now.addingTimeInterval(-12), recorded: .zero, problem: nil,
+        stage: .recording, recordingStarted: .now.addingTimeInterval(-12), recorded: .zero, levels: [], problem: nil,
         playing: false, saved: nil, error: nil, actions: .inert
     )
+    .preferredColorScheme(.dark)
 }
 
 #Preview("Too short") {
     VoiceSetupContent(
-        stage: .review, recordingStarted: nil, recorded: .seconds(4),
+        stage: .review, recordingStarted: nil, recorded: .seconds(4), levels: (0..<22).map { Float($0 % 5) / 4 },
         problem: "That was only 4 seconds. About 20 are needed: please read the whole passage",
         playing: false, saved: nil, error: nil, actions: .inert
     )
+    .preferredColorScheme(.dark)
 }
