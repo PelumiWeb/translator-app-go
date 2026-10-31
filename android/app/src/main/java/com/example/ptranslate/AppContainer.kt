@@ -14,6 +14,8 @@ import com.example.ptranslate.core.model.ModelState
 import com.example.ptranslate.core.net.BackendClient
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
 import com.example.ptranslate.core.speech.AndroidSpeechSynthesizer
+import com.example.ptranslate.core.speech.FallbackSpeechSynthesizer
+import com.example.ptranslate.core.speech.RemoteSpeechSynthesizer
 import com.example.ptranslate.core.speech.SpeechSynthesizer
 import com.example.ptranslate.core.stt.DeviceBenchmark
 import com.example.ptranslate.core.stt.DeviceSpeed
@@ -112,8 +114,14 @@ class AppContainer(context: Context) {
     val voiceSetup: VoiceSetupPreference = SharedPreferencesVoiceSetup(preferences)
     private val translator: Translator = MlKitTranslator()
 
-    /** Says translations aloud in one of the phone's own voices. */
-    val synthesizer: SpeechSynthesizer = AndroidSpeechSynthesizer(context)
+    /**
+     * Says translations aloud in the user's own voice, through the server, or
+     * in one of the phone's voices when that cannot be done.
+     */
+    val synthesizer: SpeechSynthesizer = FallbackSpeechSynthesizer(
+        preferred = RemoteSpeechSynthesizer(backend, voice, player),
+        fallback = AndroidSpeechSynthesizer(context),
+    )
 
     /** A language can be spoken only if Whisper transcribes it and ML Kit translates from it. */
     val sourceLanguages: List<Language> = translator.supportedLanguages.filter(WhisperLanguages::supports)

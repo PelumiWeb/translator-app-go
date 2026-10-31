@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -60,6 +61,9 @@ sealed interface JobEvent {
  */
 data class JobUpdate(val seq: Int, val event: JobEvent)
 
+/** A request to speak, accepted and queued. Its audio is fetched from [audioUrl] once the job is done. */
+data class SpeechJob(val id: String, val audioUrl: String)
+
 /** One model the backend offers, as listed in its manifest. */
 @Serializable
 data class RemoteModel(
@@ -112,17 +116,46 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
             .build()
 
         val result = http.newCall(request).awaitResult()
-        if (!result.isSuccessful) {
-            throw BackendException(
-                errorMessage(result.body) ?: "The server answered ${result.code}",
-                retryable = result.code >= 500,
-            )
-        }
+        if (!result.isSuccessful) throw refusal(result)
         return try {
-            json.decodeFromString<CreateJobResponse>(result.body).id
+            json.decodeFromString<CreateJobResponse>(result.text).id
         } catch (e: SerializationException) {
             throw BackendException("The server sent an unreadable response", e)
         }
+    }
+
+    /**
+     * Asks for [text] to be spoken in [language], in the voice heard in [voiceWav]. The server queues it like a
+     * transcription: follow [jobEvents] until it is done, then fetch [speechAudio]. [idempotencyKey] works as for
+     * [createJob].
+     */
+    suspend fun createSpeech(voiceWav: ByteArray, text: String, language: Language, idempotencyKey: String): SpeechJob {
+        val form = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("text", text)
+            .addFormDataPart("lang", language.tag)
+            .addFormDataPart("voice", "voice.wav", voiceWav.toRequestBody("audio/wav".toMediaType()))
+            .build()
+        val request = Request.Builder()
+            .url(url("/v1/speech"))
+            .header("Idempotency-Key", idempotencyKey)
+            .post(form)
+            .build()
+
+        val result = http.newCall(request).awaitResult()
+        if (!result.isSuccessful) throw refusal(result)
+        return try {
+            json.decodeFromString<CreateSpeechResponse>(result.text).let { SpeechJob(it.id, it.audioUrl) }
+        } catch (e: SerializationException) {
+            throw BackendException("The server sent an unreadable response", e)
+        }
+    }
+
+    /** The audio a finished speech job produced, as a WAV file. */
+    suspend fun speechAudio(audioUrl: String): ByteArray {
+        val result = http.newCall(Request.Builder().url(url(audioUrl)).build()).awaitResult()
+        if (!result.isSuccessful) throw refusal(result)
+        return result.body
     }
 
     /** Fetches the list of models the backend offers. */
@@ -131,10 +164,10 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
 
         val result = http.newCall(request).awaitResult()
         if (!result.isSuccessful) {
-            throw BackendException(errorMessage(result.body) ?: "The server answered ${result.code}")
+            throw BackendException(errorMessage(result.text) ?: "The server answered ${result.code}")
         }
         return try {
-            json.decodeFromString<ManifestResponse>(result.body).models
+            json.decodeFromString<ManifestResponse>(result.text).models
         } catch (e: SerializationException) {
             throw BackendException("The server sent an unreadable model list", e)
         }
@@ -226,6 +259,12 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
         else -> JobEvent.Unknown // a type added later; older apps skip it
     }
 
+    /** A server fault is worth retrying; a request the server understood and refused is not. */
+    private fun refusal(result: HttpResult) = BackendException(
+        errorMessage(result.text) ?: "The server answered ${result.code}",
+        retryable = result.code >= 500,
+    )
+
     private fun errorMessage(body: String): String? =
         try {
             json.decodeFromString<ErrorResponse>(body).error.message
@@ -237,8 +276,10 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
         requireNotNull(baseUrl.resolve(path)) { "Invalid path: $path" }
 }
 
-private class HttpResult(val code: Int, val body: String) {
+/** A response read in full. [body] is bytes because some responses are audio. */
+private class HttpResult(val code: Int, val body: ByteArray) {
     val isSuccessful: Boolean get() = code in 200..299
+    val text: String get() = body.decodeToString()
 }
 
 /** Runs the call without blocking a thread, and cancels it with the coroutine. */
@@ -257,7 +298,7 @@ private suspend fun Call.awaitResult(): HttpResult = suspendCancellableCoroutine
             // resuming could happen on the main thread, where network I/O
             // throws NetworkOnMainThreadException.
             val result = try {
-                response.use { HttpResult(it.code, it.body?.string().orEmpty()) }
+                response.use { HttpResult(it.code, it.body?.bytes() ?: ByteArray(0)) }
             } catch (e: IOException) {
                 continuation.resumeWithException(
                     BackendException("Could not read the server's response", e, retryable = true),
@@ -276,10 +317,14 @@ private data class ManifestResponse(val models: List<RemoteModel>)
 private data class CreateJobResponse(val id: String)
 
 @Serializable
-private data class TextPayload(val text: String)
+private data class CreateSpeechResponse(val id: String, @SerialName("audio_url") val audioUrl: String)
 
 @Serializable
-private data class DonePayload(val text: String, val language: String = "")
+private data class TextPayload(val text: String)
+
+// A speech job ends with an empty "done": its result is the audio, fetched separately.
+@Serializable
+private data class DonePayload(val text: String = "", val language: String = "")
 
 @Serializable
 private data class MessagePayload(val message: String)
