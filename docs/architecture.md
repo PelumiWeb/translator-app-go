@@ -35,9 +35,9 @@ work, runs it through a cloud provider, and streams progress back.
 ```
 
 The pipeline goes one stage further than this diagram: the translated text is
-spoken aloud through a `SpeechSynthesizer` (section 2.9). Today that is one of
-the phone's own voices. The aim is the voice of whoever spoke, for every user;
-that is milestone 9 and will be a second implementation of the same interface.
+spoken aloud through a `SpeechSynthesizer` (section 2.9), in the user's own
+voice through the server when it can be, and in one of the phone's own voices
+otherwise. The aim is the voice of whoever spoke, for every user (milestone 9).
 
 Two things to notice:
 
@@ -236,6 +236,15 @@ text stays on screen with the reason; the run is not a failure. A voice that is
 still downloading on first use is retried a few times. ADR 0008 has the
 reasoning.
 
+From checkpoint 9.3 the app speaks in the user's own voice when it can.
+`RemoteSpeechSynthesizer` sends the voice sample (section 2.10) and the
+translation to `POST /v1/speech`, follows the job like a transcription, then
+downloads the audio and plays it. `FallbackSpeechSynthesizer` tries it first
+and the phone's voice second: with no voice recorded, no network, or a failed
+job, the phone's voice says it instead, so the translation is always heard.
+Until a real voice-cloning engine arrives (checkpoint 9.4), the server's fake
+engine answers with one beep per word.
+
 ### 2.10 The user's voice
 
 To speak translations in the user's own voice, the app needs a sample of it.
@@ -243,8 +252,8 @@ The user records one once, by reading a passage of about 20 seconds on a
 "Record your voice" screen shown at first launch.
 
 - `VoiceSampleStore` keeps it as one WAV file in the app's private files. It
-  is not uploaded when recorded. It will be sent with each request to speak
-  (checkpoint 9.3) and the server deletes it when that job ends.
+  is not uploaded when recorded. It is sent with each request to speak, and
+  the server deletes it when that job ends.
 - `VoiceSampleRules` refuses a recording that is silent or under 10 seconds,
   with the reason in words.
 - The user can replace it or delete it at any time. Declining is remembered,
@@ -306,6 +315,7 @@ Android.
 | ML Kit Translate | Apple's Translation framework (section 3.4) |
 | `TextToSpeech` | `AVSpeechSynthesizer`, in the voice for the language's default region. iOS installs its voices with the system, so there is no first-use download to retry (ADR 0008 addendum) |
 | `AudioTrack` | `AVAudioPlayerNode` on an `AVAudioEngine`; the mixer converts 16 kHz to the output's rate |
+| `SpeechSynthesizer.stop()`, a plain function | `async`: the player belongs to the main actor, which another thread reaches only by waiting. The voice store and the player reach `RemoteSpeechSynthesizer` as main-actor closures |
 | `<files>/voice/` | Application Support `voice/`, excluded from iCloud backup, so that "the recording stays on this phone" holds |
 | OkHttp and `okhttp-sse` | `URLSession`. The event stream is parsed by hand from `URLSession.bytes`, because its `lines` leaves out the empty lines that end each event |
 | `Sha256` | CryptoKit's `SHA256` |

@@ -29,11 +29,14 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 
 ## Working agreement
 
-1. One milestone at a time, in the order of `docs/plan.md`. Do not start the
-   next one until the owner approves the current one.
-2. The owner makes the commits. Never run `git commit`, `git push`, or anything
-   that rewrites history. At each checkpoint in the plan: stop, summarise what
-   changed and how to verify it, suggest a commit message, and wait.
+1. Work in the order of `docs/plan.md`, without stopping at each checkpoint
+   (since 2026-10-31). Do everything that needs no decision from the owner;
+   stop and ask only when a decision is genuinely theirs.
+2. The owner makes the commits, in batches. Never run `git commit`,
+   `git push`, or anything that rewrites history; staging with `git add` is
+   fine. At the end of a batch, list the commits to make, in order: the files
+   in each, the feature it is, how to verify it, and a message. Keep each
+   commit buildable on its own, so a problem can be traced to one commit.
 3. Ask before adding any dependency that is not in the approved list in
    `docs/architecture.md` (section "Dependencies"). That includes Gradle
    plugins, Go modules, Swift packages, CocoaPods, Homebrew formulas and git

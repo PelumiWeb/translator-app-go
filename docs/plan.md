@@ -1,12 +1,12 @@
 # Plan
 
 Milestones are thin vertical slices. Each ends with something that can be
-shown working. One milestone at a time; the next one starts only after the
-owner approves the current one.
+shown working.
 
-Inside a milestone, work stops at each **checkpoint**: Claude summarises what
-changed, how to verify it, and suggests a commit message. The owner reviews and
-commits. Then work continues.
+Each **checkpoint** is one commit, or a few. Since 2026-10-31 the work no
+longer stops at each one: Claude carries on until a decision is needed from
+the owner, then lists the commits to make, with what each contains, how to
+verify it, and a message. The owner reviews and commits them in batches.
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` approved.
 
@@ -403,10 +403,31 @@ is spoken in that voice.
   transfer to a new phone. iOS excludes its sample from the start (10.2)
 
 **Checkpoint 9.3: the app speaks through the server** (Android, then iOS)
-- A second `SpeechSynthesizer` that uploads the sample and the translation,
-  and plays what comes back
-- Fallback to the phone's stock voice when there is no sample, no network, or
-  the server fails
+(done)
+- `RemoteSpeechSynthesizer` on both phones: uploads the voice sample and the
+  translation to `POST /v1/speech`, follows the job, downloads the audio and
+  plays it. Each step retries and reconnects as transcription does
+- `FallbackSpeechSynthesizer`: the user's voice through the server, or the
+  phone's own voice when no voice is recorded, there is no network, or the
+  server fails. The translation is always heard
+- The upload-with-retries and follow-the-job logic moved out of
+  `RemoteTranscriber` into `core/net` (`Core/Net` on iOS), shared by both
+  remote stages; the transcriber's tests still guard it
+- Fixed on both phones: a speech job's `done` event carries no text, which
+  the clients' event parser required
+- iOS: `SpeechSynthesizer.stop()` is `async`, since a voice may be playing on
+  the main actor; if a run is cancelled, a clip from the server that is
+  already playing is heard to its end
+- Tests: 8 cases for the remote synthesizer against a stub server and 4 for
+  the fallback, the same on both phones. Android 138 pass; iOS 160 pass,
+  1 skipped. Both clients were also checked once against the real server:
+  the fake engine's audio came back and decoded (0.92 s, a beep per word)
+- With the fake engine the "own voice" is beeps until 9.4
+- Verify: `make android-test` and `make ios-test`. Then `make db-up` and
+  `make server-run`; on the emulator or an iPhone, record your voice, then
+  record a sentence with a target language other than the source: the
+  translation is heard as beeps. Stop the server and record again: the
+  phone's voice says it instead
 
 **Checkpoint 9.4: a real engine, as a free trial**
 - A provider that calls a public Hugging Face Spaces demo of an open
