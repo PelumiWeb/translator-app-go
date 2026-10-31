@@ -458,9 +458,11 @@ Event types: `queued`, `processing`, `partial`, `done`, `error`. The stream
 closes after `done` or `error`. A comment line is sent every 15 seconds to keep
 proxies from closing an idle connection.
 
-**`POST /v1/speech`**: `multipart/form-data` with a `voice` part (a WAV sample
-of the voice to imitate), the `text` to say, and its language as `lang`. Like
-a transcription it is queued and answered with `202 Accepted`:
+**`POST /v1/speech`**: `multipart/form-data` with the `text` to say, its
+language as `lang`, and the voice to say it in: a `voice` part (a WAV sample
+of the voice to imitate), or, when the request carries a session and no
+`voice` part, the user's kept voice. Like a transcription it is queued and
+answered with `202 Accepted`:
 
 ```json
 { "id": "c688...", "status": "queued",
@@ -468,15 +470,58 @@ a transcription it is queued and answered with `202 Accepted`:
 ```
 
 Progress comes over the same events endpoint (`queued`, `processing`, `done`
-or `error`). The voice sample is used for that one job and deleted when it
-ends; the server keeps no voices. Milestone 13 changes this: each user's voice
-is kept, and requests to speak use it (section 9). A server with no voice
-engine answers `501 Not Implemented` with code `no_voice_engine` instead of
-queuing the request.
+or `error`). The job works on its own copy of the voice and deletes it when
+it ends; a kept voice stays. A signed-in user with no kept voice gets `409`
+with code `no_voice`. A server with no voice engine answers
+`501 Not Implemented` with code `no_voice_engine` instead of queuing the
+request.
 
 **`GET /v1/jobs/{id}/audio`**: the generated speech, a WAV file, with range
 support. `409` with code `not_ready` while the job has no audio: it is
 unfinished, it failed, or an hour has passed and the audio was deleted.
+
+**Accounts** (milestone 13, ADR 0018). Signed-in requests carry
+`Authorization: Bearer <token>`; without a working session they get `401`
+with code `unauthenticated`.
+
+| Endpoint | What it does |
+| --- | --- |
+| `POST /v1/sessions/apple` | JSON `identity_token`, `nonce`, optional `name`. Checks the token, creates the account on its first sign-in, answers `{ "token", "user", "new_user" }`: `201` for a new account, `200` otherwise. `401 invalid_token` for a token that fails a check; `503 sign_in_unavailable` when Apple's keys cannot be fetched |
+| `POST /v1/sessions/google` | the same, with a Google ID token; `501 sign_in_not_configured` when the server has no `GOOGLE_CLIENT_ID` |
+| `DELETE /v1/sessions/current` | signs out this session |
+| `GET /v1/me` | the profile: `{ "id", "display_name", "handle", "language" }` |
+| `PATCH /v1/me` | changes any of `display_name`, `handle`, `language`; `409 handle_taken` |
+| `DELETE /v1/me` | deletes the account, its sessions and its voice |
+| `PUT /v1/me/voice` | `multipart/form-data`: the `voice` (WAV) and `consent`, the version of the consent wording the user agreed to. Replaces any earlier voice. Answers `{ "consent_version", "consented_at" }` |
+| `GET /v1/me/voice` | the same, or `404 no_voice` |
+| `GET /v1/me/voice/audio` | the user's own kept sample, for a phone they sign in on later |
+| `DELETE /v1/me/voice` | deletes the voice |
+| `GET /v1/handles/{handle}` | whether the user may take an ID: `{ "handle", "available", "suggestions" }`, with three free IDs when it is taken; `400 invalid_handle` for one that breaks the rules |
+| `GET /v1/users/{handle}` | someone by their ID, the same shape as `/v1/me`; `404 user_not_found`, also for someone who has not chosen a language |
+
+**Rooms** (milestone 14, ADR 0020). All signed in. A room the user is not in
+is answered as not found.
+
+| Endpoint | What it does |
+| --- | --- |
+| `POST /v1/rooms` | JSON `handle`: opens a room of two with that person, or returns the one the two have (`201` / `200`). `400 cannot_add_self`, `404 user_not_found`, `409 profile_incomplete` before the user has a language |
+| `GET /v1/rooms` | `{ "rooms": [ { "id", "people", "last_message", "unread", "created_at" } ] }`, most recent first; `people` is everyone but the user |
+| `GET /v1/rooms/{id}` | one room |
+| `GET /v1/rooms/{id}/messages` | `{ "messages": [...] }`, oldest first: the newest 50, or `?before=<message id>&limit=` for older ones |
+| `POST /v1/rooms/{id}/messages` | `multipart/form-data`: `audio` (WAV, up to 30 s), `transcript` (written on the phone, up to 1000 characters), `duration_ms`, optional `lang`; `Idempotency-Key` as for jobs. `201` with the message; `409 room_closed` when the other person has deleted their account |
+| `POST /v1/rooms/{id}/read` | the user has seen the room so far |
+| `GET /v1/messages/{id}` | one message |
+| `POST /v1/messages/{id}/retry` | the sender asks for a failed translation to be tried again |
+| `GET /v1/messages/{id}/audio?lang=` | the audio in one language: the sender's recording for the language it was said in, or the spoken translation once ready; `404 no_audio` until then |
+| `GET /v1/me/events` | Server-Sent Events: `ready` once listening, then `room` with `{ "room_id", "message_id" }` whenever something in one of the user's rooms changes. Hints only, nothing replayed: the phone fetches on `ready` |
+
+A message as the user sees it: `{ "id", "room_id", "sender_id", "mine",
+"lang", "transcript", "duration_ms", "created_at", "renditions" }`. Each
+rendition is `{ "lang", "status", "text", "voice", "audio_url" }`, with
+`status` one of `translating`, `speaking`, `ready`, `failed`, and `voice` one
+of `own` (the sender's voice), `original` (their recording) or `phone` (the
+listener's phone reads `text`). The sender sees a rendition per language the
+others speak; a listener sees their own.
 
 **`GET /v1/models/manifest`**
 
@@ -518,6 +563,14 @@ CREATE INDEX jobs_ready ON jobs (run_at) WHERE status = 'queued';
 
 -- Added later: jobs.idempotency_key (milestone 5), and for speech synthesis
 -- (milestone 9) jobs.kind, target_lang, input_text and result_path.
+-- Accounts (milestone 13): users, identities (provider, subject) -> user,
+-- sessions (token_hash -> user), and voices (one per user: the blob key,
+-- the consent version and when it was given). See migrations 0004 and 0005.
+-- Rooms (milestone 14): rooms (pair, created_by), room_members (read_at),
+-- messages (sender, language, transcript, audio, duration, idempotency key)
+-- and renditions (one per message and listener language: status, text,
+-- voice, audio). jobs.kind gains 'deliver', with jobs.message_id. See
+-- migration 0006 and ADR 0020.
 
 CREATE TABLE job_events (
     job_id     uuid NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -647,12 +700,19 @@ and know nothing about which kind they are handling.
 
 A small `BlobStore` interface (`Put`, `Open`, `Delete`) with a local directory
 implementation. Audio is deleted when its job reaches `done` or `failed`.
+Users' kept voices live in a second directory (`VOICES_DIR`), apart from job
+audio, and are deleted only when the user replaces or deletes the voice, or
+deletes the account (ADR 0016). Room messages live in a third
+(`MESSAGES_DIR`): each sender's recording and the copies spoken in their
+voice, kept until the sender deletes their account (ADR 0020).
 
 ### 4.7 Configuration and logging
 
 Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
-`WORKERS`, `AUDIO_DIR`, `MODELS_DIR`, `JOB_LEASE`, `SWEEP_INTERVAL`,
-`VOICE_ENGINE`, `FISH_AUDIO_API_KEY`, `FISH_AUDIO_MODEL`). Secrets live in
+`WORKERS`, `AUDIO_DIR`, `VOICES_DIR`, `MODELS_DIR`, `JOB_LEASE`,
+`SWEEP_INTERVAL`, `VOICE_ENGINE`, `FISH_AUDIO_API_KEY`, `FISH_AUDIO_MODEL`,
+`APPLE_AUDIENCE`, `GOOGLE_CLIENT_ID`, `MESSAGES_DIR`, `TRANSLATE_ENGINE`,
+`GOOGLE_TRANSLATE_KEY`). Secrets live in
 `server/.env`, which git ignores and the Makefile's server targets load.
 Structured logs with `log/slog`, with
 the job id on every line that concerns a job.
@@ -681,6 +741,7 @@ in the original spec; the owner approved them on 2026-10-04.
 | Postgres 16, Homebrew `postgresql@16` (*added*) | database and queue. Installed locally instead of Docker to save disk and RAM on the dev machine. |
 | `github.com/jackc/pgx/v5` (*added*) | Postgres driver and connection pool. A driver is unavoidable; pgx is the standard one and supports `LISTEN/NOTIFY`. |
 | Fish Audio API (*added* 2026-10-31) | the voice-cloning engine, a paid service (ADR 0010). Called with `net/http` and a small MessagePack encoder of our own: no Go module. |
+| Google Cloud Translation API, basic edition (*added* 2026-10-31) | translates room messages, a paid service (ADR 0020). Called with `net/http`: no Go module. |
 
 No router (Go 1.22+ `ServeMux` covers method and path patterns, so chi is not
 needed), no migration tool (SQL files embedded with `embed`, applied by a small
@@ -698,6 +759,9 @@ runner at startup), no UUID library (Postgres generates ids), no test library.
 | kotlinx-serialization-json and its Kotlin compiler plugin (*added*) | JSON for the manifest and SSE payloads |
 | lifecycle-runtime-compose | `collectAsStateWithLifecycle`; part of AndroidX lifecycle |
 | JUnit 4, kotlinx-coroutines-test, OkHttp MockWebServer (*added*, test only) | unit tests |
+| `androidx.credentials:credentials` and `credentials-play-services-auth` 1.6.0, `com.google.android.libraries.identity.googleid:googleid` 1.2.0 (*added* 2026-10-31) | Sign in with Google through Android's Credential Manager (ADR 0018). The second artefact makes it work on Android 13 and older, through Play services. `googleid` 1.2.1 was approved, but it is built with Kotlin 2.4, which the Kotlin bundled with AGP 9 cannot read, so 1.2.0 is used |
+| `com.google.zxing:core` 3.5.4 (*added* 2026-10-31) | draws the user's QR code. Plain Java, no other libraries |
+| `com.google.android.gms:play-services-code-scanner` 16.1.0 (*added* 2026-10-31) | scans someone's QR code. Play services draws the camera screen, so the app needs no camera permission |
 
 No DI framework, no Retrofit, no Room.
 
@@ -707,6 +771,8 @@ No DI framework, no Retrofit, no Room.
 | --- | --- |
 | Xcode 26.4 and the iOS 26 SDK | needed for any iOS app; already installed |
 | SwiftUI, AVFoundation, CryptoKit, Foundation (`URLSession`) | part of the SDK; nothing to install |
+| AuthenticationServices, Security (Keychain) | part of the SDK; Sign in with Apple and keeping the session token (ADR 0018) |
+| Core Image, VisionKit | part of the SDK; drawing the user's QR code, and scanning someone's |
 | Translation (Apple) | part of the SDK; the iOS translator, chosen 2026-10-17 |
 | whisper.cpp (the same submodule) | the same engine as on Android |
 | CMake and Ninja, through Homebrew | build whisper.cpp into an xcframework. Already installed on the dev machine (CMake 4.0, Ninja 1.12), but new as build tools of this project |
@@ -739,15 +805,17 @@ Written in the milestone where the decision is implemented.
 | 0015 | From a portfolio piece to a social product (written) | 13 |
 | 0016 | Users' voices are kept on the server (written) | 13 |
 | 0017 | Messages are translated on the server (written) | 14 |
-| 0018 | Sign-in and sessions | 13 |
+| 0018 | Sign-in and sessions (written) | 13 |
 | 0019 | The Pearl design in both apps (written) | 19 |
+| 0020 | Rooms, message delivery, and Google Cloud Translation (written) | 14 |
 
 ## 8. Known limits
 
-- No auth: anyone who can reach the server can upload audio and download
-  models. Job ids are random UUIDs, so one client cannot guess another's event
-  stream, and uploads are size-limited. Not suitable for a public deployment.
-  Accounts arrive with milestone 13.
+- The job, speech and model endpoints need no sign-in yet: anyone who can
+  reach the server can upload audio and ask for speech. Job ids are random
+  UUIDs, so one client cannot guess another's event stream, and uploads are
+  size-limited. Not suitable for a public deployment. They will require a
+  session once both phones sign in (ADR 0018).
 - ML Kit translation covers about 59 languages and translates through English
   when neither side is English, so quality between two non-English languages is
   modest.
@@ -797,6 +865,10 @@ What changes:
   listener's phone (APNs, FCM). That phone plays it and shows both texts.
   Translating and speaking are jobs on the existing queue, with its retries,
   leases and events.
+- **Rooms** (milestones 14 and 20). A room is a conversation: two people
+  first, groups later. Its messages update live while it is open, over the
+  same event stream and `LISTEN/NOTIFY` bus as jobs; push notifications reach
+  a phone that is not in it.
 - **Safety** (milestone 16): block, report, and acting on reports, before
   anyone can be found at random.
 - **Calls** (milestone 17): a stream, not jobs; designed when they come.

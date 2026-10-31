@@ -72,6 +72,8 @@ core/net         backend client: upload, SSE
 core/speech      SpeechSynthesizer interface and its implementations
 core/voice       the user's recorded voice sample: storage and rules
 core/pipeline    transcribe -> translate -> speak, the reusable entry point
+core/account     the signed-in user: session, profile, sign-up progress
+core/rooms       rooms and voice messages: models, live feed, playback
 ui/              Compose screens and ViewModels
 ```
 
@@ -89,6 +91,8 @@ Core/Net         backend client: upload, SSE
 Core/Speech      SpeechSynthesizer protocol and its implementations
 Core/Voice       the user's recorded voice sample: storage and rules
 Core/Pipeline    transcribe -> translate -> speak, the reusable entry point
+Core/Account     the signed-in user: session, profile, sign-up progress
+Core/Rooms       rooms and voice messages: models, live feed, playback
 UI/              SwiftUI views and their view models
 ```
 
@@ -101,7 +105,10 @@ Server layout:
 cmd/server           main: wiring, config, graceful shutdown
 internal/api         HTTP handlers, SSE
 internal/queue       job store (Postgres), worker pool, event listener and bus
-internal/provider    Provider and Synthesizer interfaces, fakes for both, Fish Audio (fish/)
+internal/provider    Provider, Synthesizer and Translator interfaces, fakes, Fish Audio (fish/), Google Cloud Translation (google/)
+internal/accounts    users, identities, sessions, handles, kept voices
+internal/auth        Apple and Google identity token checks
+internal/rooms       rooms, messages, renditions; the deliverer and the change hub
 internal/models      manifest and model file serving
 internal/storage     audio blob storage
 migrations/          plain SQL, embedded in the binary

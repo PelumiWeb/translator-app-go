@@ -1,7 +1,3 @@
-> Copied from Claude Design's handoff on 2026-10-31, as the reference for building the design. The brief it
-> mentions is `../brief.md`. The HTML prototype (`Style Directions.dc.html` and `support.js`) is not kept in the
-> repository. ADR 0019 records how the design was built into the apps.
-
 # Handoff: Timbre (working name, was PTranslate). Visual direction "Lagoon / Pearl"
 
 ## Overview
@@ -12,7 +8,14 @@ This package covers the **approved style direction** and three key screens:
 2. Conversation with voice notes (their note played, my note preparing, mic idle)
 3. Interpreter (preparing-voice state). This one was designed in an earlier round; restyle it with the Pearl rules below.
 
-The other v1 screens in brief §7 (welcome, sign in, name, ID, language, model download, home, add someone, profile/settings) have **not been designed yet**. Build them from the tokens and components here, using native platform patterns.
+**Update (round 2):** `Timbre v1 Screens.dc.html` adds the remaining v1 screens, every voice-note state, and the error/notice styles. See the "v1 screens" section near the end of this README.
+
+Still not designed:
+- the speech-model download step (onboarding step 5)
+- light mode
+- Android-specific frames
+- the Pearl recolour of the interpreter
+- the app icon
 
 ## About the design files
 The files in this bundle are **design references created in HTML**. They are prototypes that show the intended look, not production code. The job is to recreate them natively:
@@ -52,7 +55,11 @@ To view: open `Style Directions.dc.html` in a browser, with `support.js` next to
 | `them` | `#7FD1C1` | **Everything that is "the other person"**: their play button, their waveform dots, "Show original" link, their language label, the translation text in the interpreter |
 | `onThem` | `#0E2426` | Icons on `them` fills |
 
-Rule: **two meaning colours only.** Warm white is you, mint is them. No third accent. Apricot `#F4A37C` from the earlier round has been **removed**.
+| `destructive` | `#F2A08A` | Text colour for destructive actions only ("Delete my voice", "Delete account"). Never used for errors. |
+| `line` | `rgba(243,238,228,0.08)` | List separators |
+| `outline` | `rgba(243,238,228,0.28)` | Secondary button border |
+
+Rule: **two meaning colours only.** Warm white is you, mint is them. The only other accent is `destructive`. Apricot `#F4A37C` from the earlier round has been **removed**.
 
 Errors are not designed yet. Suggestion: warm white text with an outline icon. Avoid red alarm styling and never blame the user (brief §9).
 
@@ -229,7 +236,124 @@ MessageStatus (mine): sending | translating | preparingVoice | delivered | faile
 - Icons: Lucide-style outlines (mic, play, chevron-left, arrow-left-right, volume-2) at 1.5–1.75 stroke. In production use SF Symbols on iOS and Material Symbols (Outlined) on Android.
 - No imagery. App icon and wordmark are not designed yet.
 
+## v1 screens (round 2): `Timbre v1 Screens.dc.html`
+All frames are dark, iPhone, 360 pt wide. Screenshots are in `screenshots/v1/`.
+
+### Shared parts
+- **Primary button:** 52 pt high, capsule, `you` fill, `onYou` text at 16/500.
+- **Secondary button:** same size, 1 px `outline` border, `fg` text.
+- **Text input:** 56–60 pt high, `bgRaised`, radius 12, 18–20 pt text. When focused it gets a 1.5 px `fg` border.
+- **Onboarding header:** back chevron (28 pt) plus a 5-segment progress bar (3 pt high, gap 6; done = `fg`, to do = `fg` at 20%). Under it, a step label such as "1 of 5" (12/500, `fg2`), then the title at 28–30/500, -0.02em.
+- **Onboarding steps:** Name, ID, Language, Voice (record, then consent), Speech model. ⚠ The round-1 record screen says "5 of 6"; change it to **"4 of 5"**.
+- **Grouped list (settings, language list):** `bgRaised`, radius 12, rows 50–56 pt, 16 pt side padding, `line` separators. Group titles 12/500 in `fg2`, inset 16. Use native `List(.insetGrouped)` / Material 3 `ListItem`.
+- **Tab bar:** a floating iOS 26 Liquid Glass bar with Rooms, Interpreter and Profile. Use the system `TabView`; don't redraw it. On Android, use a Material 3 `NavigationBar`.
+
+### Screens
+1. **Welcome** (screenshot `01-welcome`)
+   - "timbre" wordmark placeholder at 18/600.
+   - Two-voices animation: a warm-white ring set and a mint ring set, 180 pt each, 80 pt apart so they overlap. Each set has 3 pulsing rings (3 s loop, staggered 1 s, mint offset by 0.5 s) around a 52 pt core.
+   - Headline "Talk to anyone. Be heard in your own voice." at 34/500.
+   - Sub-line "You speak your language. They hear theirs, in your voice."
+   - Sample card (`bgRaised`): mint play button, "Hear Rosa say hello" / "Spanish, heard in English, in her voice".
+   - Primary button: "Get started".
+2. **Sign in** (`02-sign-in`)
+   - Title "Sign in to keep your conversations."
+   - Body "This is only to find your account on any phone. We never post anything."
+   - Buttons: `ASAuthorizationAppleIDButton` (white style) and the Google Credential Manager button (dark theme). The system draws both logos.
+   - "Email sign-in is coming soon." in `fg3`, then the Terms / Privacy line.
+3. **Your name** (`03-name`): "What should people call you?", a text field, helper "Shown to the people you talk to." The Continue button sits above the keyboard.
+4. **Your ID** (`04-id`)
+   - "Pick your ID." / "This is how people find you."
+   - The field shows a dim "@" prefix.
+   - The check runs as you type, debounced to about 400 ms. When it passes, show a check icon and "Available".
+   - Helper: "Letters, numbers, dots and underscores."
+   - The taken state is on the notices board.
+5. **Your language** (`05-language`)
+   - "Which language do you speak?" with a search field "Search 99 languages".
+   - A "From your phone" group holds the suggested language, ticked.
+   - Then "All languages": each row shows the name in its own language at 16 pt, with the English name on the right at 13 pt in `fg2`.
+   - Button: "Continue in {language}".
+   - Scripts use the Plex sibling families.
+6. **Voice consent** (`06-consent`), shown after recording
+   - Title "That's your voice. Keep it?"
+   - Playback card in `you`, with a petrol play button and dots.
+   - Three plain blocks:
+     - **What we keep:** this recording, on our server.
+     - **What it's for:** only your own words; Fish Audio makes the speech.
+     - **Delete it any time:** in Profile, under Your voice.
+   - Buttons: "Keep my voice" (primary), "Record again" (secondary), and the link "Use the phone's voice instead".
+   - Have legal and privacy review this copy.
+7. **Your rooms** (`07-rooms`)
+   - Large title "Rooms" (32/600), a + button (44 pt circle, `bgRaised`) top right, and a search field.
+   - Each row has:
+     - a 48 pt avatar in `bgRaised` with the initial in `them`
+     - the name at 16/500 and the time at 12 in `fg2`
+     - the last message at 14 in `fg` at 72%, up to 2 lines
+     - "{City} · hears {Language}" at 12 in `them`
+     - a 10 pt mint dot when there's something new from them
+   - My own last messages start with "You: ".
+8. **Rooms, empty** (`08-rooms-empty`)
+   - The two-voices animation, then "No one here yet."
+   - Body: "Add someone by their ID or QR code. You'll hear them in English, in their own voice."
+   - Buttons: "Add someone" and "Share my ID, @pelumi.a".
+9. **Add someone, by ID** (`09-add-by-id`)
+   - A sheet with a grabber, a close button and the title "Add someone".
+   - A segmented control: By ID / QR code.
+   - The ID field. When it finds someone, show a result card: avatar, name, "@id · speaks {Language}" (language in `them`), and the line "You'll hear Rosa in English, in her voice. She'll hear you in Spanish, in yours." Then "Add Rosa".
+10. **Add someone, QR** (`10-add-by-qr`)
+    - My QR code on a 236 pt warm-white tile (radius 20). It's a placeholder: generate a real QR code with dark modules on light.
+    - Under it: my name, "@id · speaks English", and the hint "Let them scan this with their phone's camera, or the app."
+    - Buttons: "Scan their code" (opens the camera) and "Share my code".
+11. **Profile and settings** (`11-profile`, full scroll)
+    - Header: a 76 pt avatar in `you`, the name at 22/500, and "@id · speaks English".
+    - Groups:
+      - **Your voice:** Play your voice (0:21 · recorded date), Record again, Delete my voice (`destructive`). Footer: "Used only to speak your own words. Without it, your messages use the phone's voice."
+      - **You:** Name, ID, Language.
+      - **Privacy:** What we keep, and why.
+      - **Advanced:** Speech to text (Automatic / This device / Server), Speech model (Ready · 57 MB; push to status, delete, download again), This phone's speed.
+      - **Account:** Sign out, Delete account (`destructive`).
+    - Destructive actions must ask for confirmation in a native alert.
+
+### Voice-note states (`12-voice-note-states`)
+Mine (a `you` card, 270 pt, radius 12, padding 16):
+- **M1 Recording (composer):**
+  - a cancel X (44 pt, outline)
+  - live dots in `fg`
+  - a 64 pt stop button with a 10 pt halo
+  - the line "0:07 · tap to send"
+  - 30 s maximum; from 25 s on, show the seconds left
+- **M2 Too short:** a `bgRaised` hint above the mic: "That was very short. Tap, say something, then tap again to send." Nothing is sent.
+- **M3 Speech to text:** words arrive one by one. Words not yet confirmed are in `onYou` at 44%, followed by a caret. Status: "Writing down what you said…"
+- **M4 Translating:** a 4-segment bar (sent, translating, voice, delivered) and the status "Translating into {language}".
+- **M5 Preparing your voice:** the breathing-ring indicator and "Preparing your voice in {language}".
+- **M6 Delivered:** play button, dots and duration above the text. Meta line: check icon, "Delivered in your voice · 9:14".
+- **M7 Failed:** the transcript stays. Below a hairline: an alert icon, "Couldn't translate this. Your words are kept." and **Retry**.
+- **M8 Phone's voice:** "Delivered in the phone's voice · Record yours". This is not styled as an error.
+
+Theirs (a `bgRaised` card, 290 pt):
+- **T1 New:** dots at 45% and a mint unread dot. Meta: "New · 0:14 · in her voice".
+- **T2 Playing:** pause glyph; the dots fill as it plays and the text lights up to match. Meta: "Playing in her voice" in mint.
+- **T3 Done with original:** the translation, a hairline, then "Original · {Language}" in mint and the original text at 15 pt in `fg` at 72%. Link: "Hide original".
+- **T4 Phone's voice:** an outline mint play button, dots in `fg` at 40%, and "Spoken by your phone's voice" with a phone icon.
+- **T5 First use of a language:** a 3 pt mint progress bar and "Getting {language} ready on this phone. This happens only once." On iPhone, the system shows its own sheet.
+
+### Errors and notices (`13-errors-notices`)
+There are three forms. None of them uses red, and the copy never blames the person.
+
+1. **Toast:** a top capsule in `bgRaised` with a spinner, for problems that fix themselves: "Connection lost. Reconnecting…"
+2. **Banner:** a `bgRaised` card with an icon, a title, a body and a primary action, used when the person needs to act. Example: "Timbre needs your microphone" / "To record, allow microphone access in Settings." / [Open Settings]. It replaces the mic until permission is granted.
+3. **Hint above the mic:** after a failed recording.
+   - Silent: "We didn't hear anything. Check nothing is covering the microphone, then try again." The dB figure goes to Advanced and the logs only.
+   - No speech: "No words came through. Try again, a little closer to the phone."
+   - Unclear: "We couldn't quite make that out. Please say it again."
+
+Two more cases are handled in place, not as one of the three forms:
+- **In the message:** "This iPhone has no voice for {language}. The words are all here; only the sound is missing."
+- **In the form:** "@pelumi is taken. These are free:" followed by 3 suggestion chips (capsule, `bgRaised`, 14 pt).
+
 ## Files
+- `Timbre v1 Screens.dc.html`: round 2, all remaining v1 screens, voice-note states and notices. Open it with `support.js` in the same folder.
+- `screenshots/v1/`: one image per screen plus the two boards (2x).
 - `screenshots/01-record-your-voice.png`: approved look for onboarding voice recording (3c, at 3x). The rings are captured mid-animation.
 - `screenshots/02-conversation.png`: approved look for the conversation (3c).
 - `screenshots/03-interpreter-layout-old-colours.png`: **layout reference only.** It uses the superseded apricot colour; restyle with `you` = warm white as described above.

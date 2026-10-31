@@ -15,20 +15,20 @@ are built. On 2026-10-31 the app became a product, a social app where people
 talk across languages (ADR 0015), and the order changed. The order of work,
 as of 2026-10-31:
 
-1. Milestone 19: the design, by Claude Design, then built into both apps
-2. Milestone 13: accounts, profile, and your voice on the server
-3. Milestone 14: voice notes between people
+1. Milestone 13: accounts, profile, and your voice on the server
+2. Milestone 14: rooms of two, where two people talk in voice messages
+3. Milestone 12: voice notes shared in from other apps, such as WhatsApp
 4. Milestone 15: text messages
-5. Milestone 16: safety and discovery
-6. Milestone 18: going live
-7. Milestone 17: calls, for premium users
-8. Milestone 11: voice keyboards
-9. Milestone 7 and checkpoint 8.2, in an order still to agree
+5. Milestone 20: group rooms
+6. Milestone 16: safety and discovery
+7. Milestone 18: going live
+8. Milestone 17: calls, for premium users
+9. Milestone 11: voice keyboards
+10. Milestone 7 and checkpoint 8.2, in an order still to agree
 
-Checkpoint 9.4, the real voice engine, was done on 2026-10-31.
-
-Milestone 10 was done on 2026-10-29. Milestone 12 was dropped on 2026-10-31:
-voice notes now live inside the app (milestone 14).
+Milestone 10 was done on 2026-10-29; checkpoint 9.4 and milestone 19 (the
+design) on 2026-10-31. Milestone 12 was dropped on 2026-10-31, then brought
+back the same day, after milestone 14.
 
 A checkpoint with phone work is done on Android, then on iOS.
 
@@ -697,12 +697,12 @@ Checkpoints, to be detailed when the milestone starts:
 
 ---
 
-## [-] Milestone 12: Voice notes, interpret and reply
+## [ ] Milestone 12: Voice notes, interpret and reply
 
-Dropped on 2026-10-31. The social app brings voice notes into the app itself
-(milestone 14), where they arrive already in the listener's language and the
-sender's voice, so there is nothing to bring in from WhatsApp. Kept below as
-the record of what was considered.
+Dropped on 2026-10-31, when the social app brought voice notes into the app
+itself (milestone 14). Brought back the same day by the owner, to come after
+milestone 14: people will still receive voice notes in other apps. The
+feasibility notes are under open question 8, now settled.
 
 Added on 2026-10-29 at the owner's request. A user receives a voice note in
 another app, such as WhatsApp, and reads or hears it in their own language.
@@ -777,7 +777,7 @@ Known before starting:
 
 ---
 
-## [ ] Milestone 13: Accounts, profile, and your voice on the server
+## [~] Milestone 13: Accounts, profile, and your voice on the server
 
 Added on 2026-10-31, when the app became a product (ADR 0015). The first
 step of the social app: each person has an account, a profile others can
@@ -790,36 +790,118 @@ agree to it being kept. Sign in on a second phone: the same profile and
 voice are there. Delete your voice, then your account: both are gone from
 the server.
 
-Checkpoints, to be detailed when the milestone starts:
+**Checkpoint 13.1: server accounts, Sign in with Apple and Google** (done, 2026-10-31, but codes by email)
+- Migration 0004: `users`, `identities` (`provider`, `subject`) and
+  `sessions` (the SHA-256 of each token, never the token)
+- `internal/auth`: Apple and Google identity tokens checked with the
+  standard library: RS256 only, the provider's keys fetched and kept for a
+  day, issuer, audience, expiry, subject, nonce
+- `internal/accounts`: sign in (the account is made at the first sign-in, and
+  two first sign-ins at once make one account), sessions, the profile, unique
+  handles, deleting an account
+- `POST /v1/sessions/apple`, `POST /v1/sessions/google`,
+  `DELETE /v1/sessions/current`, `GET`/`PATCH`/`DELETE /v1/me`;
+  `APPLE_AUDIENCE` (the bundle ID), `GOOGLE_CLIENT_ID` (off when empty)
+- ADR 0018
+- Waiting on the owner: a Google Cloud project with its OAuth clients, for
+  Google sign-in; a domain and a mail service, for codes by email
+- Verify: `make server-test`
 
-- 13.1 Server: users, sign-in identities and sessions in Postgres; checking
-  Apple and Google sign-in tokens; codes sent by email; the profile; handles
-  that are unique; deleting an account
-- 13.2 Server: each user's voice sample, kept with a record of their
-  consent, replaceable and deletable; requests to speak use it instead of an
-  upload
-- 13.3 Android, 13.4 iOS: sign in, the profile, the voice with consent, sign
-  out, delete the account
-- ADR for sign-in and sessions
+**Checkpoint 13.2: each user's voice on the server** (done, 2026-10-31)
+- Migration 0005: `voices`, one per user, with the consent version and when
+  it was given; the audio in its own directory, `VOICES_DIR`
+- `PUT`/`GET`/`DELETE /v1/me/voice`, `GET /v1/me/voice/audio`; replacing a
+  voice deletes the old file, two uploads at once leave no file behind,
+  deleting the account deletes the voice
+- `POST /v1/speech` without a `voice` part, from a signed-in user, speaks in
+  their kept voice; the job gets its own copy, so the kept one survives it
+- Verify: `make server-test`
+
+**Design round 2** (arrived 2026-10-31)
+- `docs/design/brief-2-social.md` went to Claude Design; the handoff is in
+  `docs/design/pearl/` (README, round 2 section) and `docs/design/pearl/v1/`:
+  welcome, sign in, name, ID, language, voice consent, rooms, add someone (ID
+  and QR), profile, every state of a voice note, errors and notices
+- Built as designed, with these departures, each for a reason:
+  - the city in "Madrid · hears Español" is left out: sign-up never asks for
+    one (the owner's choice, 2026-10-31); rows say "hears Español"
+  - the iPhone offers Sign in with Apple only and Android Google only, as ADR
+    0018 says; the frame showing both on one phone is not followed
+  - sign-up has 4 steps, not 5: the speech model step is not designed
+  - "in her voice" becomes "in their voice": the app does not know pronouns
+  - the welcome's "Hear Rosa say hello" card is left out until there is a
+    recording to play
+  - Terms and Privacy Policy are plain text until there are pages to link to
+
+**Checkpoint 13.3: Android, sign-up and profile** (built, 2026-10-31)
+- Sign in with Google through Credential Manager; the session token sealed
+  with an Android Keystore key; name, ID (checked as typed, with suggestions
+  when taken), language, voice with consent; profile with play, record again
+  and delete voice, edit name, ID and language, privacy, Advanced, sign out,
+  delete account. Signing out leaves no voice on the phone
+- `GET /v1/handles/{handle}` and `GET /v1/users/{handle}` on the server
+- Waiting on the owner: the Google Cloud project's web client ID, in
+  `android/local.properties` as `googleWebClientId=` and in `server/.env` as
+  `GOOGLE_CLIENT_ID=`; until then the Google button says it is not set up
+- Verify: `make android-test`; on a phone, `make android-install`
+
+**Checkpoint 13.4: iOS, sign-up and profile** (built, 2026-10-31)
+- The same on iPhone with Sign in with Apple (the entitlement is in the
+  project; `make ios-device` lets Xcode add the capability to the app ID),
+  the token in the Keychain
+- Verify: `make ios-test`; on the iPhone, `make ios-device`
+
+Still to come: codes by email (a domain and a mail service); revoking Apple
+tokens when an account is deleted (milestone 18).
 
 ---
 
-## [ ] Milestone 14: Voice notes between people
+## [~] Milestone 14: Rooms of two
 
-**Demo**: two phones, one set to English and one to Spanish. Add each other
-by ID or QR code. Send a voice note in English: the other phone is notified,
-and plays it in Spanish, in the sender's voice, with the original words and
-the translation on screen. Reply in Spanish the other way.
+Renamed on 2026-10-31, when the owner asked for the part where people
+connect: "rooms for just two users and later a group user, but let's start
+with just a room of two". A room is a conversation. In this milestone it has
+two people; group rooms are milestone 20. It is the conversation screen of
+the design (`docs/design/pearl/02-conversation.png`).
 
-Checkpoints, to be detailed when the milestone starts:
+**Demo**: two phones, one set to English and one to Spanish. One adds the
+other by ID (or QR code) and a room opens for the two. It opens at once: the
+first voice note reaches the other person with no request to accept (the
+owner's choice, 2026-10-31); blocking and reporting come in milestone 16. A voice message in
+English plays on the other phone in Spanish, in the sender's voice, with the
+original words a tap away. The reply comes back the other way. With both in
+the room, each message appears as soon as it is ready.
 
-- 14.1 Server: contacts, conversations and messages. A voice note is the
-  sender's audio and transcript; the server translates it into the
-  listener's language and speaks it in the sender's voice, as jobs on the
-  queue (ADR 0017)
-- 14.2 Server: push notifications, through APNs and FCM
-- 14.3 Android, 14.4 iOS: contacts, a conversation, record and send, receive
-  and play
+**Checkpoints 14.1 and 14.2: server rooms, delivery and live changes** (done, 2026-10-31)
+- Migration 0006: rooms of two (found by their pair), members with when they
+  last read, messages, and renditions, one per message and listener language
+- A `deliver` job per message and language on the existing queue: translate
+  with Google Cloud Translation (the owner's choice, 2026-10-31), save the
+  translation, speak it in the sender's kept voice; listeners of the same
+  language get the recording itself; no kept voice means the listener's
+  phone reads the words. ADR 0020
+- `POST`/`GET /v1/rooms`, messages, read, retry, audio per language, and
+  `GET /v1/me/events`, a live stream of changes per user over `NOTIFY`
+- `TRANSLATE_ENGINE=fake` for working without a key; `GOOGLE_TRANSLATE_KEY`
+  for the real one, waiting on the owner
+- Verify: `make server-test`
+
+**Checkpoints 14.3 and 14.4: rooms on both phones** (built, 2026-10-31)
+- Your rooms with unread dots, and the empty state with your ID to share;
+  add someone by ID or by QR code (show yours, scan theirs, or open a
+  timbre://add link); a room with every state of a note: writing down,
+  sending, translating, preparing your voice, delivered, failed with retry,
+  the phone's voice; theirs new, playing (the words light up), played, with
+  the original a tap away; tap to record, tap to send, cancel, 30 seconds
+  with a countdown from 25; hints when a recording was too short, silent or
+  unclear; the microphone banner; "Reconnecting" while the stream is down
+- Not yet: the dots that follow the microphone's level; the empty room and a
+  listener's note still on its way are not in the design and are kept plain
+- Verify: two phones, one English and one Spanish, the server running with
+  `TRANSLATE_ENGINE=fake` (or a Google key)
+
+- 14.5 Push notifications, through APNs and FCM, for a phone not in the room
+  (needs an APNs key from the developer account, and a decision on FCM)
 
 ---
 
@@ -857,7 +939,7 @@ stores require block and report.
 
 ---
 
-## [~] Milestone 19: The design
+## [x] Milestone 19: The design
 
 Added on 2026-10-31: the owner hands the app's design to Claude Design, to
 make it look great before more features are built. The brief is
@@ -904,8 +986,19 @@ ask for.
 - Verify: `make ios-device` and walk through recording your voice and a
   translation; on Android, `make android-install`
 
-The new screens (sign-in, conversations, and so on) are built to the design
-in their own milestones.
+The new screens (sign-in, rooms, and so on) are built to the design in their
+own milestones.
+
+Approved by the owner on 2026-10-31 ("The design is good").
+
+---
+
+## [ ] Milestone 20: Group rooms
+
+Added on 2026-10-31. Rooms with more than two people. Each message is
+translated and spoken once per language in the room, so a room of five who
+speak three languages makes three versions of each. Safety (milestone 16)
+covers group rooms as well as rooms of two.
 
 ---
 
@@ -950,6 +1043,14 @@ Still open:
 3. The profile's details beyond name, ID and language (milestone 13).
 4. Codes sent by email need an email-sending service and a domain to send
    from (milestone 13).
-5. Sign in with Google: the libraries each phone uses (milestone 13).
-6. Which translation service the server uses for messages (milestone 14).
+5. Settled 2026-10-31: Sign in with Google on Android, through Credential
+   Manager (`androidx.credentials`, `googleid`). On the iPhone it waits.
+6. Settled 2026-10-31: Google Cloud Translation translates messages on the
+   server (ADR 0020). The owner also chose: two QR libraries on Android
+   (ZXing core, Google's code scanner), and no city on profiles for now.
 7. Hosting, the domain, and storage for audio (milestone 18).
+8. Settled 2026-10-31: milestone 12 comes back, after milestone 14.
+   Feasible: Android decodes WhatsApp's audio itself;
+   on the iPhone, one test on a real phone settles whether iOS decodes it and
+   whether WhatsApp's share menu offers the app. The reply reaches WhatsApp as
+   an audio file, not a voice-note bubble.
