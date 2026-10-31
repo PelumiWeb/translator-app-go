@@ -37,6 +37,19 @@ object PearlType {
     val passageCurrent = style(25f, FontWeight.Medium, lineHeight = 31.25f, tracking = -0.01f)
     val passageOther = style(16f, FontWeight.Normal, lineHeight = 22.4f)
     val translation = style(28f, FontWeight.Medium, lineHeight = 33.6f, tracking = -0.015f)
+
+    /** The welcome headline. */
+    val hero = style(34f, FontWeight.Medium, lineHeight = 40f, tracking = -0.02f)
+
+    /** A screen's large title, as "Rooms". The design asks for 600; Plex is bundled at 400 and 500. */
+    val largeTitle = style(32f, FontWeight.Medium, lineHeight = 38f, tracking = -0.01f)
+
+    /** The question an onboarding step asks. */
+    val screenTitle = style(28f, FontWeight.Medium, lineHeight = 34f, tracking = -0.02f)
+
+    /** What is typed in a text field. */
+    val field = style(18f, FontWeight.Normal, lineHeight = 24f)
+    val messageStrong = style(16f, FontWeight.Medium, lineHeight = 22f)
     val title = style(22f, FontWeight.Medium, lineHeight = 26.4f)
     val headline = style(19f, FontWeight.Medium, lineHeight = 24f)
     val message = style(16f, FontWeight.Normal, lineHeight = 24f)

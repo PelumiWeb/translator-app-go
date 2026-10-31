@@ -7,10 +7,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.ptranslate.PtranslateApp
+import com.example.ptranslate.core.account.Account
 import com.example.ptranslate.core.audio.AudioPlayer
 import com.example.ptranslate.core.audio.AudioRecorder
 import com.example.ptranslate.core.audio.PcmAudio
 import com.example.ptranslate.core.audio.Recording
+import com.example.ptranslate.core.audio.toWav
+import com.example.ptranslate.core.net.BackendException
 import com.example.ptranslate.core.voice.VoiceSampleRules
 import com.example.ptranslate.core.voice.VoiceSampleState
 import com.example.ptranslate.core.voice.VoiceSampleStore
@@ -49,16 +52,23 @@ data class VoiceSetupUiState(
     /** Length of the recording already saved on this phone, if there is one. */
     val savedMs: Long? = null,
     val error: String? = null,
+    /** The recording is being kept: uploaded, then saved on the phone. */
+    val keeping: Boolean = false,
     /** Set when the user is finished here, one way or another. */
     val finished: Boolean = false,
 )
 
-/** Records, reviews and saves the sample of the user's voice. */
+/**
+ * Records, reviews and keeps the sample of the user's voice: on the server,
+ * with their consent, so the people they talk to hear them in it (ADR 0016),
+ * and on the phone, for the interpreter.
+ */
 class VoiceSetupViewModel(
     private val recorder: AudioRecorder,
     private val player: AudioPlayer,
     private val samples: VoiceSampleStore,
     private val preference: VoiceSetupPreference,
+    private val account: Account,
     private val maxRecordingMs: Long = 30_000,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : ViewModel() {
@@ -158,21 +168,31 @@ class VoiceSetupViewModel(
         }
     }
 
-    /** Keeps the recording under review as the user's voice. */
+    /**
+     * Keeps the recording under review as the user's voice: the user has just agreed, on this screen, to it being
+     * kept on the server. The server first, so that a failed upload changes nothing.
+     */
     fun onUseClicked() {
         val audio = candidate ?: return
-        if (_state.value.problem != null) return
+        if (_state.value.problem != null || _state.value.keeping) return
         stopPlayback()
+        _state.update { it.copy(keeping = true, error = null) }
         viewModelScope.launch {
             try {
+                if (account.session.value != null) account.keepVoice(audio.toWav())
                 samples.save(audio)
+            } catch (e: BackendException) {
+                _state.update {
+                    it.copy(keeping = false, error = if (e.status == 0) "No connection, so your voice couldn't be kept. Check you're online, then try again." else "Your voice couldn't be kept just now. Please try again.")
+                }
+                return@launch
             } catch (e: Exception) {
-                _state.update { it.copy(error = "The recording could not be saved") }
+                _state.update { it.copy(keeping = false, error = "The recording could not be saved") }
                 return@launch
             }
             preference.skipped = false
             candidate = null
-            _state.update { it.copy(finished = true) }
+            _state.update { it.copy(keeping = false, finished = true) }
         }
     }
 
@@ -185,10 +205,16 @@ class VoiceSetupViewModel(
         _state.update { it.copy(finished = true) }
     }
 
-    /** Deletes the saved recording from the phone. */
+    /** Deletes the voice, from the server and from the phone. */
     fun onDeleteClicked() {
         discardRecording()
         viewModelScope.launch {
+            try {
+                if (account.session.value != null) account.deleteVoice()
+            } catch (e: BackendException) {
+                _state.update { it.copy(error = "Your voice couldn't be deleted just now. Please try again.") }
+                return@launch
+            }
             samples.delete()
             preference.skipped = true
             _state.update { it.copy(finished = true) }
@@ -227,6 +253,7 @@ class VoiceSetupViewModel(
                     player = container.player,
                     samples = container.voice,
                     preference = container.voiceSetup,
+                    account = container.account,
                 )
             }
         }

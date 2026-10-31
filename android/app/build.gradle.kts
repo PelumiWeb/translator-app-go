@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -28,6 +30,16 @@ android {
         // `adb reverse`, which makes the device's localhost:8080 reach it, on
         // the emulator and on a phone over USB alike.
         buildConfigField("String", "BACKEND_URL", "\"http://localhost:8080\"")
+
+        // The "web" OAuth client ID of the Google Cloud project, which Sign in
+        // with Google writes into its tokens for the server to check. Not a
+        // secret, but it belongs to the owner's project, so it is read from
+        // local.properties (googleWebClientId=...) rather than committed.
+        val localProperties = Properties().apply {
+            rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use(::load)
+        }
+        val googleWebClientId = localProperties.getProperty("googleWebClientId", "")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
 
         ndk {
             // 64-bit ARM: every current phone, and the emulator on Apple
@@ -91,6 +103,11 @@ dependencies {
     implementation(libs.mlkit.translate)
     implementation(libs.okhttp)
     implementation(libs.okhttp.sse)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
+    implementation(libs.googleid)
+    implementation(libs.zxing.core)
+    implementation(libs.play.services.code.scanner)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)

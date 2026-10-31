@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -63,8 +64,8 @@ import kotlinx.coroutines.delay
 fun TranslateScreen(
     viewModel: TranslateViewModel,
     savedVoiceMs: Long?,
-    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onSettingsClick: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -104,7 +105,7 @@ private fun InterpreterContent(
     onSourceSelect: (Language) -> Unit,
     onTargetSelect: (Language) -> Unit,
     onSwapClick: () -> Unit,
-    onSettingsClick: () -> Unit,
+    onSettingsClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val colors = Pearl.colors
@@ -114,9 +115,12 @@ private fun InterpreterContent(
     RecordingHaptics(state.stage)
 
     Column(modifier.fillMaxSize().padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
-            IconButton(onClick = onSettingsClick, enabled = idle) {
-                Icon(PearlIcons.Settings, contentDescription = "Settings", tint = colors.fg2)
+        // In the tabbed app the settings are under Profile, so there is no button here.
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp).heightIn(min = 24.dp), horizontalArrangement = Arrangement.End) {
+            if (onSettingsClick != null) {
+                IconButton(onClick = onSettingsClick, enabled = idle) {
+                    Icon(PearlIcons.Settings, contentDescription = "Settings", tint = colors.fg2)
+                }
             }
         }
         LanguageChips(

@@ -10,61 +10,70 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ptranslate.BuildConfig
 import com.example.ptranslate.PtranslateApp
-import com.example.ptranslate.core.voice.VoiceSampleState
-
-private enum class Screen { INTERPRETER, SETTINGS, VOICE }
+import com.example.ptranslate.core.account.OnboardingStep
+import com.example.ptranslate.ui.onboarding.GoogleSignIn
+import com.example.ptranslate.ui.onboarding.HandleScreen
+import com.example.ptranslate.ui.onboarding.LanguageScreen
+import com.example.ptranslate.ui.onboarding.NameScreen
+import com.example.ptranslate.ui.onboarding.OnboardingViewModel
+import com.example.ptranslate.ui.onboarding.SignInScreen
+import com.example.ptranslate.ui.onboarding.WelcomeScreen
 
 /**
- * Chooses between the app's three screens. With so few, a state value does the
- * job a navigation library would; the back button is handled by hand.
+ * Chooses what the person sees from where they are: not signed in (welcome,
+ * then sign in), part way through signing up (the step they reached), or in
+ * the app. The account is the one source of truth, so signing out or a
+ * session the server ended brings them back to the welcome from anywhere.
+ *
+ * @param addHandle an ID from a timbre://add link, offered once signed up.
  */
 @Composable
-fun AppRoot(modifier: Modifier = Modifier) {
+fun AppRoot(addHandle: String?, onAddHandleUsed: () -> Unit, modifier: Modifier = Modifier) {
     val container = (LocalContext.current.applicationContext as PtranslateApp).container
-    val voice by container.voice.state.collectAsStateWithLifecycle()
-    // Shared by the interpreter and settings, which shows its advanced state.
-    val translate: TranslateViewModel = viewModel(factory = TranslateViewModel.Factory)
-    val savedVoiceMs = (voice as? VoiceSampleState.Present)?.durationMs
+    val session by container.account.session.collectAsStateWithLifecycle()
+    val step by container.account.step.collectAsStateWithLifecycle()
 
-    // On first launch the user is taken to record their voice. They are not
-    // taken there again once they have recorded one, or said "not now".
-    // rememberSaveable keeps the screen across a rotation.
-    var screen by rememberSaveable {
-        mutableStateOf(if (voice is VoiceSampleState.None && !container.voiceSetup.skipped) Screen.VOICE else Screen.INTERPRETER)
+    if (session == null) {
+        var signingIn by rememberSaveable { mutableStateOf(false) }
+        // Keyed to "signed out", so a new sign-in starts with fresh fields.
+        val onboarding: OnboardingViewModel = viewModel(key = "onboarding-signed-out", factory = OnboardingViewModel.Factory)
+        val state by onboarding.state.collectAsStateWithLifecycle()
+        if (!signingIn) {
+            WelcomeScreen(onGetStarted = { signingIn = true }, modifier = modifier)
+        } else {
+            BackHandler { signingIn = false }
+            SignInScreen(
+                state = state,
+                googleSignIn = GoogleSignIn(BuildConfig.GOOGLE_WEB_CLIENT_ID),
+                onSignIn = onboarding::onSignInClicked,
+                onBack = { signingIn = false },
+                modifier = modifier,
+            )
+        }
+        return
     }
-    var voiceOpenedFromSettings by rememberSaveable { mutableStateOf(false) }
 
-    when (screen) {
-        Screen.INTERPRETER -> TranslateScreen(
-            viewModel = translate,
-            savedVoiceMs = savedVoiceMs,
-            onSettingsClick = { screen = Screen.SETTINGS },
+    if (step == OnboardingStep.DONE) {
+        MainScreen(addHandle = addHandle, onAddHandleUsed = onAddHandleUsed, modifier = modifier)
+        return
+    }
+
+    val onboarding: OnboardingViewModel = viewModel(key = "onboarding-${session?.profile?.id}", factory = OnboardingViewModel.Factory)
+    val state by onboarding.state.collectAsStateWithLifecycle()
+    val back = { onboarding.onBack(step) }
+    BackHandler { back() }
+    when (step) {
+        OnboardingStep.NAME -> NameScreen(state, onboarding::onNameChanged, onboarding::onNameContinue, back, modifier)
+        OnboardingStep.HANDLE -> HandleScreen(state, onboarding::onHandleChanged, onboarding::onHandleContinue, back, modifier)
+        OnboardingStep.LANGUAGE -> LanguageScreen(state, container.phoneLanguage, onboarding::onLanguagePicked, onboarding::onLanguageContinue, back, modifier)
+        OnboardingStep.VOICE -> VoiceSetupScreen(
+            onDone = { container.account.moveTo(OnboardingStep.DONE) },
             modifier = modifier,
+            step = 4,
+            onBack = back,
         )
-        Screen.SETTINGS -> {
-            BackHandler { screen = Screen.INTERPRETER }
-            SettingsScreen(
-                viewModel = translate,
-                savedVoiceMs = savedVoiceMs,
-                onVoiceClick = {
-                    voiceOpenedFromSettings = true
-                    screen = Screen.VOICE
-                },
-                onBack = { screen = Screen.INTERPRETER },
-                modifier = modifier,
-            )
-        }
-        Screen.VOICE -> {
-            // On first launch, back leaves the app as usual; from settings, it goes back there.
-            BackHandler(enabled = voiceOpenedFromSettings) { screen = Screen.SETTINGS }
-            VoiceSetupScreen(
-                onDone = {
-                    screen = if (voiceOpenedFromSettings) Screen.SETTINGS else Screen.INTERPRETER
-                    voiceOpenedFromSettings = false
-                },
-                modifier = modifier,
-            )
-        }
+        OnboardingStep.DONE -> Unit
     }
 }

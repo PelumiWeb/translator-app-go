@@ -28,6 +28,8 @@ data class PearlColors(
     val youRing: Color,
     val them: Color,
     val onThem: Color,
+    /** For destructive actions only ("Delete account"). Never for errors. */
+    val destructive: Color,
 )
 
 private val Petrol = Color(0xFF0E2426)
@@ -48,6 +50,7 @@ val DarkPearlColors = PearlColors(
     youRing = WarmWhite.copy(alpha = 0.28f),
     them = Color(0xFF7FD1C1),
     onThem = Petrol,
+    destructive = Color(0xFFF2A08A),
 )
 
 /**
@@ -69,6 +72,7 @@ val LightPearlColors = PearlColors(
     youRing = Petrol.copy(alpha = 0.22f),
     them = Color(0xFF1C6E62),
     onThem = WarmWhite,
+    destructive = Color(0xFFA6452C),
 )
 
 val LocalPearlColors = staticCompositionLocalOf { DarkPearlColors }

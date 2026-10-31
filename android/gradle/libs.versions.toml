@@ -13,6 +13,11 @@ composeBom = "2024.09.00"
 coroutines = "1.10.2"
 mlkitTranslate = "17.0.3"
 okhttp = "4.12.0"
+credentials = "1.6.0"
+# 1.2.1 is built with Kotlin 2.4, which the Kotlin bundled with AGP 9 (2.2) cannot read.
+googleid = "1.2.0"
+zxing = "3.5.4"
+codeScanner = "16.1.0"
 serializationJson = "1.9.0"
 
 [libraries]
@@ -39,6 +44,11 @@ mlkit-translate = { group = "com.google.mlkit", name = "translate", version.ref 
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-sse = { group = "com.squareup.okhttp3", name = "okhttp-sse", version.ref = "okhttp" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
+androidx-credentials-play-services = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
+googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "codeScanner" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

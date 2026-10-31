@@ -13,6 +13,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -31,22 +37,30 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ptranslate.core.voice.VoiceSampleRules
 import com.example.ptranslate.ui.components.DotWaveform
 import com.example.ptranslate.ui.components.LinkButton
+import com.example.ptranslate.ui.components.Hint
 import com.example.ptranslate.ui.components.Notice
+import com.example.ptranslate.ui.components.OnboardingHeader
 import com.example.ptranslate.ui.components.PearlIcons
 import com.example.ptranslate.ui.components.PrimaryButton
 import com.example.ptranslate.ui.components.RecordControl
 import com.example.ptranslate.ui.components.RecordControlState
-import com.example.ptranslate.ui.components.RoundIconButton
+import com.example.ptranslate.ui.components.SecondaryButton
+import com.example.ptranslate.ui.onboarding.ONBOARDING_STEPS
 import com.example.ptranslate.ui.theme.Pearl
 import com.example.ptranslate.ui.theme.PearlType
 import com.example.ptranslate.ui.theme.PtranslateTheme
@@ -66,11 +80,16 @@ private val PASSAGE_LINES = listOf(
     "they can still be spoken in my own voice.",
 )
 
-/** Where the user records the sample of their voice that translations are spoken in. */
+/**
+ * Where the user records the sample of their voice that their words are spoken in, and agrees to it being kept.
+ * During sign-up, [step] numbers it and [onBack] goes to the step before.
+ */
 @Composable
 fun VoiceSetupScreen(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
+    step: Int? = null,
+    onBack: (() -> Unit)? = null,
     viewModel: VoiceSetupViewModel = viewModel(factory = VoiceSetupViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -103,6 +122,8 @@ fun VoiceSetupScreen(
         onSkipClick = viewModel::onSkipClicked,
         onDeleteClick = viewModel::onDeleteClicked,
         modifier = modifier,
+        step = step,
+        onBack = onBack,
     )
 }
 
@@ -115,21 +136,31 @@ private fun VoiceSetupContent(
     onSkipClick: () -> Unit,
     onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier,
+    step: Int? = null,
+    onBack: (() -> Unit)? = null,
 ) {
-    Column(
-        modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        when (state.stage) {
-            VoiceSetupStage.INTRO -> Intro(state, onRecordClick, onSkipClick, onDeleteClick)
-            VoiceSetupStage.RECORDING -> Recording(state, onRecordClick, onSkipClick)
-            VoiceSetupStage.REVIEW -> Review(state, onRecordClick, onListenClick, onUseClick, onSkipClick)
+    Column(modifier.fillMaxSize()) {
+        if (step != null) {
+            OnboardingHeader(step = step, total = ONBOARDING_STEPS, onBack = onBack, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         }
-        state.error?.let { Notice(it) }
+        if (state.stage == VoiceSetupStage.REVIEW) {
+            Consent(state, onRecordClick, onListenClick, onUseClick, onSkipClick)
+            return@Column
+        }
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            when (state.stage) {
+                VoiceSetupStage.INTRO -> Intro(state, onRecordClick, onSkipClick, onDeleteClick)
+                else -> Recording(state, onRecordClick, onSkipClick)
+            }
+            state.error?.let { Notice(it) }
+        }
     }
 }
 
@@ -146,9 +177,9 @@ private fun Intro(state: VoiceSetupUiState, onRecordClick: () -> Unit, onSkipCli
     )
     Text(
         if (saved == null) {
-            "Read the lines below aloud, at your normal pace. About 20 seconds."
+            "Read the lines below aloud, at your normal pace. About 20 seconds. You'll hear it back before anything is kept."
         } else {
-            "${saved / 1000} seconds, kept on this phone. Record a new one, keep it, or delete it."
+            "${saved / 1000} seconds. Record a new one, or keep the one you have."
         },
         style = PearlType.body,
         color = colors.fg2,
@@ -160,24 +191,7 @@ private fun Intro(state: VoiceSetupUiState, onRecordClick: () -> Unit, onSkipCli
         label = if (saved == null) "Start recording" else "Record a new one",
         onClick = onRecordClick,
     )
-    if (saved == null) {
-        LinkButton("Not now, use the phone's voice", onClick = onSkipClick)
-    } else {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            LinkButton("Keep it", onClick = onSkipClick)
-            LinkButton("Delete my voice", onClick = onDeleteClick)
-        }
-    }
-    // Said before the user records, in plain words: what happens to it.
-    Text(
-        "The recording stays on this phone. When a translation is spoken, it goes with the text to " +
-            "our server, and from there to Fish Audio, the service that makes the speech. Our server " +
-            "deletes it straight after. You can delete it from this phone at any time.",
-        style = PearlType.meta,
-        color = colors.fg2,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 8.dp),
-    )
+    LinkButton(if (saved == null) "Not now, use the phone's voice" else "Keep the one I have", onClick = onSkipClick)
 }
 
 @Composable
@@ -200,8 +214,12 @@ private fun Recording(state: VoiceSetupUiState, onStopClick: () -> Unit, onSkipC
     LinkButton("Not now, use the phone's voice", onClick = onSkipClick)
 }
 
+/**
+ * After recording: listen back, and agree to the voice being kept, in the
+ * design's plain words: what is kept, what it is for, how to delete it.
+ */
 @Composable
-private fun Review(
+private fun Consent(
     state: VoiceSetupUiState,
     onRecordClick: () -> Unit,
     onListenClick: () -> Unit,
@@ -219,28 +237,71 @@ private fun Review(
             played.snapTo(1f)
         }
     }
+    val seconds = state.recordedMs / 1000
 
-    Text("Recorded", style = PearlType.label, color = colors.fg)
-    Text(clock(state.recordedMs), style = PearlType.timer, color = colors.fg)
-    Text(
-        if (state.problem == null) "Listen back, then keep it." else "This one cannot be kept.",
-        style = PearlType.small,
-        color = colors.fg2,
-    )
-    Spacer(Modifier.height(16.dp))
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        RoundIconButton(
-            icon = PearlIcons.Play,
-            label = if (state.playing) "Stop listening" else "Listen",
-            onClick = onListenClick,
-        )
-        DotWaveform(levels = state.levels, color = colors.you, played = played.value, modifier = Modifier.weight(1f))
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Text(
+                if (state.problem == null) "That's your voice. Keep it?" else "Let's try that again.",
+                style = PearlType.screenTitle,
+                color = colors.fg,
+                modifier = Modifier.padding(top = 8.dp).semantics { heading() },
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.you)
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(colors.onYou)
+                        .clickable(role = Role.Button, onClickLabel = if (state.playing) "Stop listening" else "Listen", onClick = onListenClick),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(if (state.playing) PearlIcons.Pause else PearlIcons.Play, contentDescription = null, tint = colors.you, modifier = Modifier.size(16.dp))
+                }
+                DotWaveform(levels = state.levels, color = colors.onYou, played = played.value, modifier = Modifier.weight(1f))
+                Text(clock(state.recordedMs), style = PearlType.meta, color = colors.onYou)
+            }
+            if (state.problem != null) {
+                Hint(state.problem, icon = PearlIcons.Ear)
+            } else {
+                ConsentBlock("What we keep", "This $seconds-second recording, on our server.")
+                ConsentBlock(
+                    "What it's for",
+                    "Only to speak your own words, when someone plays a message you sent. Fish Audio makes the speech for us.",
+                )
+                ConsentBlock("Delete it any time", "In Profile, under Your voice. Your messages will then use the phone's voice.")
+            }
+            state.error?.let { Notice(it) }
+        }
+        Column(Modifier.padding(top = 12.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (state.problem == null) {
+                PrimaryButton(if (state.keeping) "Keeping…" else "Keep my voice", onClick = onUseClick, enabled = !state.keeping)
+                SecondaryButton("Record again", onClick = onRecordClick, enabled = !state.keeping)
+            } else {
+                PrimaryButton("Record again", onClick = onRecordClick)
+            }
+            LinkButton(if (state.savedMs == null) "Use the phone's voice instead" else "Keep the one I have", onClick = onSkipClick)
+        }
     }
-    state.problem?.let { Notice(it, Modifier.padding(top = 8.dp)) }
-    Spacer(Modifier.height(16.dp))
-    PrimaryButton("Use this recording", onClick = onUseClick, enabled = state.problem == null)
-    LinkButton("Record again", onClick = onRecordClick)
-    LinkButton(if (state.savedMs == null) "Not now, use the phone's voice" else "Cancel, keep my saved voice", onClick = onSkipClick)
+}
+
+@Composable
+private fun ConsentBlock(title: String, body: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = PearlType.messageStrong.copy(fontSize = 17.sp), color = Pearl.colors.fg)
+        Text(body, style = PearlType.message.copy(fontSize = 17.sp, lineHeight = 26.sp), color = Pearl.colors.fg2)
+    }
 }
 
 /**

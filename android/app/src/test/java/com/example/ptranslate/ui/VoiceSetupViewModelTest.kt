@@ -1,5 +1,6 @@
 package com.example.ptranslate.ui
 
+import com.example.ptranslate.core.account.testAccount
 import com.example.ptranslate.core.audio.AudioPlayer
 import com.example.ptranslate.core.audio.AudioRecorder
 import com.example.ptranslate.core.audio.PcmAudio
@@ -87,6 +88,7 @@ class VoiceSetupViewModelTest {
         player = player,
         samples = store,
         preference = preference,
+        account = testAccount(),
         maxRecordingMs = 30_000,
         now = { dispatcher.scheduler.currentTime },
     )

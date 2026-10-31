@@ -39,15 +39,13 @@ import com.example.ptranslate.ui.theme.PearlType
 import java.util.Locale
 
 /**
- * Settings: the user's voice, and under "Advanced" the controls that left the
- * interpreter for being about how it works rather than what it does.
+ * Advanced, opened from the profile: the controls that left the interpreter
+ * for being about how it works rather than what it does.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: TranslateViewModel,
-    savedVoiceMs: Long?,
-    onVoiceClick: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -56,7 +54,7 @@ fun SettingsScreen(
 
     Column(modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Settings", style = PearlType.title) },
+            title = { Text("Advanced", style = PearlType.title) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(PearlIcons.Back, contentDescription = "Back", tint = colors.fg)
@@ -68,21 +66,6 @@ fun SettingsScreen(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            SectionTitle("Your voice")
-            Card {
-                Text(
-                    if (savedVoiceMs != null) {
-                        "Recorded, ${savedVoiceMs / 1000} seconds. Translations are spoken in your voice."
-                    } else {
-                        "Not recorded. Translations are spoken in the phone's voice."
-                    },
-                    style = PearlType.message,
-                    color = colors.fg,
-                )
-                PrimaryButton(if (savedVoiceMs != null) "Record again or delete" else "Record your voice", onClick = onVoiceClick)
-            }
-
-            SectionTitle("Advanced")
             Card {
                 Text("Turn speech into text", style = PearlType.label, color = colors.fg2)
                 TranscriptionRoute.entries.forEach { route ->

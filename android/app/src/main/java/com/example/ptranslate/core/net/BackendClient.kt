@@ -35,11 +35,15 @@ import kotlin.coroutines.resumeWithException
  * @param retryable whether trying again could succeed. True for a connection
  *   problem or a server fault; false when the server understood the request
  *   and refused it, since sending the same thing again gets the same answer.
+ * @param status the HTTP status of a refusal, 0 when the server was not reached.
+ * @param code the server's error code for a refusal, such as "handle_taken".
  */
 class BackendException(
     message: String,
     cause: Throwable? = null,
     val retryable: Boolean = false,
+    val status: Int = 0,
+    val code: String? = null,
 ) : IOException(message, cause)
 
 /** One entry in a job's event stream, already parsed. */
@@ -83,7 +87,10 @@ class ModelDownload(val partial: Boolean, val body: InputStream, private val res
     override fun close() = response.close()
 }
 
-/** The only class that knows the backend's URLs and JSON. */
+/**
+ * Knows the URLs and JSON of jobs, speech and models. [AccountClient] and
+ * [RoomsClient] do the same for accounts and rooms.
+ */
 class BackendClient(baseUrl: String, private val http: OkHttpClient) {
 
     private val baseUrl: HttpUrl = baseUrl.toHttpUrl()
@@ -259,35 +266,46 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
         else -> JobEvent.Unknown // a type added later; older apps skip it
     }
 
-    /**
-     * A server fault is worth retrying; a request the server understood and
-     * refused is not. Nor is 501: the server cannot do this at all, such as
-     * speaking with no voice engine, so asking again gets the same answer.
-     */
-    private fun refusal(result: HttpResult) = BackendException(
-        errorMessage(result.text) ?: "The server answered ${result.code}",
-        retryable = result.code >= 500 && result.code != 501,
-    )
+    private fun refusal(result: HttpResult) = refusal(result, json)
 
-    private fun errorMessage(body: String): String? =
-        try {
-            json.decodeFromString<ErrorResponse>(body).error.message
-        } catch (_: SerializationException) {
-            null
-        }
+    private fun errorMessage(body: String): String? = errorDetail(body, json)?.message
 
     private fun url(path: String): HttpUrl =
         requireNotNull(baseUrl.resolve(path)) { "Invalid path: $path" }
 }
 
+/**
+ * A server fault is worth retrying; a request the server understood and
+ * refused is not. Nor is 501: the server cannot do this at all, such as
+ * speaking with no voice engine, so asking again gets the same answer.
+ */
+internal fun refusal(result: HttpResult, json: Json): BackendException {
+    val detail = errorDetail(result.text, json)
+    return BackendException(
+        detail?.message ?: "The server answered ${result.code}",
+        retryable = result.code >= 500 && result.code != 501,
+        status = result.code,
+        code = detail?.code,
+    )
+}
+
+private fun errorDetail(body: String, json: Json): ErrorResponse.Detail? =
+    try {
+        json.decodeFromString<ErrorResponse>(body).error
+    } catch (_: SerializationException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null // not JSON at all
+    }
+
 /** A response read in full. [body] is bytes because some responses are audio. */
-private class HttpResult(val code: Int, val body: ByteArray) {
+internal class HttpResult(val code: Int, val body: ByteArray) {
     val isSuccessful: Boolean get() = code in 200..299
     val text: String get() = body.decodeToString()
 }
 
 /** Runs the call without blocking a thread, and cancels it with the coroutine. */
-private suspend fun Call.awaitResult(): HttpResult = suspendCancellableCoroutine { continuation ->
+internal suspend fun Call.awaitResult(): HttpResult = suspendCancellableCoroutine { continuation ->
     continuation.invokeOnCancellation { cancel() }
 
     enqueue(object : Callback {
