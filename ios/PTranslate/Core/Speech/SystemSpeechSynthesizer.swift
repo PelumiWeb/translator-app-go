@@ -8,10 +8,15 @@ import Synchronization
 /// turns that into one `async` call per utterance.
 final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthesizerDelegate {
     // AVSpeechSynthesizer is not Sendable, so every call to it goes through this lock. The callers waiting for their
-    // utterance to end have a lock of their own: the synthesizer may report an end from inside a call made under
-    // the first one.
+    // utterance to start and to end have a lock of their own: the synthesizer may report an end from inside a call
+    // made under the first one.
     private let synthesizer: Mutex<AVSpeechSynthesizer>
-    private let waiting = Mutex<[ObjectIdentifier: CheckedContinuation<Void, Never>]>([:])
+    private let waiting = Mutex<[ObjectIdentifier: Waiting]>([:])
+
+    private struct Waiting {
+        let ended: CheckedContinuation<Void, Never>
+        var started: (@Sendable () -> Void)?
+    }
 
     override init() {
         synthesizer = Mutex(AVSpeechSynthesizer())
@@ -19,7 +24,7 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthe
         synthesizer.withLock { $0.delegate = self }
     }
 
-    func speak(_ text: String, language: Language) async throws(SpeechError) {
+    func speak(_ text: String, language: Language, onStart: @escaping @Sendable () -> Void) async throws(SpeechError) {
         guard let voice = Self.voice(for: language) else {
             throw SpeechError(message: "This iPhone has no voice for \(Self.name(of: language))")
         }
@@ -42,7 +47,7 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthe
                     let utterance = AVSpeechUtterance(string: text)
                     utterance.voice = voice
                     // Waiting before speaking starts, so that an utterance that ends at once still finds its caller.
-                    waiting.withLock { $0[ObjectIdentifier(utterance)] = continuation }
+                    waiting.withLock { $0[ObjectIdentifier(utterance)] = Waiting(ended: continuation, started: onStart) }
                     synthesizer.speak(utterance)
                 }
             }
@@ -75,6 +80,14 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthe
 
     // MARK: AVSpeechSynthesizerDelegate
 
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        let started = waiting.withLock { waiting in
+            defer { waiting[ObjectIdentifier(utterance)]?.started = nil }
+            return waiting[ObjectIdentifier(utterance)]?.started
+        }
+        started?()
+    }
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         ended(utterance)
     }
@@ -85,6 +98,6 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthe
     }
 
     private func ended(_ utterance: AVSpeechUtterance) {
-        waiting.withLock { $0.removeValue(forKey: ObjectIdentifier(utterance)) }?.resume()
+        waiting.withLock { $0.removeValue(forKey: ObjectIdentifier(utterance)) }?.ended.resume()
     }
 }

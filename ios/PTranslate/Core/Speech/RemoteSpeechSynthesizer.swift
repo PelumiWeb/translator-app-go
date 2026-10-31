@@ -38,7 +38,7 @@ struct RemoteSpeechSynthesizer: SpeechSynthesizer {
         self.retryDelay = retryDelay
     }
 
-    func speak(_ text: String, language: Language) async throws(SpeechError) {
+    func speak(_ text: String, language: Language, onStart: @escaping @Sendable () -> Void) async throws(SpeechError) {
         let recorded: Data?
         do {
             recorded = try await voiceSample()
@@ -74,6 +74,7 @@ struct RemoteSpeechSynthesizer: SpeechSynthesizer {
         } catch {
             throw SpeechError(message: "The server sent audio that cannot be played")
         }
+        onStart()
         do {
             try await play(audio)
         } catch {

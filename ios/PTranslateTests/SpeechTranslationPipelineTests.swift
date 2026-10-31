@@ -49,6 +49,7 @@ struct SpeechTranslationPipelineTests {
             .transcribed(transcript),
             .translating,
             .translated("[en>es] hello world"),
+            .preparingSpeech,
             .speaking,
             .spoken,
         ])
@@ -67,6 +68,7 @@ struct SpeechTranslationPipelineTests {
             .downloadingLanguages,
             .translating,
             .translated("[en>es] hello world"),
+            .preparingSpeech,
             .speaking,
             .spoken,
         ])
@@ -126,7 +128,7 @@ struct SpeechTranslationPipelineTests {
         #expect(error == nil)
         #expect(Array(events.suffix(3)) == [
             .translated("[en>es] hello world"),
-            .speaking,
+            .preparingSpeech,
             .speechFailed("This iPhone has no voice for Spanish"),
         ])
     }

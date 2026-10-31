@@ -238,10 +238,38 @@ struct TranslateViewModelTests {
 
         #expect(synthesizer.spoken == ["es: [en>es] good morning"])
         #expect(viewModel.status == "Speaking")
+        #expect(viewModel.speaking)
         #expect(viewModel.translation == "[en>es] good morning")
         #expect(viewModel.phase == .working)
 
         synthesizer.finish()
+        await viewModel.work?.value
+
+        #expect(viewModel.status == "Done")
+        #expect(viewModel.phase == .idle)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func saysTheSpeechIsBeingPreparedWithProgressUntilItCanBeHeard() async {
+        let synthesizer = FakeSynthesizer(holdsBeforeStart: true) // a voice still being made on the server
+        let viewModel = makeViewModel(
+            recorder: FakeRecorder(audio: oneSecond),
+            transcriber: saying("good morning"),
+            synthesizer: synthesizer
+        )
+
+        await tap(viewModel)
+        viewModel.recordTapped() // stop
+        await synthesizer.untilSpeaking()
+        for _ in 0..<100 where viewModel.status != "Preparing speech" {
+            await Task.yield()
+        }
+
+        #expect(viewModel.status == "Preparing speech")
+        #expect(!viewModel.speaking) // so the screen shows progress
+        #expect(viewModel.translation == "[en>es] good morning")
+
+        synthesizer.finish() // it can be heard now
         await viewModel.work?.value
 
         #expect(viewModel.status == "Done")

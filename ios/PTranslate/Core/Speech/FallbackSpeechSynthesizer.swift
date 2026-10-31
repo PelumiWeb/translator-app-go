@@ -5,11 +5,11 @@ struct FallbackSpeechSynthesizer: SpeechSynthesizer {
     let preferred: any SpeechSynthesizer
     let fallback: any SpeechSynthesizer
 
-    func speak(_ text: String, language: Language) async throws(SpeechError) {
+    func speak(_ text: String, language: Language, onStart: @escaping @Sendable () -> Void) async throws(SpeechError) {
         do {
-            try await preferred.speak(text, language: language)
+            try await preferred.speak(text, language: language, onStart: onStart)
         } catch {
-            try await fallback.speak(text, language: language)
+            try await fallback.speak(text, language: language, onStart: onStart)
         }
     }
 

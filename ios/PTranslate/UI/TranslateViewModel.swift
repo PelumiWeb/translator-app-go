@@ -25,6 +25,9 @@ final class TranslateViewModel {
     /// Why the result came from where it did, when that needs saying.
     private(set) var routing: String?
 
+    /// True while the translation can be heard; the screen shows progress at other times of a run.
+    private(set) var speaking = false
+
     private(set) var error: String?
     private(set) var route: TranscriptionRoute
 
@@ -234,10 +237,14 @@ final class TranslateViewModel {
             status = "Done"
             // With the same language on both sides there is nothing to show twice.
             translation = translating ? translated : ""
+        case .preparingSpeech:
+            status = "Preparing speech"
         case .speaking:
             status = "Speaking"
+            speaking = true
         case .spoken:
             status = "Done"
+            speaking = false
         case .speechFailed(let reason):
             // The translation is on screen; only the voice is missing.
             status = "Done"
@@ -264,6 +271,7 @@ final class TranslateViewModel {
 
     private func finish(error: String?) {
         phase = .idle
+        speaking = false
         // With no new error, one already on screen stays: a result can be complete and still carry a note, such
         // as "could not be spoken".
         if let error {

@@ -172,7 +172,7 @@ final class FakeTranslator: Translator {
 }
 
 /// Records what it was asked to say. Speaking ends at once, unless `holds`: then it lasts until `stop()` or
-/// `finish()`.
+/// `finish()`. With `holdsBeforeStart` it waits the same way before it can be heard, like a voice still being made.
 final class FakeSynthesizer: SpeechSynthesizer {
     private struct State {
         var spoken: [String] = []
@@ -183,22 +183,34 @@ final class FakeSynthesizer: SpeechSynthesizer {
 
     private let failure: SpeechError?
     private let holds: Bool
+    private let holdsBeforeStart: Bool
     private let state = Mutex(State())
 
-    init(failure: SpeechError? = nil, holds: Bool = false) {
+    init(failure: SpeechError? = nil, holds: Bool = false, holdsBeforeStart: Bool = false) {
         self.failure = failure
         self.holds = holds
+        self.holdsBeforeStart = holdsBeforeStart
     }
 
     var spoken: [String] { state.withLock { $0.spoken } }
     var stops: Int { state.withLock { $0.stops } }
 
-    func speak(_ text: String, language: Language) async throws(SpeechError) {
+    func speak(_ text: String, language: Language, onStart: @escaping @Sendable () -> Void) async throws(SpeechError) {
         if let failure {
             throw failure
         }
         state.withLock { $0.spoken.append("\(language.tag): \(text)") }
-        guard holds else { return }
+        if holdsBeforeStart {
+            await hold()
+        }
+        onStart()
+        if holds {
+            await hold()
+        }
+    }
+
+    /// Waits for `stop()` or `finish()`, after letting `untilSpeaking` know it has begun.
+    private func hold() async {
         await withCheckedContinuation { continuation in
             let waiting = state.withLock { state in
                 state.speaking = continuation

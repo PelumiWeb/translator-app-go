@@ -49,9 +49,9 @@ struct SpeechTranslationPipeline: Sendable {
             events.yield(.translated(translation))
 
             guard speak else { return }
-            events.yield(.speaking)
+            events.yield(.preparingSpeech)
             do throws(SpeechError) {
-                try await synthesizer.speak(translation, language: target)
+                try await synthesizer.speak(translation, language: target, onStart: { events.yield(.speaking) })
                 events.yield(.spoken)
             } catch {
                 events.yield(.speechFailed(error.message))
@@ -70,6 +70,9 @@ enum PipelineEvent: Equatable, Sendable {
 
     case translating
     case translated(String)
+
+    /// The speech is being made, before anything can be heard. Seconds, for a voice made on the server.
+    case preparingSpeech
 
     /// The translation is being said aloud.
     case speaking

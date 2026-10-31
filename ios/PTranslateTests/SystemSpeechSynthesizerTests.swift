@@ -1,5 +1,6 @@
 import AVFAudio
 import Foundation
+import Synchronization
 import Testing
 @testable import PTranslate
 
@@ -10,8 +11,12 @@ struct SystemSpeechSynthesizerTests {
 
     @Test(.timeLimit(.minutes(1)))
     func speaksAndReturnsWhenFinished() async throws {
+        let started = Mutex(0)
+
         // Returning at all, without an error, is the result: a voice was found and the utterance reported done.
-        try await synthesizer.speak("Good morning.", language: .english)
+        try await synthesizer.speak("Good morning.", language: .english, onStart: { started.withLock { $0 += 1 } })
+
+        #expect(started.withLock { $0 } == 1, "reported as started once")
     }
 
     @Test(.timeLimit(.minutes(1)))

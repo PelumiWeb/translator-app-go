@@ -12,6 +12,7 @@ struct TranslateScreen: View {
         TranslateContent(
             phase: viewModel.phase,
             status: viewModel.status,
+            speaking: viewModel.speaking,
             text: viewModel.text,
             translation: viewModel.translation,
             details: viewModel.details,
@@ -44,6 +45,7 @@ struct TranslateScreen: View {
 private struct TranslateContent: View {
     let phase: RecordingPhase
     let status: String
+    let speaking: Bool
     let text: String
     let translation: String
     let details: String?
@@ -110,8 +112,15 @@ private struct TranslateContent: View {
                 Button(phase == .recording ? "Stop" : "Record", action: onRecord)
                     .buttonStyle(.borderedProminent)
                     .disabled(phase == .working)
-                Text(status)
-                    .font(.subheadline.weight(.medium))
+                HStack(spacing: 8) {
+                    // While something is being worked on and nothing can be heard yet.
+                    if phase == .working && !speaking {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Text(status)
+                        .font(.subheadline.weight(.medium))
+                }
                 Text(text)
                     .font(.title3)
                 if !translation.isEmpty {
@@ -262,7 +271,7 @@ private extension TranscriptionRoute {
 
 #Preview {
     TranslateContent(
-        phase: .idle, status: "Done", text: "this is a fake", translation: "esto es falso",
+        phase: .idle, status: "Done", speaking: false, text: "this is a fake", translation: "esto es falso",
         details: "On device, 1.2 s for 4.0 s of audio (0.30x real time), confidence 0.87",
         routing: "Sent to the server: this device was not confident in its own result", error: nil,
         route: .constant(.automatic), source: .constant(.english), target: .constant(.spanish),
