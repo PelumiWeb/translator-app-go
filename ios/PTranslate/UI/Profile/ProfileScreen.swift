@@ -43,10 +43,10 @@ struct ProfileScreen: View {
                 }
             } header: {
                 header("Your voice")
-            }
-            .listRowBackground(Palette.bgRaised) footer: {
+            } footer: {
                 Text("Used only to speak your own words. Without it, your messages use the phone's voice.").font(.pearlSmall)
             }
+            .listRowBackground(Palette.bgRaised)
 
             Section {
                 row("Name", value: viewModel.profile?.displayName, to: .name)

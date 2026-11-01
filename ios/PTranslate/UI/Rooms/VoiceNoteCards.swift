@@ -89,9 +89,9 @@ struct PendingNoteCard: View {
                 // Words arrive one by one; the last few are still being decided, so they are fainter.
                 let words = note.text.split(separator: " ").map(String.init)
                 let settled = max(words.count - 2, 0)
-                (Text(words.prefix(settled).joined(separator: " ") + (settled > 0 ? " " : ""))
-                    + Text(words.dropFirst(settled).joined(separator: " ")).foregroundStyle(Palette.onYou.opacity(0.44))
-                    + Text("▍"))
+                let firm = words.prefix(settled).joined(separator: " ") + (settled > 0 ? " " : "")
+                let faint = Text(words.dropFirst(settled).joined(separator: " ")).foregroundStyle(Palette.onYou.opacity(0.44))
+                Text("\(firm)\(faint)▍")
                     .font(.pearlMessage).foregroundStyle(Palette.onYou)
                 status("Writing down what you said…")
             case .sending:
@@ -214,8 +214,9 @@ private struct SpokenText: View {
             let total = length.map { max($0 / .seconds(1), 0.1) } ?? 1
             let progress = playing ? started.map { min(context.date.timeIntervalSince($0) / total, 1) } ?? 0 : 1
             let lit = max(Int(Double(words.count) * progress), playing ? 1 : words.count)
-            (Text(words.prefix(lit).joined(separator: " "))
-                + Text(lit < words.count ? " " + words.dropFirst(lit).joined(separator: " ") : "").foregroundStyle(Palette.fg.opacity(0.45)))
+            let heard = words.prefix(lit).joined(separator: " ")
+            let coming = Text(lit < words.count ? " " + words.dropFirst(lit).joined(separator: " ") : "").foregroundStyle(Palette.fg.opacity(0.45))
+            Text("\(heard)\(coming)")
                 .font(.pearlMessage).foregroundStyle(Palette.fg)
         }
         .onChange(of: length) { _, length in started = length == nil ? nil : .now }
