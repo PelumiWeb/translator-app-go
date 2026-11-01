@@ -18,7 +18,9 @@ android {
     ndkVersion = "27.1.12297006"
 
     defaultConfig {
-        applicationId = "com.example.ptranslate"
+        // The app's identity in the Play Store, fixed once published (ADR 0021). The
+        // code keeps its own package, `namespace` above.
+        applicationId = "com.pelumi.shinar"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

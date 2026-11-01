@@ -14,7 +14,8 @@ TEST_DB := voice_translation_test
 MODEL      := ggml-base-q5_1.bin
 MODEL_FILE := server/data/models/$(MODEL)
 MODEL_URL  := https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$(MODEL)
-APP_ID     := com.example.ptranslate
+APP_ID     := com.pelumi.shinar
+BUNDLE_ID  := com.pelumi.shinar
 
 .DEFAULT_GOAL := help
 
@@ -133,7 +134,7 @@ emulator-mic: ## Let the emulator hear the Mac's microphone (needed after every 
 .PHONY: android-install
 android-install: device-proxy ## Install the debug build on the connected device and open it
 	cd android && ./gradlew :app:installDebug
-	adb shell am start -n $(APP_ID)/.MainActivity
+	adb shell am start -n $(APP_ID)/com.example.ptranslate.MainActivity
 
 .PHONY: android-device-test
 android-device-test: ## Run the tests that need a device (native code). Removes the app afterwards
@@ -190,7 +191,7 @@ ios-device: ios-whisper ## Build, install and open the app on the connected iPho
 	@app=$$(xcodebuild -project $(IOS_PROJECT) -scheme PTranslate -destination 'generic/platform=iOS' -showBuildSettings 2>/dev/null \
 		| awk -F' = ' '/ TARGET_BUILD_DIR /{dir=$$2} / FULL_PRODUCT_NAME /{name=$$2} END{print dir "/" name}'); \
 	xcrun devicectl device install app --device "$(IOS_DEVICE)" "$$app"
-	xcrun devicectl device process launch --device "$(IOS_DEVICE)" pelumi.PTranslate
+	xcrun devicectl device process launch --device "$(IOS_DEVICE)" $(BUNDLE_ID)
 	@echo "The app on the phone talks to http://$(MAC_HOST):8080"
 
 # --- Whisper model ----------------------------------------------------------

@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.example.ptranslate.R
 import com.example.ptranslate.core.account.Profile
 import com.example.ptranslate.ui.components.Avatar
 import com.example.ptranslate.ui.components.Notice
@@ -65,9 +67,9 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import kotlin.coroutines.resume
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
 
 private enum class AddTab { BY_ID, QR }
 
@@ -86,6 +88,7 @@ fun AddSomeoneSheet(
     var tab by rememberSaveable { mutableStateOf(AddTab.BY_ID) }
     var scanProblem by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val appName = stringResource(R.string.app_name)
     val scope = rememberCoroutineScope()
 
     ModalBottomSheet(
@@ -127,7 +130,7 @@ fun AddSomeoneSheet(
                                     tab = AddTab.BY_ID
                                     onHandleChange(result.handle)
                                 }
-                                ScanResult.NotOurs -> scanProblem = "That code isn't a Timbre ID. Ask them to open Add someone, then QR code."
+                                ScanResult.NotOurs -> scanProblem = "That code isn't a $appName ID. Ask them to open Add someone, then QR code."
                                 ScanResult.Failed -> scanProblem = "The camera couldn't be opened. You can add them by ID instead."
                                 ScanResult.Cancelled -> Unit
                             }
@@ -295,9 +298,9 @@ private suspend fun scanCode(context: Context): ScanResult = suspendCancellableC
         .addOnFailureListener { continuation.resume(ScanResult.Failed) }
 }
 
-/** The ID in a scanned code or opened link: timbre://add/<id>. Anything else is not ours. */
+/** The ID in a scanned code or opened link: shinar://add/<id>. Anything else is not ours. */
 fun handleFromCode(raw: String): String? {
-    val prefix = "timbre://add/"
+    val prefix = ADD_LINK_PREFIX
     if (!raw.startsWith(prefix, ignoreCase = true)) return null
     return raw.substring(prefix.length).trim('/').lowercase().takeIf { it.isNotEmpty() }
 }

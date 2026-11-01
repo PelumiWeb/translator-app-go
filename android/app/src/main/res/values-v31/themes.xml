@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Android 12 and later draw their own splash screen from these. -->
+    <style name="Theme.Ptranslate.Starting">
+        <item name="android:windowSplashScreenBackground">@color/petrol</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_mark</item>
+    </style>
+</resources>

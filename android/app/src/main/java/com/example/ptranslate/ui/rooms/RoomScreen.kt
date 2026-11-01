@@ -45,6 +45,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -56,6 +57,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ptranslate.R
 import com.example.ptranslate.ui.components.Banner
 import com.example.ptranslate.ui.components.DotWaveform
 import com.example.ptranslate.ui.components.Hint
@@ -194,7 +196,7 @@ fun RoomScreen(
                 other == null && state.room != null -> Unit
                 state.micDenied -> Banner(
                     icon = PearlIcons.MicOff,
-                    title = "Timbre needs your microphone",
+                    title = "${stringResource(R.string.app_name)} needs your microphone",
                     body = "To record, allow microphone access in Settings.",
                     action = "Open Settings",
                     onAction = {

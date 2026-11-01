@@ -98,8 +98,9 @@ fun Hint(text: String, modifier: Modifier = Modifier, icon: ImageVector? = Pearl
 }
 
 /**
- * The welcome's two voices: a warm white set of rings for you and a mint one
- * for them, overlapping, each breathing on a three-second loop.
+ * The welcome's two voices: a mint set of rings for them on the left and a
+ * warm white one for you on the right, the logo's circles and order,
+ * overlapping, each breathing on a three-second loop.
  */
 @Composable
 fun TwoVoices(modifier: Modifier = Modifier) {
@@ -125,8 +126,8 @@ fun TwoVoices(modifier: Modifier = Modifier) {
                 drawCircle(color, radius = core, center = center)
             }
             val mid = Offset(size.width / 2, size.height / 2)
-            voice(mid.copy(x = mid.x - gap), colors.you, 0f)
-            voice(mid.copy(x = mid.x + gap), colors.them, 0.5f / 3f)
+            voice(mid.copy(x = mid.x - gap), colors.them, 0.5f / 3f)
+            voice(mid.copy(x = mid.x + gap), colors.you, 0f)
         }
     }
 }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The splash before Android 12, which has no splash screen of its own: petrol with
+     the mark in the middle, the same as Android 12's. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/petrol" />
+    <item
+        android:drawable="@drawable/splash_mark"
+        android:gravity="center" />
+</layer-list>

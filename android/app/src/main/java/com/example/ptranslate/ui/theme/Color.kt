@@ -28,6 +28,8 @@ data class PearlColors(
     val youRing: Color,
     val them: Color,
     val onThem: Color,
+    /** Where the two circles of the logo overlap. */
+    val lens: Color,
     /** For destructive actions only ("Delete account"). Never for errors. */
     val destructive: Color,
 )
@@ -50,6 +52,7 @@ val DarkPearlColors = PearlColors(
     youRing = WarmWhite.copy(alpha = 0.28f),
     them = Color(0xFF7FD1C1),
     onThem = Petrol,
+    lens = Color(0xFFB9E0D3),
     destructive = Color(0xFFF2A08A),
 )
 
@@ -72,6 +75,7 @@ val LightPearlColors = PearlColors(
     youRing = Petrol.copy(alpha = 0.22f),
     them = Color(0xFF1C6E62),
     onThem = WarmWhite,
+    lens = Color(0xFF7FD1C1),
     destructive = Color(0xFFA6452C),
 )
 

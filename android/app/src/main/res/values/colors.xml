@@ -7,4 +7,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- The design's page colour, behind the icon and the splash screen. -->
+    <color name="petrol">#FF0E2426</color>
 </resources>

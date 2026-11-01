@@ -51,7 +51,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
  * profile leads to, cover the bar; with this few, a state value does the job
  * of a navigation library, and back is handled by hand.
  *
- * @param addHandle an ID from a timbre://add link, to offer to add.
+ * @param addHandle an ID from a shinar://add link, to offer to add.
  */
 @Composable
 fun MainScreen(addHandle: String?, onAddHandleUsed: () -> Unit, modifier: Modifier = Modifier) {

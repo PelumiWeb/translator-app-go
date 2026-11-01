@@ -31,14 +31,14 @@
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.Ptranslate">
+            android:theme="@style/Theme.Ptranslate.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <!--
-              The link in a person's QR code, timbre://add/<their ID>. Opening
+              The link in a person's QR code, shinar://add/<their ID>. Opening
               it, from the camera or a message, offers to add them. singleTop
               brings it to the app already open instead of a second copy.
             -->
@@ -48,7 +48,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="timbre" android:host="add" />
+                <data android:scheme="shinar" android:host="add" />
             </intent-filter>
         </activity>
     </application>

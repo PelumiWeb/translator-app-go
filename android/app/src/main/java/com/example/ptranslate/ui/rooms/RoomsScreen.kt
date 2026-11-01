@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ptranslate.R
 import com.example.ptranslate.core.account.Profile
 import com.example.ptranslate.core.rooms.Room
 import com.example.ptranslate.ui.components.Avatar
@@ -54,7 +55,7 @@ import com.example.ptranslate.ui.theme.PearlType
 
 /**
  * The people the user talks with. [addHandle] is an ID from a link
- * (timbre://add/...) to look up in the "Add someone" sheet straight away.
+ * (shinar://add/...) to look up in the "Add someone" sheet straight away.
  */
 @Composable
 fun RoomsScreen(
@@ -230,12 +231,15 @@ private fun EmptyRooms(me: Profile?, onAdd: () -> Unit, onShare: () -> Unit) {
     }
 }
 
+/** The start of the link in a person's QR code and in what they share. The scheme is in the manifest too. */
+internal const val ADD_LINK_PREFIX = "shinar://add/"
+
 /** The link in a person's QR code and in what they share: opening it offers to add them. */
-fun addLink(handle: String) = "timbre://add/$handle"
+fun addLink(handle: String) = ADD_LINK_PREFIX + handle
 
 /** Shares the user's ID through Android's share sheet. */
 fun shareId(context: Context, me: Profile) {
-    val text = "Talk to me on Timbre, in your own language: my ID is @${me.handle}\n${addLink(me.handle)}"
+    val text = "Talk to me on ${context.getString(R.string.app_name)}, in your own language: my ID is @${me.handle}\n${addLink(me.handle)}"
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
     context.startActivity(Intent.createChooser(send, "Share my ID"))
 }

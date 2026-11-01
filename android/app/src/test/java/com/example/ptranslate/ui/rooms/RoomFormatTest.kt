@@ -48,8 +48,8 @@ class RoomFormatTest {
 
     @Test
     fun `a scanned code gives an ID only when it is ours`() {
-        assertEquals("rosa.lm", handleFromCode("timbre://add/Rosa.LM"))
+        assertEquals("rosa.lm", handleFromCode("shinar://add/Rosa.LM"))
         assertNull(handleFromCode("https://example.com/rosa"))
-        assertNull(handleFromCode("timbre://add/"))
+        assertNull(handleFromCode("shinar://add/"))
     }
 }

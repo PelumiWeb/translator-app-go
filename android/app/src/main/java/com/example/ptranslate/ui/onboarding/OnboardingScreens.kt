@@ -57,6 +57,7 @@ import com.example.ptranslate.ui.components.OnboardingHeader
 import com.example.ptranslate.ui.components.PearlIcons
 import com.example.ptranslate.ui.components.PearlTextField
 import com.example.ptranslate.ui.components.PrimaryButton
+import com.example.ptranslate.ui.components.Lockup
 import com.example.ptranslate.ui.components.SuggestionChip
 import com.example.ptranslate.ui.components.TwoVoices
 import com.example.ptranslate.ui.components.localName
@@ -73,7 +74,7 @@ const val ONBOARDING_STEPS = 4
 fun WelcomeScreen(onGetStarted: () -> Unit, modifier: Modifier = Modifier) {
     val colors = Pearl.colors
     Column(modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp)) {
-        Text("timbre", style = PearlType.headline.copy(fontSize = 18.sp), color = colors.fg)
+        Lockup()
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             TwoVoices()
         }

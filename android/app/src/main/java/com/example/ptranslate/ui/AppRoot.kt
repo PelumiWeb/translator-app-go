@@ -27,7 +27,7 @@ import com.example.ptranslate.ui.onboarding.WelcomeScreen
  * the app. The account is the one source of truth, so signing out or a
  * session the server ended brings them back to the welcome from anywhere.
  *
- * @param addHandle an ID from a timbre://add link, offered once signed up.
+ * @param addHandle an ID from a shinar://add link, offered once signed up.
  */
 @Composable
 fun AppRoot(addHandle: String?, onAddHandleUsed: () -> Unit, modifier: Modifier = Modifier) {

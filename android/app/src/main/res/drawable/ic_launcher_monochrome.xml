@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one-colour mark for themed icons: both circles in one path, so even-odd
+     filling knocks the overlap out, as the logo's one-colour version does. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.5125"
+        android:scaleY="0.5125"
+        android:translateX="54"
+        android:translateY="54">
+        <group
+            android:translateX="-60"
+            android:translateY="-41">
+            <path
+                android:pathData="M8,62L112,62"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeLineCap="round"
+                android:strokeWidth="2.5" />
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:fillType="evenOdd"
+                android:pathData="M24,40a22,22 0 1,0 44,0a22,22 0 1,0 -44,0M52,40a22,22 0 1,0 44,0a22,22 0 1,0 -44,0" />
+        </group>
+    </group>
+</vector>

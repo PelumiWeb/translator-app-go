@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">Ptranslate</string>
+    <!-- The one place the app's name is written; every screen reads it from here, since the
+         name waits on a trademark check (ADR 0021). -->
+    <string name="app_name">Shinar</string>
 </resources>
