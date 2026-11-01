@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The people the user talks with. `addHandle` is an ID from a link (timbre://add/...) to look up in the "Add
+/// The people the user talks with. `addHandle` is an ID from a link (shinar://add/...) to look up in the "Add
 /// someone" sheet straight away.
 struct RoomsScreen: View {
     let viewModel: RoomsViewModel
@@ -122,7 +122,7 @@ private struct EmptyRooms: View {
                 .padding(.top, 10).padding(.bottom, 24)
             Button("Add someone", action: onAdd).buttonStyle(PrimaryButtonStyle())
             if let me, !me.handle.isEmpty {
-                ShareLink(item: addLink(me.handle), message: Text("Talk to me on Timbre, in your own language: my ID is @\(me.handle)")) {
+                ShareLink(item: addLink(me.handle), message: Text(shareMessage(me.handle))) {
                     Text("Share my ID, @\(me.handle)")
                 }
                 .buttonStyle(SecondaryButtonStyle())

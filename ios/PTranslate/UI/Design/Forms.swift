@@ -184,8 +184,8 @@ struct Hint: View {
     }
 }
 
-/// The welcome's two voices: a warm white set of rings for you and a mint one for them, overlapping, each breathing
-/// on a three-second loop. With Reduce Motion, they stand still.
+/// The welcome's two voices: a mint set of rings for them on the left and a warm white one for you on the right, the
+/// logo's circles and order, overlapping, each breathing on a three-second loop. With Reduce Motion, they stand still.
 struct TwoVoices: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -206,8 +206,8 @@ struct TwoVoices: View {
                     }
                     canvas.fill(Path(ellipseIn: CGRect(x: center.x - core, y: center.y - core, width: core * 2, height: core * 2)), with: .color(color))
                 }
-                voice(CGPoint(x: mid.x - 40, y: mid.y), Palette.you, 0)
-                voice(CGPoint(x: mid.x + 40, y: mid.y), Palette.them, 1.0 / 6)
+                voice(CGPoint(x: mid.x - 40, y: mid.y), Palette.them, 1.0 / 6)
+                voice(CGPoint(x: mid.x + 40, y: mid.y), Palette.you, 0)
             }
         }
         .frame(width: 260, height: 180)

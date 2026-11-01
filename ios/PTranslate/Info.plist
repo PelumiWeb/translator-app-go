@@ -4,23 +4,34 @@
 <dict>
 	<key>BackendURL</key>
 	<string>$(BACKEND_URL)</string>
+	<key>CFBundleDisplayName</key>
+	<string>$(APP_NAME)</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>The app records what you say so it can transcribe and translate it.</string>
+	<string>$(APP_NAME) records what you say so it can write it down and translate it.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>The app scans the QR code of someone you want to add.</string>
+	<string>$(APP_NAME) scans the QR code of someone you want to add.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>pelumi.PTranslate.add</string>
+			<string>com.pelumi.shinar.add</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>timbre</string>
+				<string>shinar</string>
 			</array>
 		</dict>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>The app talks to the development server on this network.</string>
+	<string>$(APP_NAME) talks to the development server on this network.</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+		<key>UIImageName</key>
+		<string>LaunchMark</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<false/>
+	</dict>
 	<key>UIUserInterfaceStyle</key>
 	<string>Dark</string>
 	<key>UIAppFonts</key>

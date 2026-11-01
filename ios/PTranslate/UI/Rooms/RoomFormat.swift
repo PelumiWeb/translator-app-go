@@ -1,13 +1,21 @@
 import Foundation
 
+/// The start of the link in a person's QR code and in what they share. The scheme is in Info.plist too.
+private let addPrefix = "shinar://add/"
+
 /// The link in a person's QR code and in what they share: opening it offers to add them.
 func addLink(_ handle: String) -> URL {
-    URL(string: "timbre://add/\(handle)")!
+    URL(string: addPrefix + handle)!
 }
 
-/// The ID in a scanned code or opened link: timbre://add/<id>. Anything else is not ours.
+/// What goes with the link when someone shares their ID.
+func shareMessage(_ handle: String) -> String {
+    "Talk to me on \(Brand.name), in your own language: my ID is @\(handle)"
+}
+
+/// The ID in a scanned code or opened link: shinar://add/<id>. Anything else is not ours.
 func handle(fromCode raw: String) -> String? {
-    let prefix = "timbre://add/"
+    let prefix = addPrefix
     guard raw.lowercased().hasPrefix(prefix) else { return nil }
     let id = raw.dropFirst(prefix.count).trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
     return id.isEmpty ? nil : id

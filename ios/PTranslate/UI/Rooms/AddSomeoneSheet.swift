@@ -46,7 +46,7 @@ struct AddSomeoneSheet: View {
                         tab = .byID
                         viewModel.lookupChanged(handle)
                     } else {
-                        scanProblem = "That code isn't a Timbre ID. Ask them to open Add someone, then QR code."
+                        scanProblem = "That code isn't a \(Brand.name) ID. Ask them to open Add someone, then QR code."
                     }
                 } onCancel: {
                     scanning = false
@@ -98,7 +98,7 @@ struct AddSomeoneSheet: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .padding(.top, 16)
-            ShareLink(item: addLink(me.handle), message: Text("Talk to me on Timbre, in your own language: my ID is @\(me.handle)")) {
+            ShareLink(item: addLink(me.handle), message: Text(shareMessage(me.handle))) {
                 Text("Share my code")
             }
             .buttonStyle(SecondaryButtonStyle())
@@ -120,8 +120,8 @@ private struct PersonCard: View {
                 Avatar(name: person.shownName, size: 52, fill: Palette.bg)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(person.shownName).font(.custom("IBMPlexSans-Medm", size: 18, relativeTo: .title3)).foregroundStyle(Palette.fg)
-                    Text("@\(person.handle) · speaks ").font(.pearlBody).foregroundStyle(Palette.fg2)
-                        + Text(person.lang?.ownName ?? "").font(.pearlBody).foregroundStyle(Palette.them)
+                    let language = Text(person.lang?.ownName ?? "").foregroundStyle(Palette.them)
+                    Text("@\(person.handle) · speaks \(language)").font(.pearlBody).foregroundStyle(Palette.fg2)
                 }
             }
             // Pronouns are not known, so the sentence is written around them.

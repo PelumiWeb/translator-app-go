@@ -8,7 +8,7 @@ struct AppRoot: View {
     let container: AppContainer
     let translate: TranslateViewModel
     let voiceSetup: VoiceSetupViewModel
-    /// An ID from a timbre://add link, offered once signed up.
+    /// An ID from a shinar://add link, offered once signed up.
     @Binding var addHandle: String?
 
     var body: some View {

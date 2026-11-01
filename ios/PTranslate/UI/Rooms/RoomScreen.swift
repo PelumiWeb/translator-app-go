@@ -111,7 +111,7 @@ struct RoomScreen: View {
             } else if viewModel.micDenied {
                 Banner(
                     systemImage: "mic.slash",
-                    title: "Timbre needs your microphone",
+                    title: "\(Brand.name) needs your microphone",
                     message: "To record, allow microphone access in Settings.",
                     action: "Open Settings"
                 ) {

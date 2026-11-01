@@ -93,8 +93,8 @@ struct RoomsTests {
     }
 
     @Test func aScannedCodeGivesAnIDOnlyWhenItIsOurs() {
-        #expect(handle(fromCode: "timbre://add/Rosa.LM") == "rosa.lm")
+        #expect(handle(fromCode: "shinar://add/Rosa.LM") == "rosa.lm")
         #expect(handle(fromCode: "https://example.com/rosa") == nil)
-        #expect(handle(fromCode: "timbre://add/") == nil)
+        #expect(handle(fromCode: "shinar://add/") == nil)
     }
 }

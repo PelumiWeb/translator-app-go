@@ -10,7 +10,7 @@ struct WelcomeScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("timbre").font(.custom("IBMPlexSans-Medm", size: 18, relativeTo: .headline)).foregroundStyle(Palette.fg)
+            Lockup()
             Spacer()
             TwoVoices().frame(maxWidth: .infinity)
             Spacer()

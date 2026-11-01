@@ -7,8 +7,12 @@ struct PTranslateApp: App {
     private let container: AppContainer
     @State private var translate: TranslateViewModel
     @State private var voiceSetup: VoiceSetupViewModel
-    /// An ID from a timbre://add link that opened the app, waiting to be offered.
+    /// An ID from a shinar://add link that opened the app, waiting to be offered.
     @State private var addHandle: String?
+    /// The launch screen's mark, still showing until the app is ready to be seen.
+    @State private var covering = true
+    /// The intro plays once, on the way to the welcome; anyone already signed in goes straight in.
+    private let playsIntro: Bool
 
     init() {
         let container = AppContainer()
@@ -36,15 +40,28 @@ struct PTranslateApp: App {
                 requestMicrophone: requestMicrophone
             )
         )
+        playsIntro = container.account.session == nil && !UserDefaults.standard.bool(forKey: Self.introSeen)
     }
+
+    private static let introSeen = "introSeen"
 
     var body: some Scene {
         WindowGroup {
-            AppRoot(container: container, translate: translate, voiceSetup: voiceSetup, addHandle: $addHandle)
-                .modifier(LanguagePackDownloads(downloads: container.translationDownloads))
-                .onOpenURL { url in
-                    if let handle = handle(fromCode: url.absoluteString) { addHandle = handle }
+            ZStack {
+                AppRoot(container: container, translate: translate, voiceSetup: voiceSetup, addHandle: $addHandle)
+                if covering {
+                    LaunchCover(playsIntro: playsIntro) {
+                        UserDefaults.standard.set(true, forKey: Self.introSeen)
+                        withAnimation(.easeInOut(duration: 0.25)) { covering = false }
+                    }
+                    .transition(.opacity)
+                    .zIndex(1)
                 }
+            }
+            .modifier(LanguagePackDownloads(downloads: container.translationDownloads))
+            .onOpenURL { url in
+                if let handle = handle(fromCode: url.absoluteString) { addHandle = handle }
+            }
         }
     }
 }

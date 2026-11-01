@@ -24,6 +24,8 @@ enum Palette {
     static let youRing = dynamic(light: petrol.withAlphaComponent(0.22), dark: warmWhite.withAlphaComponent(0.28))
     static let them = dynamic(light: UIColor(hex: 0x1C6E62), dark: UIColor(hex: 0x7FD1C1))
     static let onThem = dynamic(light: warmWhite, dark: petrol)
+    /// Where the two circles of the logo overlap.
+    static let lens = dynamic(light: UIColor(hex: 0x7FD1C1), dark: UIColor(hex: 0xB9E0D3))
     /// For destructive actions only ("Delete account"). Never for errors.
     static let destructive = dynamic(light: UIColor(hex: 0xA6452C), dark: UIColor(hex: 0xF2A08A))
 
