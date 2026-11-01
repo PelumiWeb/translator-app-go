@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	audience    = "pelumi.PTranslate"
+	audience    = "com.pelumi.shinar"
 	appleIssuer = "https://appleid.apple.com"
 )
 

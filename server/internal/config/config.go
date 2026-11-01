@@ -80,7 +80,7 @@ func Load() Config {
 		TranslateEngine:    env("TRANSLATE_ENGINE", ""),
 		GoogleTranslateKey: env("GOOGLE_TRANSLATE_KEY", ""),
 
-		AppleAudience:  env("APPLE_AUDIENCE", "pelumi.PTranslate"),
+		AppleAudience:  env("APPLE_AUDIENCE", "com.pelumi.shinar"),
 		GoogleClientID: env("GOOGLE_CLIENT_ID", ""),
 	}
 }
