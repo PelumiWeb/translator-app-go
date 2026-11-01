@@ -833,6 +833,33 @@ the server.
     recording to play
   - Terms and Privacy Policy are plain text until there are pages to link to
 
+**Design round 3: the name Shinar, the logo and the splash** (arrived and
+built 2026-11-01)
+- The app is called Shinar. The handoff in `docs/design/pearl/` (README,
+  "Logo and splash"; `assets/`, `brand/`) adds the mark, the app icon, the
+  splash screen and a first-launch intro, the mark beside the name on the
+  welcome, and the welcome's two voices in the logo's order: mint (them) on
+  the left, warm white (you) on the right
+- The owner chose the identifier `com.pelumi.shinar` on both phones. The
+  name is written once per phone, the link in QR codes is `shinar://add/`,
+  and the code keeps its names. ADR 0021
+- Both phones: the icon (Android's adaptive, with a one-colour version for
+  themed icons), the launch screen (the mark on petrol), then a cover that
+  starts from that frame: the first time, on the way to the welcome, the
+  1.5-second intro (a tap skips it; with Reduce Motion only the name fades
+  in); otherwise a 250 ms fade into the app
+- Built as designed, with these departures:
+  - Android 8 to 11 get the splash from a window background, not the
+    core-splashscreen library the handoff suggests: the same picture with
+    no new dependency. Android 12 and later use their own splash screen
+  - the intro's mark stays where the splash put it and the name appears
+    under it, so nothing jumps between the splash and the intro; the
+    handoff gives no size for the name there, so it is 40 points
+  - the iPhone icon's dark and tinted versions are left to iOS, which makes
+    them from the icon; the handoff designs only the one
+- Verify: `make android-test`, `make ios-test`; on a phone, delete the old
+  PTranslate app, install, and open it signed out to see the intro
+
 **Checkpoint 13.3: Android, sign-up and profile** (built, 2026-10-31)
 - Sign in with Google through Credential Manager; the session token sealed
   with an Android Keystore key; name, ID (checked as typed, with suggestions
@@ -842,7 +869,9 @@ the server.
 - `GET /v1/handles/{handle}` and `GET /v1/users/{handle}` on the server
 - Waiting on the owner: the Google Cloud project's web client ID, in
   `android/local.properties` as `googleWebClientId=` and in `server/.env` as
-  `GOOGLE_CLIENT_ID=`; until then the Google button says it is not set up
+  `GOOGLE_CLIENT_ID=`, and an Android OAuth client in the same project for
+  `com.pelumi.shinar` with the debug key's SHA-1; until then the Google
+  button says it is not set up
 - Verify: `make android-test`; on a phone, `make android-install`
 
 **Checkpoint 13.4: iOS, sign-up and profile** (built, 2026-10-31)

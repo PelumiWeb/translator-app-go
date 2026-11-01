@@ -4,6 +4,10 @@ Status: approved 2026-10-04. Section 3 (iOS) added and approved 2026-10-14.
 Section 9 (the social product) added 2026-10-31: the direction from milestone
 13 on, which changes some of what sections 1 to 4 say, as noted where it does.
 
+The app is called Shinar (2026-11-01; built as PTranslate, working name
+Timbre). Both phones have the identifier `com.pelumi.shinar`; the code keeps
+its old names (ADR 0021).
+
 ## 1. What the system does
 
 A person records speech on a phone, Android or iPhone. The app transcribes it,
@@ -53,7 +57,8 @@ Two things to notice:
 
 Kotlin, Jetpack Compose, one Gradle module, in `android/`. minSdk 26. Native
 code is built for `arm64-v8a`, which covers phones and the emulator on Apple
-silicon.
+silicon. The application ID is `com.pelumi.shinar`; the code's package
+(`namespace`) is still `com.example.ptranslate` (ADR 0021).
 
 ### 2.1 Core and UI split
 
@@ -281,9 +286,11 @@ follow the Pearl design (`docs/design/pearl`, ADR 0019).
 ## 3. iOS
 
 Added 2026-10-14. Swift 6 and SwiftUI, one Xcode project in `ios/` with one
-app target, `PTranslate`, bundle id `pelumi.PTranslate` (the owner's own
-prefix: installing on an iPhone needs an identifier registered to their Apple
-developer team, which `com.example` cannot be). iOS 26 and later: the owner's
+app target, `PTranslate`. The bundle id was `pelumi.PTranslate` (the owner's
+own prefix: installing on an iPhone needs an identifier registered to their
+Apple developer team, which `com.example` cannot be) and is `com.pelumi.shinar`
+since 2026-11-01 (ADR 0021); the display name comes from the `APP_NAME` build
+setting. iOS 26 and later: the owner's
 iPhone runs it, and Apple's translation can only be used without a screen from
 iOS 26 (section 3.4). whisper.cpp is built for arm64 only, which covers
 iPhones and the simulator on Apple silicon.
@@ -711,7 +718,7 @@ voice, kept until the sender deletes their account (ADR 0020).
 Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 `WORKERS`, `AUDIO_DIR`, `VOICES_DIR`, `MODELS_DIR`, `JOB_LEASE`,
 `SWEEP_INTERVAL`, `VOICE_ENGINE`, `FISH_AUDIO_API_KEY`, `FISH_AUDIO_MODEL`,
-`APPLE_AUDIENCE`, `GOOGLE_CLIENT_ID`, `MESSAGES_DIR`, `TRANSLATE_ENGINE`,
+`APPLE_AUDIENCE` (default `com.pelumi.shinar`), `GOOGLE_CLIENT_ID`, `MESSAGES_DIR`, `TRANSLATE_ENGINE`,
 `GOOGLE_TRANSLATE_KEY`). Secrets live in
 `server/.env`, which git ignores and the Makefile's server targets load.
 Structured logs with `log/slog`, with
@@ -808,6 +815,7 @@ Written in the milestone where the decision is implemented.
 | 0018 | Sign-in and sessions (written) | 13 |
 | 0019 | The Pearl design in both apps (written) | 19 |
 | 0020 | Rooms, message delivery, and Google Cloud Translation (written) | 14 |
+| 0021 | The name Shinar, and the app identifiers (written) | 13 |
 
 ## 8. Known limits
 

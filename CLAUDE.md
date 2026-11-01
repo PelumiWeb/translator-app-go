@@ -1,4 +1,4 @@
-# Voice Translation
+# Shinar (voice translation)
 
 Record speech on a phone, transcribe it, translate it into the listener's
 language, and speak it in the speaker's own voice. Native mobile apps (Android
@@ -15,6 +15,12 @@ The Android app came first. The iOS app was added on 2026-10-14: a native
 Swift app on the same Go server, built to the same design. Milestone 10
 brought it level with Android (2026-10-29); every phone feature is built on
 both. The owner has a paid Apple Developer account (2026-10-31).
+
+The app is called Shinar (2026-11-01). Its identifier on both phones is
+`com.pelumi.shinar`; the code keeps its old names (the Kotlin package
+`com.example.ptranslate`, the Xcode target `PTranslate`). The name is written
+once per phone, behind a constant, until its trademark check is done
+(ADR 0021).
 
 Read `docs/architecture.md` for the design and `docs/plan.md` for the current
 milestone before starting any work.
@@ -183,8 +189,9 @@ After cloning, fetch whisper.cpp: `git submodule update --init`.
 Postgres is a local Homebrew install (`postgresql@16`), not Docker: the dev
 machine is short on disk and RAM. For the same reason, run the Android
 emulator or the iOS simulator, never both at once. `make help` lists every
-target. The Android project lives in `android/` (package
-`com.example.ptranslate`); open that folder in Android Studio. The iOS project
+target. The Android project lives in `android/` (application ID
+`com.pelumi.shinar`, code package `com.example.ptranslate`); open that folder
+in Android Studio. The iOS project
 lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 
 | Command | What it does |

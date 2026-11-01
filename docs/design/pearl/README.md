@@ -1,4 +1,10 @@
-# Handoff: Timbre (working name, was PTranslate). Visual direction "Lagoon / Pearl"
+# Handoff: Shinar (formerly "Timbre" / PTranslate). Visual direction "Lagoon / Pearl"
+
+## ⚠ Round 3 update: the app is now called **Shinar**
+- **Rename everywhere.** Replace every "Timbre" and "PTranslate" with **Shinar**: app display name, bundle/package names, strings, permission prompts (e.g. "Shinar needs your microphone") and store listings. In sentences write "Shinar". The wordmark is always lowercase "shinar".
+- **Where the name comes from:** Genesis 11:2. Shinar is the plain where everyone still shared one language before Babel scattered them. The app reverses the scattering.
+- **Logo and splash are designed:** see `Shinar Brand.dc.html`, `assets/` and `screenshots/brand/`. The full spec is in "Logo and splash (round 3)" near the end of this file.
+- **Trademark:** a quick web search found no conflicting translation or voice app. A formal clearance (USPTO/EUIPO/WIPO, classes 9, 38, 42) is **still pending**, so keep the name behind a single constant/string resource until legal confirms.
 
 ## Overview
 This is the chosen visual direction for a voice-translation app. You speak in your language and the other person hears it in theirs, in your own voice. The full product brief is in `brief.md`; it covers product, platforms, the "core moment" steps, error copy and the v1 screen list.
@@ -8,14 +14,13 @@ This package covers the **approved style direction** and three key screens:
 2. Conversation with voice notes (their note played, my note preparing, mic idle)
 3. Interpreter (preparing-voice state). This one was designed in an earlier round; restyle it with the Pearl rules below.
 
-**Update (round 2):** `Timbre v1 Screens.dc.html` adds the remaining v1 screens, every voice-note state, and the error/notice styles. See the "v1 screens" section near the end of this README.
+**Update (round 2):** `Shinar v1 Screens.dc.html` adds the remaining v1 screens, every voice-note state, and the error/notice styles. See the "v1 screens" section near the end of this README.
 
 Still not designed:
 - the speech-model download step (onboarding step 5)
 - light mode
 - Android-specific frames
 - the Pearl recolour of the interpreter
-- the app icon
 
 ## About the design files
 The files in this bundle are **design references created in HTML**. They are prototypes that show the intended look, not production code. The job is to recreate them natively:
@@ -234,9 +239,9 @@ MessageStatus (mine): sending | translating | preparingVoice | delivered | faile
 
 ## Assets
 - Icons: Lucide-style outlines (mic, play, chevron-left, arrow-left-right, volume-2) at 1.5–1.75 stroke. In production use SF Symbols on iOS and Material Symbols (Outlined) on Android.
-- No imagery. App icon and wordmark are not designed yet.
+- No imagery. For the logo, app icon and splash screen, see `Shinar Brand.dc.html` and `assets/`.
 
-## v1 screens (round 2): `Timbre v1 Screens.dc.html`
+## v1 screens (round 2): `Shinar v1 Screens.dc.html`
 All frames are dark, iPhone, 360 pt wide. Screenshots are in `screenshots/v1/`.
 
 ### Shared parts
@@ -250,7 +255,7 @@ All frames are dark, iPhone, 360 pt wide. Screenshots are in `screenshots/v1/`.
 
 ### Screens
 1. **Welcome** (screenshot `01-welcome`)
-   - "timbre" wordmark placeholder at 18/600.
+   - Horizontal lockup: the mark at 40 pt wide plus "shinar" at 20/500, -0.04em.
    - Two-voices animation: a warm-white ring set and a mint ring set, 180 pt each, 80 pt apart so they overlap. Each set has 3 pulsing rings (3 s loop, staggered 1 s, mint offset by 0.5 s) around a 52 pt core.
    - Headline "Talk to anyone. Be heard in your own voice." at 34/500.
    - Sub-line "You speak your language. They hear theirs, in your voice."
@@ -341,7 +346,7 @@ Theirs (a `bgRaised` card, 290 pt):
 There are three forms. None of them uses red, and the copy never blames the person.
 
 1. **Toast:** a top capsule in `bgRaised` with a spinner, for problems that fix themselves: "Connection lost. Reconnecting…"
-2. **Banner:** a `bgRaised` card with an icon, a title, a body and a primary action, used when the person needs to act. Example: "Timbre needs your microphone" / "To record, allow microphone access in Settings." / [Open Settings]. It replaces the mic until permission is granted.
+2. **Banner:** a `bgRaised` card with an icon, a title, a body and a primary action, used when the person needs to act. Example: "Shinar needs your microphone" / "To record, allow microphone access in Settings." / [Open Settings]. It replaces the mic until permission is granted.
 3. **Hint above the mic:** after a failed recording.
    - Silent: "We didn't hear anything. Check nothing is covering the microphone, then try again." The dB figure goes to Advanced and the logs only.
    - No speech: "No words came through. Try again, a little closer to the phone."
@@ -351,8 +356,50 @@ Two more cases are handled in place, not as one of the three forms:
 - **In the message:** "This iPhone has no voice for {language}. The words are all here; only the sound is missing."
 - **In the form:** "@pelumi is taken. These are free:" followed by 3 suggestion chips (capsule, `bgRaised`, 14 pt).
 
+## Logo and splash (round 3): `Shinar Brand.dc.html`
+
+### Mark
+- **Geometry** (viewBox `6 16 108 50`):
+  - Two circles, r = 22, centres at (46, 40) and (74, 40).
+  - Overlap ("lens") path: `M60 23.03A22 22 0 0 1 60 56.97A22 22 0 0 1 60 23.03Z`.
+  - Horizon line from (8, 62) to (112, 62), stroke 2.5, round caps.
+- **Colours on petrol:**
+  - left circle: mint `#7FD1C1` (them)
+  - right circle: warm white `#F3EEE4` (you)
+  - lens: `#B9E0D3`
+  - line: warm white at 50%
+- **Colours on light:** left `#1C6E62`, right `#0E2426`, lens `#7FD1C1`, line petrol at 40%.
+- **One colour:** both circles and the line in a single colour, with the lens knocked out to the background.
+- **Clear space:** one circle radius on every side.
+- **Minimum size:** 20 px tall for the mark, 72 px wide for the lockup.
+- **Wordmark:** "shinar", lowercase, IBM Plex Sans Medium (500), letter-spacing -0.04em. Lockup gap = 0.15 × mark width (horizontal) or 16 pt (stacked).
+- **SVG assets** in `assets/`:
+  - `shinar-mark-on-dark.svg`, `shinar-mark-on-light.svg`, `shinar-mark-mono-white.svg`, `shinar-mark-mono-petrol.svg`
+  - `shinar-app-icon-1024.svg`: iOS icon, full-bleed square. The system applies the corner mask; export a PNG with no transparency.
+  - `shinar-android-adaptive-foreground-432.svg`: the mark sits inside the 66% safe zone. Background layer is solid `#0E2426`. Monochrome themed icon: use the mono-white mark.
+
+### Splash
+- **Launch screen (every cold start):**
+  - Solid `#0E2426` with the mark centred at 135 pt wide. No text.
+  - **iOS:** `UILaunchScreen` in Info.plist (background colour asset + image asset) or a LaunchScreen storyboard.
+  - **Android 12+:** SplashScreen API with `windowSplashScreenBackground = #0E2426`, the mark as `windowSplashScreenAnimatedIcon` and `postSplashScreenTheme`. Use the core-splashscreen compat library for Android 8–11.
+- **Intro (first launch only, about 1.5 s), in SwiftUI / Compose after the system splash:**
+  1. Hold 200 ms.
+  2. The circles move ±9 units apart and the lens fades out (300 ms).
+  3. One ripple ring per circle, scale 1 to 1.6 with opacity 0.6 to 0 (400 ms).
+  4. The circles return and the lens fades in (300 ms).
+  5. The wordmark fades in, rising 8 pt (300 ms).
+  6. A 250 ms cross-fade into Welcome.
+- **Easing:** `cubic-bezier(0.22, 0.61, 0.36, 1)`. The intro must not block input; a tap skips it.
+- **Returning users:** no intro. The launch screen cross-fades straight into Rooms.
+- **Reduce Motion:** skip the parting and ripples; only the wordmark fades in.
+- The Welcome screen's two-voices animation reuses the same two circles and colours.
+
 ## Files
-- `Timbre v1 Screens.dc.html`: round 2, all remaining v1 screens, voice-note states and notices. Open it with `support.js` in the same folder.
+- `Shinar Brand.dc.html`: round 3, logo system and splash screen (open with `support.js`).
+- `assets/`: logo and icon SVGs.
+- `screenshots/brand/`: the logo board and the splash board.
+- `Shinar v1 Screens.dc.html`: round 2, all remaining v1 screens, voice-note states and notices. Open it with `support.js` in the same folder.
 - `screenshots/v1/`: one image per screen plus the two boards (2x).
 - `screenshots/01-record-your-voice.png`: approved look for onboarding voice recording (3c, at 3x). The rings are captured mid-animation.
 - `screenshots/02-conversation.png`: approved look for the conversation (3c).
