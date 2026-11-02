@@ -966,6 +966,32 @@ policy and terms that cover voices, and listings on the App Store and Google
 Play. Before the first outside users, and after milestone 16, since the
 stores require block and report.
 
+**Checkpoint 18.1: iPhone builds to TestFlight** (built 2026-11-02, at the
+owner's request, ahead of the rest of this milestone)
+- A GitHub Actions workflow on every push to `main` that changes the iPhone
+  app, or by hand: the iOS tests, then a signed App Store build uploaded to
+  TestFlight, for testers the owner invites through TestFlight groups. The
+  owner chose GitHub Actions over Xcode Cloud. ADR 0022
+- `make ios-testflight` runs the same upload from a Mac
+- Signed with a distribution certificate and profile kept as secrets; an
+  App Store Connect API key for the upload. The server address is the
+  repository variable `BACKEND_URL`
+- Info.plist answers the encryption question; `PrivacyInfo.xcprivacy` gives
+  the reasons for `UserDefaults` and file attributes
+- Checked here: the workflow parses, and an unsigned Release archive builds
+  with the address passed in, carrying the privacy manifest. Not yet run on
+  GitHub: it needs the owner's set-up (ADR 0022, "Setting it up")
+- Waiting on the owner: the app in App Store Connect, the certificate, the
+  profile, the API key, and the GitHub secrets and variable
+- Testers reach the server only on the owner's Wi-Fi until it is hosted;
+  external TestFlight groups wait for that too
+
+Asked on 2026-11-02 and put off by the owner: telling people when a new
+version is out. Two ways were weighed: our server answering with the latest
+and minimum build for each phone (works on TestFlight and both phones, a
+minimum can force an update), or Apple's public App Store lookup (no server
+work, but iPhone only, App Store releases only, and no minimum).
+
 ---
 
 ## [x] Milestone 19: The design

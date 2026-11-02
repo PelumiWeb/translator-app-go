@@ -34,3 +34,8 @@ xcuserdata/
 
 # Local environment
 .env
+
+# Signing files and API keys (they go in GitHub secrets, ADR 0022)
+*.p8
+*.p12
+*.mobileprovision

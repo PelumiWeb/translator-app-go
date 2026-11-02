@@ -194,6 +194,13 @@ ios-device: ios-whisper ## Build, install and open the app on the connected iPho
 	xcrun devicectl device process launch --device "$(IOS_DEVICE)" $(BUNDLE_ID)
 	@echo "The app on the phone talks to http://$(MAC_HOST):8080"
 
+# Builds for the App Store and uploads to TestFlight. The GitHub workflow
+# (.github/workflows/testflight.yml) runs it; it runs the same here given the
+# signing files and settings the script lists at its top. ADR 0022.
+.PHONY: ios-testflight
+ios-testflight: ios-whisper ## Build for the App Store and upload to TestFlight (signing files: see ios/scripts/testflight.sh)
+	ios/scripts/testflight.sh
+
 # --- Whisper model ----------------------------------------------------------
 
 # A file target: make skips the download when the file already exists.

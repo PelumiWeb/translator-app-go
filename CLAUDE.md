@@ -220,6 +220,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make ios-build` | build the iOS app for the simulator |
 | `make ios-test` | iOS tests on the simulator (`IOS_SIM="..."` picks another one); the Whisper test needs `make model-download` |
 | `make ios-device` | build, install and open the app on the connected iPhone, pointed at this Mac's server (start it first); `MAC_HOST=<ip>` if the `.local` name does not resolve |
+| `make ios-testflight` | build for the App Store and upload to TestFlight; GitHub Actions runs it on pushes to `main` that change `ios/` (ADR 0022 has the set-up) |
 
 The Android app calls `http://localhost:8080`. `adb reverse` forwards that to
 this machine, on the emulator and on a phone over USB alike. The iOS

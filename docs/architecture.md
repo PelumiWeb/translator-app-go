@@ -788,6 +788,13 @@ No DI framework, no Retrofit, no Room.
 No CocoaPods, no third-party Swift packages, no project generator: the owner
 creates the Xcode project, as with the Android one.
 
+**Builds** (*added* 2026-11-02, ADR 0022)
+
+| Dependency | Why |
+| --- | --- |
+| GitHub Actions, the `macos-26` runner, and GitHub's `actions/checkout` | the TestFlight workflow. Signing and the upload are `xcodebuild` and `security`, with no other actions or tools |
+| An App Store Connect API key, a distribution certificate and profile | kept as repository secrets; the key uploads, the certificate signs |
+
 ## 7. Planned ADRs
 
 Written in the milestone where the decision is implemented.
@@ -816,6 +823,7 @@ Written in the milestone where the decision is implemented.
 | 0019 | The Pearl design in both apps (written) | 19 |
 | 0020 | Rooms, message delivery, and Google Cloud Translation (written) | 14 |
 | 0021 | The name Shinar, and the app identifiers (written) | 13 |
+| 0022 | TestFlight builds from GitHub Actions (written) | 18 |
 
 ## 8. Known limits
 
