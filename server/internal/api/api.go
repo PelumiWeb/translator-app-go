@@ -91,9 +91,11 @@ type API struct {
 func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.handleHealth)
-	mux.HandleFunc("POST /v1/jobs", a.handleCreateJob)
+	// Transcribing and speaking cost money (the server's time, Fish Audio),
+	// so a public server does them only for people signed in.
+	mux.HandleFunc("POST /v1/jobs", a.signedIn(a.handleCreateJob))
 	mux.HandleFunc("GET /v1/jobs/{id}/events", a.handleJobEvents)
-	mux.HandleFunc("POST /v1/speech", a.handleCreateSpeech)
+	mux.HandleFunc("POST /v1/speech", a.signedIn(a.handleCreateSpeech))
 	mux.HandleFunc("GET /v1/jobs/{id}/audio", a.handleJobAudio)
 	mux.HandleFunc("POST /v1/sessions/apple", a.handleSignIn(accounts.ProviderApple, a.Apple))
 	mux.HandleFunc("POST /v1/sessions/google", a.handleSignIn(accounts.ProviderGoogle, a.Google))

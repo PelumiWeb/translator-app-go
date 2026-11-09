@@ -39,7 +39,43 @@ func speechRequest(t *testing.T, lang, text string, voice []byte) *http.Request 
 	}
 	req := httptest.NewRequest(http.MethodPost, "/v1/speech", &body)
 	req.Header.Set("Content-Type", form.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+testToken)
 	return req
+}
+
+func TestTranscribingAndSpeakingNeedASignIn(t *testing.T) {
+	tests := []struct {
+		name  string
+		req   func(t *testing.T) *http.Request
+		token string
+	}{
+		{"transcribing, not signed in", func(t *testing.T) *http.Request { return uploadRequest(t, "en", wavBytes(10)) }, ""},
+		{"speaking, not signed in", func(t *testing.T) *http.Request { return speechRequest(t, "es", "hola", wavBytes(10)) }, ""},
+		{"speaking, from an ended session", func(t *testing.T) *http.Request { return speechRequest(t, "es", "hola", wavBytes(10)) }, "made-up"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := newTestAPI()
+			jobs, audio := &fakeJobs{}, &fakeAudio{}
+			a.Jobs, a.Audio = jobs, audio
+			req := tt.req(t)
+			if tt.token == "" {
+				req.Header.Del("Authorization")
+			} else {
+				req.Header.Set("Authorization", "Bearer "+tt.token)
+			}
+
+			rec := httptest.NewRecorder()
+			a.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), `"code":"unauthenticated"`) {
+				t.Errorf("status %d, body %s; want 401 unauthenticated", rec.Code, rec.Body)
+			}
+			if len(audio.keys()) != 0 || len(jobs.synthesized) != 0 {
+				t.Errorf("stored %v and queued %v; want nothing", audio.keys(), jobs.synthesized)
+			}
+		})
+	}
 }
 
 func TestCreateSpeech(t *testing.T) {
@@ -115,7 +151,8 @@ func TestCreateSpeechRejectsBadInput(t *testing.T) {
 		{"missing text", "es", "", wavBytes(10), http.StatusBadRequest, "missing_text"},
 		{"text of only spaces", "es", "   ", wavBytes(10), http.StatusBadRequest, "missing_text"},
 		{"text too long", "es", strings.Repeat("a", maxSpeechChars+1), wavBytes(10), http.StatusBadRequest, "text_too_long"},
-		{"missing voice", "es", "hola", nil, http.StatusBadRequest, "missing_voice"},
+		// No file, and the signed-in user has kept no voice to use instead.
+		{"missing voice", "es", "hola", nil, http.StatusConflict, "no_voice"},
 		{"voice is not a wav", "es", "hola", []byte("ID3 an mp3, honest"), http.StatusBadRequest, "unsupported_audio"},
 		{"voice over the size limit", "es", "hola", wavBytes(8192), http.StatusRequestEntityTooLarge, "voice_too_large"},
 	}

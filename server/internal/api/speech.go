@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/PelumiWeb/translator-app-go/server/internal/accounts"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 )
 
@@ -25,12 +26,12 @@ type createSpeechResponse struct {
 //
 // It accepts multipart/form-data with the "text" to say, its language as
 // "lang", and the voice to say it in: a "voice" file (a WAV sample of the
-// voice to imitate), or, when the request is signed in and has no file, the
-// user's kept voice. Like a transcription, it is queued and answered at once
-// with 202 Accepted: follow events_url for progress, then fetch audio_url.
+// voice to imitate), or, with no file, the signed-in user's kept voice. Like
+// a transcription, it is queued and answered at once with 202 Accepted:
+// follow events_url for progress, then fetch audio_url.
 //
 // The job works on its own copy of the voice and deletes it when it ends.
-func (a *API) handleCreateSpeech(w http.ResponseWriter, r *http.Request) {
+func (a *API) handleCreateSpeech(w http.ResponseWriter, r *http.Request, user accounts.User, _ string) {
 	if !a.CanSpeak {
 		// 501 rather than 503: this is not a passing fault, so asking again
 		// later gets the same answer, and the phones know not to retry it.
@@ -74,7 +75,7 @@ func (a *API) handleCreateSpeech(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key, ok := a.speechVoice(w, r)
+	key, ok := a.speechVoice(w, r, user)
 	if !ok {
 		return
 	}

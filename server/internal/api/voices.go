@@ -167,7 +167,7 @@ func (a *API) deleteVoiceBlob(key string) {
 // key, or answers the request itself and returns false. The voice is the
 // uploaded "voice" file when there is one; otherwise the signed-in user's
 // kept voice, copied, since the job deletes its blob when it ends.
-func (a *API) speechVoice(w http.ResponseWriter, r *http.Request) (string, bool) {
+func (a *API) speechVoice(w http.ResponseWriter, r *http.Request, user accounts.User) (string, bool) {
 	var voice io.Reader
 	if file, _, err := r.FormFile("voice"); err == nil {
 		defer file.Close()
@@ -177,15 +177,6 @@ func (a *API) speechVoice(w http.ResponseWriter, r *http.Request) (string, bool)
 		}
 		voice = file
 	} else {
-		user, _, err := a.sessionUser(r)
-		switch {
-		case errors.Is(err, errNoToken):
-			writeError(w, http.StatusBadRequest, "missing_voice", `the "voice" sample is required`)
-			return "", false
-		case err != nil:
-			a.writeSessionError(w, err)
-			return "", false
-		}
 		kept, err := a.Accounts.Voice(r.Context(), user.ID)
 		switch {
 		case errors.Is(err, accounts.ErrNoVoice):

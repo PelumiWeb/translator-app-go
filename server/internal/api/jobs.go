@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/PelumiWeb/translator-app-go/server/internal/accounts"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 )
 
@@ -33,8 +34,9 @@ type createJobResponse struct {
 // 202 Accepted without waiting for the transcription.
 //
 // An optional Idempotency-Key header makes the request safe to send again:
-// every request with the same key gets the same job.
-func (a *API) handleCreateJob(w http.ResponseWriter, r *http.Request) {
+// every request with the same key gets the same job. Only for people signed
+// in; whose job it is is not recorded.
+func (a *API) handleCreateJob(w http.ResponseWriter, r *http.Request, _ accounts.User, _ string) {
 	// Cap the body before anything reads it. Past the limit, reads fail and
 	// the connection is closed, so a huge upload cannot fill the disk.
 	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUploadBytes)

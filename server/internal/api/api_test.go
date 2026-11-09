@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PelumiWeb/translator-app-go/server/internal/accounts"
 	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 )
@@ -172,7 +173,14 @@ const testJobID = "5b1c0c1e-0000-4000-8000-000000000001"
 
 // newTestAPI returns an API wired to fakes. Tests replace the fields they
 // care about before calling Handler.
+// testToken is the session of the one user newTestAPI knows, for the
+// endpoints that need someone signed in.
+const testToken = "test-session"
+
 func newTestAPI() *API {
+	signedIn := newFakeAccounts()
+	signedIn.users["user-test"] = accounts.User{ID: "user-test", DisplayName: "Test"}
+	signedIn.sessions[testToken] = "user-test"
 	return &API{
 		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		DB:             fakePinger{},
@@ -185,6 +193,7 @@ func newTestAPI() *API {
 		MaxUploadBytes: 1 << 20,
 		Heartbeat:      time.Hour, // effectively off unless a test lowers it
 		CanSpeak:       true,
+		Accounts:       signedIn,
 	}
 }
 

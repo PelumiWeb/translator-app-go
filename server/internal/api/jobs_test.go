@@ -42,6 +42,7 @@ func uploadRequest(t *testing.T, lang string, audio []byte) *http.Request {
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/jobs", &body)
 	req.Header.Set("Content-Type", form.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+testToken)
 	return req
 }
 
@@ -133,6 +134,7 @@ func TestCreateJobRejectsBadInput(t *testing.T) {
 func TestCreateJobRejectsNonMultipartBody(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/jobs", strings.NewReader(`{"audio":"nope"}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+testToken)
 
 	rec := httptest.NewRecorder()
 	newTestAPI().Handler().ServeHTTP(rec, req)

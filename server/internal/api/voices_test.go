@@ -185,7 +185,7 @@ func TestSpeechWithoutAVoiceFile(t *testing.T) {
 		wantStatus int
 		wantCode   string
 	}{
-		{"and not signed in", "", http.StatusBadRequest, "missing_voice"},
+		{"and not signed in", "", http.StatusUnauthorized, "unauthenticated"},
 		{"from an ended session", "made-up", http.StatusUnauthorized, "unauthenticated"},
 		{"from a user with no voice yet", "ada", http.StatusConflict, "no_voice"},
 	}
@@ -195,6 +195,7 @@ func TestSpeechWithoutAVoiceFile(t *testing.T) {
 			req := speechRequest(t, "es", "hola", nil)
 			switch tt.token {
 			case "":
+				req.Header.Del("Authorization")
 			case "ada":
 				req.Header.Set("Authorization", "Bearer "+token)
 			default:
