@@ -28,7 +28,7 @@ struct PrivacyScreen: View {
         ("Your voice", "The recording you made, on our server, with the date you agreed. It is used only to speak your own words "
             + "when someone plays a message you sent. Fish Audio makes the speech for us. It is never given to other people."),
         ("Your messages", "What you record in a room, the words written down from it, its translation, and the translation spoken in "
-            + "your voice. Google Cloud Translation translates the words. They are kept so the people in the room can play them."),
+            + "your voice. Microsoft's Azure AI Translator translates the words. They are kept so the people in the room can play them."),
         ("Deleting", "Delete your voice in Profile, under Your voice: your messages then use the phone's voice. Delete your account, "
             + "and your profile, your voice and everything you said in your rooms are deleted with it."),
     ]
