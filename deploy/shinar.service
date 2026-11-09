@@ -1,0 +1,25 @@
+# The Shinar server, run by systemd: restarted if it stops, given its
+# settings from /etc/shinar/env, and allowed to write only its own folders.
+[Unit]
+Description=Shinar server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=shinar
+Group=shinar
+EnvironmentFile=/etc/shinar/env
+WorkingDirectory=/var/lib/shinar
+ExecStart=/opt/shinar/shinar
+Restart=always
+RestartSec=3
+# On a stop the server finishes its requests and hands its jobs back first.
+TimeoutStopSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/shinar
+
+[Install]
+WantedBy=multi-user.target

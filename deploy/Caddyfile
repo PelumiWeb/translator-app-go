@@ -1,0 +1,6 @@
+# Caddy gets and renews the HTTPS certificate for this name by itself, and
+# passes every request to the server, which listens only on this machine.
+# Event streams are passed through as they come.
+{{HOST}} {
+	reverse_proxy 127.0.0.1:8080
+}

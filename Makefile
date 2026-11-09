@@ -86,6 +86,13 @@ voice-check: ## Ask Fish Audio to speak once (key from server/.env) and play wha
 translate-check: ## Ask Azure AI Translator for a few translations (key from server/.env), English to Yoruba among them
 	cd server && $(SERVER_ENV) go test ./internal/provider/azure -run TestLiveTranslation -count=1 -v
 
+# Builds the server for the host and ships it there over SSH; GitHub Actions
+# does the same on pushes to main (.github/workflows/server.yml). Needs
+# SERVER_HOST, and SERVER_SSH_KEY_PATH for the deploy key. ADR 0023.
+.PHONY: server-ship
+server-ship: ## Build the server for the host and ship it (SERVER_HOST=..., SERVER_SSH_KEY_PATH=...)
+	deploy/ship.sh
+
 .PHONY: server-test
 server-test: ## Run the Go tests (needs `make db-up`)
 	cd server && go test ./...

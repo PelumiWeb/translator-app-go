@@ -32,8 +32,10 @@ xcuserdata/
 *.bin
 *.gguf
 
-# Local environment
+# Local environment, and the host's settings (deploy/env.example is the template)
 .env
+.env.*
+!.env.example
 
 # Signing files and API keys (they go in GitHub secrets, ADR 0022)
 *.p8

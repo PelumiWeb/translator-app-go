@@ -1,0 +1,78 @@
+# Tests the server, then ships it to the host: on every push to main that
+# changes the server or how it is deployed, or by hand from the Actions tab
+# ("Run workflow"). ADR 0023 lists the variable and secrets it reads.
+name: Server
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "deploy/**"
+      - ".github/workflows/server.yml"
+
+# A deploy is never cut short; a newer push waits for it.
+concurrency:
+  group: server
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: voice_translation_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/voice_translation_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Lint
+        working-directory: server
+        run: |
+          go vet ./...
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "Not gofmt'd: $unformatted"; exit 1; fi
+      - name: Test
+        working-directory: server
+        run: go test ./...
+
+  ship:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: SSH
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_HOST_KEY: ${{ secrets.SERVER_HOST_KEY }}
+        run: |
+          : "${SERVER_SSH_KEY:?add the secrets first, as ADR 0023 describes}"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SERVER_SSH_KEY" > ~/.ssh/shinar_deploy
+          chmod 600 ~/.ssh/shinar_deploy
+          # The host's own key, written down at set-up, so a deploy can only
+          # ever reach the real machine.
+          printf '%s\n' "$SERVER_HOST_KEY" >> ~/.ssh/known_hosts
+      - name: Ship
+        env:
+          SERVER_HOST: ${{ vars.SERVER_HOST }}
+        run: SERVER_SSH_KEY_PATH="$HOME/.ssh/shinar_deploy" deploy/ship.sh
