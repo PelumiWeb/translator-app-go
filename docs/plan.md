@@ -913,6 +913,16 @@ the room, each message appears as soon as it is ready.
   `GET /v1/me/events`, a live stream of changes per user over `NOTIFY`
 - `TRANSLATE_ENGINE=fake` for working without a key; `GOOGLE_TRANSLATE_KEY`
   for the real one, waiting on the owner
+- 2026-11-09: Google could not be billed (an expired card stuck on the
+  payments profile), so the owner chose Azure AI Translator on its free tier,
+  beside Google rather than instead of it (ADR 0020, addendum). The owner's
+  key is in `server/.env`; `make translate-check` gave good English to
+  Yoruba, Hausa, Spanish and Chinese, and Yoruba to English
+- Owner, by about 2026-12-09: the Azure free account lasts 30 days. Upgrade
+  it to Pay as you go before then, or Azure switches it off and translation
+  stops. The Translator stays on the free F0 tier, so it still costs nothing
+- The privacy page on both phones names the translator (Microsoft's Azure
+  AI Translator since 2026-11-09); switching engines means changing it too
 - Verify: `make server-test`
 
 **Checkpoints 14.3 and 14.4: rooms on both phones** (built, 2026-10-31)

@@ -719,7 +719,7 @@ Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 `WORKERS`, `AUDIO_DIR`, `VOICES_DIR`, `MODELS_DIR`, `JOB_LEASE`,
 `SWEEP_INTERVAL`, `VOICE_ENGINE`, `FISH_AUDIO_API_KEY`, `FISH_AUDIO_MODEL`,
 `APPLE_AUDIENCE` (default `com.pelumi.shinar`), `GOOGLE_CLIENT_ID`, `MESSAGES_DIR`, `TRANSLATE_ENGINE`,
-`GOOGLE_TRANSLATE_KEY`). Secrets live in
+`GOOGLE_TRANSLATE_KEY`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`). Secrets live in
 `server/.env`, which git ignores and the Makefile's server targets load.
 Structured logs with `log/slog`, with
 the job id on every line that concerns a job.
@@ -749,6 +749,7 @@ in the original spec; the owner approved them on 2026-10-04.
 | `github.com/jackc/pgx/v5` (*added*) | Postgres driver and connection pool. A driver is unavoidable; pgx is the standard one and supports `LISTEN/NOTIFY`. |
 | Fish Audio API (*added* 2026-10-31) | the voice-cloning engine, a paid service (ADR 0010). Called with `net/http` and a small MessagePack encoder of our own: no Go module. |
 | Google Cloud Translation API, basic edition (*added* 2026-10-31) | translates room messages, a paid service (ADR 0020). Called with `net/http`: no Go module. |
+| Azure AI Translator, free tier F0 (*added* 2026-11-09) | translates room messages while Google cannot be billed (ADR 0020, addendum). Called with `net/http`: no Go module. |
 
 No router (Go 1.22+ `ServeMux` covers method and path patterns, so chi is not
 needed), no migration tool (SQL files embedded with `embed`, applied by a small

@@ -1,6 +1,6 @@
 # ADR 0020: Rooms, message delivery, and Google Cloud Translation
 
-Status: accepted, 2026-10-31
+Status: accepted, 2026-10-31; addendum 2026-11-09 (Azure AI Translator)
 
 ## Context
 
@@ -100,3 +100,27 @@ would then have to go back to the server to be spoken in the sender's voice.
   sweep.
 - Group rooms (milestone 20) fit as they are: one rendition and one job per
   language in the room, not per member.
+
+## Addendum, 2026-11-09: Azure AI Translator, for now
+
+Google Cloud Translation could not be turned on: the Google payments
+profile holds an expired card, and Google refuses new cards until it is
+fixed. The owner chose Microsoft's Azure AI Translator in its place, on the
+free F0 tier: 2 million characters a month, about 130 languages including
+Yoruba, Igbo and Hausa, and quality on a par with Google. On F0, Azure stops
+translating for the rest of the month when the allowance is used up rather
+than charging; the paid tier is about $10 per million characters.
+
+The server keeps both engines. A key on its own chooses its engine
+(`AZURE_TRANSLATOR_KEY` with `AZURE_TRANSLATOR_REGION`, or
+`GOOGLE_TRANSLATE_KEY`); with both, `TRANSLATE_ENGINE` says which. Azure's
+key goes in a header, like Google's. Six of the phones' language codes are
+spelled differently by Azure and are mapped (Chinese, Norwegian and Nynorsk,
+Serbian, Mongolian, Tagalog); nine of the phones' languages Azure does not
+have (Latin, Breton, Occitan, Tajik, Yiddish, Sanskrit, Hawaiian, Javanese,
+Sundanese), and a message into or out of one fails to translate, as it would
+with any service that lacks it. The free month running out fails the same
+way, to be retried the next month.
+
+Microsoft, not Google, now sees the text of each message it translates; the
+privacy page and policy must say so.
