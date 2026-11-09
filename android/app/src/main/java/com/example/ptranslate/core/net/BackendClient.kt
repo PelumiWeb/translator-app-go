@@ -89,9 +89,15 @@ class ModelDownload(val partial: Boolean, val body: InputStream, private val res
 
 /**
  * Knows the URLs and JSON of jobs, speech and models. [AccountClient] and
- * [RoomsClient] do the same for accounts and rooms.
+ * [RoomsClient] do the same for accounts and rooms. Transcribing and speaking
+ * carry the session token from [token]: the server does them only for people
+ * signed in.
  */
-class BackendClient(baseUrl: String, private val http: OkHttpClient) {
+class BackendClient(
+    baseUrl: String,
+    private val http: OkHttpClient,
+    private val token: () -> String? = { null },
+) {
 
     private val baseUrl: HttpUrl = baseUrl.toHttpUrl()
 
@@ -119,6 +125,7 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
         val request = Request.Builder()
             .url(url("/v1/jobs"))
             .header("Idempotency-Key", idempotencyKey)
+            .signedIn()
             .post(form)
             .build()
 
@@ -146,6 +153,7 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
         val request = Request.Builder()
             .url(url("/v1/speech"))
             .header("Idempotency-Key", idempotencyKey)
+            .signedIn()
             .post(form)
             .build()
 
@@ -156,6 +164,10 @@ class BackendClient(baseUrl: String, private val http: OkHttpClient) {
         } catch (e: SerializationException) {
             throw BackendException("The server sent an unreadable response", e)
         }
+    }
+
+    private fun Request.Builder.signedIn() = apply {
+        token()?.let { header("Authorization", "Bearer $it") }
     }
 
     /** The audio a finished speech job produced, as a WAV file. */

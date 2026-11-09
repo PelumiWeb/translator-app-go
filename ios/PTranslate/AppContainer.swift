@@ -58,12 +58,12 @@ final class AppContainer {
 
     init(bundle: Bundle = .main) {
         let session = URLSession(configuration: .default)
-        let backend = BackendClient(baseURL: Self.backendURL(in: bundle), session: session)
 
         // Requests on behalf of the signed-in user. The token comes from the account, and a session the server says
-        // has ended is forgotten there. The account is made after the client it uses, so the closures reach it
+        // has ended is forgotten there. The account is made after the clients it uses, so the closures reach it
         // through a box filled in just below.
         let box = AccountBox()
+        let backend = BackendClient(baseURL: Self.backendURL(in: bundle), session: session, token: { await box.account?.token })
         let rest = Rest(
             baseURL: Self.backendURL(in: bundle),
             session: session,

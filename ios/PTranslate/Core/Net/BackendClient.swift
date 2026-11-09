@@ -59,16 +59,25 @@ struct ModelDownload {
 }
 
 /// Knows the URLs and JSON of jobs, speech and models. `AccountClient` and `RoomsClient` do the same for accounts
-/// and rooms.
+/// and rooms. Transcribing and speaking carry the session token from `token`: the server does them only for people
+/// signed in.
 final class BackendClient: Sendable {
     private let baseURL: URL
     private let session: URLSession
+    private let token: @Sendable () async -> String?
 
     /// The session's request timeout is the longest it waits between two pieces of data. The default of 60
     /// seconds suits event streams as well, since the server sends a keep-alive every 15.
-    init(baseURL: URL, session: URLSession) {
+    init(baseURL: URL, session: URLSession, token: @escaping @Sendable () async -> String? = { nil }) {
         self.baseURL = baseURL
         self.session = session
+        self.token = token
+    }
+
+    private func signIn(_ request: inout URLRequest) async {
+        if let token = await token() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
     }
 
     /// Uploads the audio and returns the job's id.
@@ -84,6 +93,7 @@ final class BackendClient: Sendable {
         request.httpMethod = "POST"
         request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
         request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        await signIn(&request)
         request.httpBody = form.body()
 
         let (body, response) = try await send(request)
@@ -110,6 +120,7 @@ final class BackendClient: Sendable {
         request.httpMethod = "POST"
         request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
         request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        await signIn(&request)
         request.httpBody = form.body()
 
         let (body, response) = try await send(request)

@@ -63,7 +63,7 @@ import java.util.concurrent.Executors
  */
 class AppContainer(context: Context) {
     private val http = OkHttpClient()
-    private val backend = BackendClient(BuildConfig.BACKEND_URL, http)
+    private val backend = BackendClient(BuildConfig.BACKEND_URL, http, token = { account.token })
 
     // Requests on behalf of the signed-in user. Its token comes from the
     // account, and a session the server says has ended is forgotten there;
