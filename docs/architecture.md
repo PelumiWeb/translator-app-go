@@ -435,7 +435,7 @@ can be separate processes. Postgres is the only external service.
 ### 4.1 Endpoints
 
 **`POST /v1/jobs`**: `multipart/form-data` with an `audio` part (WAV) and a
-`source_lang` field. The body is limited to 10 MB with `http.MaxBytesReader`.
+`source_lang` field. Signed in only, since 2026-11-09 (ADR 0023). The body is limited to 10 MB with `http.MaxBytesReader`.
 The handler stores the audio, inserts the job and its `queued` event in one
 transaction, and returns `202 Accepted`:
 
@@ -467,8 +467,8 @@ proxies from closing an idle connection.
 
 **`POST /v1/speech`**: `multipart/form-data` with the `text` to say, its
 language as `lang`, and the voice to say it in: a `voice` part (a WAV sample
-of the voice to imitate), or, when the request carries a session and no
-`voice` part, the user's kept voice. Like a transcription it is queued and
+of the voice to imitate), or, with no `voice` part, the user's kept voice.
+Signed in only, since 2026-11-09 (ADR 0023). Like a transcription it is queued and
 answered with `202 Accepted`:
 
 ```json
@@ -724,6 +724,18 @@ Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 Structured logs with `log/slog`, with
 the job id on every line that concerns a job.
 
+### 4.8 Hosting
+
+Since 2026-11-09 (ADR 0023): one Ubuntu 24.04 machine on Azure (B2ats v2,
+South Africa North), with Caddy in front for HTTPS on the machine's Azure
+name and the server under systemd behind it, its files in `/var/lib/shinar`,
+its settings in `/etc/shinar/env` (template `deploy/env.example`); and Azure
+Database for PostgreSQL 18 (flexible server, B1ms) in the same region,
+reachable only from the machine. `deploy/setup.sh` prepares the machine once. GitHub Actions
+(`.github/workflows/server.yml`) tests every push to `main` that changes the
+server and ships it with `deploy/ship.sh`, which `make server-ship` also
+runs.
+
 ## 5. Testing
 
 | Area | How |
@@ -796,6 +808,14 @@ creates the Xcode project, as with the Android one.
 | GitHub Actions, the `macos-26` runner, and GitHub's `actions/checkout` | the TestFlight workflow. Signing and the upload are `xcodebuild` and `security`, with no other actions or tools |
 | An App Store Connect API key, a distribution certificate and profile | kept as repository secrets; the key uploads, the certificate signs |
 
+**Hosting** (*added* 2026-11-09, ADR 0023)
+
+| Dependency | Why |
+| --- | --- |
+| An Azure virtual machine (B2ats v2, Ubuntu 24.04 LTS) and Azure Database for PostgreSQL (flexible server, B1ms) | the server and its database, free for 12 months |
+| Caddy, from Caddy's own apt repository | HTTPS in front of the server, with certificates it gets and renews itself |
+| GitHub's `actions/setup-go`, and the `postgres:18` image as a service | the server workflow: Go at the version in `go.mod`, and a database for the tests |
+
 ## 7. Planned ADRs
 
 Written in the milestone where the decision is implemented.
@@ -825,6 +845,7 @@ Written in the milestone where the decision is implemented.
 | 0020 | Rooms, message delivery, and Google Cloud Translation (written) | 14 |
 | 0021 | The name Shinar, and the app identifiers (written) | 13 |
 | 0022 | TestFlight builds from GitHub Actions (written) | 18 |
+| 0023 | Hosting the server on Azure (written) | 18 |
 
 ## 8. Known limits
 

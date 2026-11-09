@@ -996,6 +996,30 @@ owner's request, ahead of the rest of this milestone)
 - Testers reach the server only on the owner's Wi-Fi until it is hosted;
   external TestFlight groups wait for that too
 
+**Checkpoint 18.2: the server on Azure** (built 2026-11-09, at the owner's
+request, ahead of the rest of this milestone)
+- The owner asked for free hosting, to pay for as it grows, and chose
+  Azure's 12-month free services: a B2ats v2 Ubuntu machine and a managed
+  Postgres 18 (B1ms) in South Africa North. ADR 0023
+- `deploy/`: the one-time set-up (Caddy for HTTPS, the service, folders, the
+  speech model, a firewall, a deploy user), the service and Caddy files, the
+  settings template, and `ship.sh`. `make server-ship`
+- GitHub Actions on every push to `main` that changes the server: lint, the
+  tests against Postgres 18 beside them, then ship over SSH
+- Transcribing and speaking now need a signed-in user, and both phones send
+  their token: a public server would otherwise spend the Fish Audio credit
+  for anyone. Server, Android (163) and iOS (185, 1 skipped) tests pass
+- Checked here: the scripts parse, the workflow is valid, the server builds
+  for Linux
+- Live since 2026-11-09 at
+  `https://shinar-api.southafricanorth.cloudapp.azure.com`: `setup.sh` and
+  the first `make server-ship` ran on the machine, `/healthz` answers over
+  HTTPS (Let's Encrypt), the migrations ran on PostgreSQL 18.6, plain HTTP
+  redirects, and transcribing and speaking answer 401 without a sign-in.
+  The GitHub workflow has not run yet: it needs the secrets
+- Known limits: the files on the machine's disk are not backed up yet; one
+  machine, so a deploy pauses the server for a few seconds
+
 Asked on 2026-11-02 and put off by the owner: telling people when a new
 version is out. Two ways were weighed: our server answering with the latest
 and minimum build for each phone (works on TestFlight and both phones, a

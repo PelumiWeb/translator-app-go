@@ -64,6 +64,7 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 /server    Go service: HTTP API, job queue, workers
 /docs      architecture.md, plan.md, adr/
 /third_party/whisper.cpp   git submodule, pinned to a release tag
+/deploy    the hosted server: one-time set-up, service and Caddy files, ship script (ADR 0023)
 Makefile   common commands for all three
 ```
 
@@ -205,6 +206,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make server-test` | Go tests; queue tests need `make db-up` first |
 | `make server-test-race` | the same with the race detector, each test run 3 times |
 | `make server-lint` | `go vet` and `gofmt -l` |
+| `make server-ship` | build the server for the Azure machine and ship it over SSH; GitHub Actions runs the same on pushes to `main` that change `server/` (ADR 0023) |
 | `make sample-job` | upload a test clip to the running server and stream its events |
 | `make voice-check` | one real request to Fish Audio (key from `server/.env`), then plays what it made |
 | `make translate-check` | a few real translations from Azure AI Translator (key from `server/.env`), English to Yoruba among them |
