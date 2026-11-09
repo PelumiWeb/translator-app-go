@@ -37,13 +37,18 @@ type Config struct {
 	FishAudioModel  string
 
 	// TranslateEngine names the service that translates room messages:
-	// "google" for Google Cloud Translation; "fake", which marks the text
-	// with the language instead, for development; or empty for none, in
-	// which case messages reach only listeners of the language they were
-	// said in. A Google Translate key on its own chooses "google".
+	// "google" for Google Cloud Translation; "azure" for Azure AI
+	// Translator; "fake", which marks the text with the language instead,
+	// for development; or empty for none, in which case messages reach only
+	// listeners of the language they were said in. A key on its own chooses
+	// its engine.
 	TranslateEngine string
 	// GoogleTranslateKey is secret, like the Fish Audio key: server/.env.
 	GoogleTranslateKey string
+	// AzureTranslatorKey is secret too. AzureTranslatorRegion is the
+	// resource's location from its Keys and Endpoint page.
+	AzureTranslatorKey    string
+	AzureTranslatorRegion string
 
 	// AppleAudience is the iOS app's bundle ID, which Sign in with Apple
 	// writes into every identity token it issues for the app.
@@ -79,6 +84,9 @@ func Load() Config {
 
 		TranslateEngine:    env("TRANSLATE_ENGINE", ""),
 		GoogleTranslateKey: env("GOOGLE_TRANSLATE_KEY", ""),
+
+		AzureTranslatorKey:    env("AZURE_TRANSLATOR_KEY", ""),
+		AzureTranslatorRegion: env("AZURE_TRANSLATOR_REGION", "global"),
 
 		AppleAudience:  env("APPLE_AUDIENCE", "com.pelumi.shinar"),
 		GoogleClientID: env("GOOGLE_CLIENT_ID", ""),

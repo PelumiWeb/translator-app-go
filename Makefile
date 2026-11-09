@@ -82,6 +82,10 @@ voice-check: ## Ask Fish Audio to speak once (key from server/.env) and play wha
 	cd server && $(SERVER_ENV) FISH_LIVE_OUT=/tmp/vt-fish.wav go test ./internal/provider/fish -run TestLiveSynthesis -count=1 -v
 	afplay /tmp/vt-fish.wav
 
+.PHONY: translate-check
+translate-check: ## Ask Azure AI Translator for a few translations (key from server/.env), English to Yoruba among them
+	cd server && $(SERVER_ENV) go test ./internal/provider/azure -run TestLiveTranslation -count=1 -v
+
 .PHONY: server-test
 server-test: ## Run the Go tests (needs `make db-up`)
 	cd server && go test ./...

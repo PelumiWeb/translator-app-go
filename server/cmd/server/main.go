@@ -24,6 +24,7 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/internal/config"
 	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider"
+	"github.com/PelumiWeb/translator-app-go/server/internal/provider/azure"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fake"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fish"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/google"
@@ -305,8 +306,17 @@ func run(logger *slog.Logger) error {
 // the language they were said in. A Google key on its own chooses Google.
 func newTranslator(cfg config.Config) (provider.Translator, string, error) {
 	engine := cfg.TranslateEngine
-	if engine == "" && cfg.GoogleTranslateKey != "" {
-		engine = "google"
+	if engine == "" {
+		// A key on its own chooses its engine. With both keys there is no
+		// telling which is meant, so TRANSLATE_ENGINE has to say.
+		switch {
+		case cfg.GoogleTranslateKey != "" && cfg.AzureTranslatorKey != "":
+			return nil, "", errors.New("GOOGLE_TRANSLATE_KEY and AZURE_TRANSLATOR_KEY are both set: choose one with TRANSLATE_ENGINE=google or TRANSLATE_ENGINE=azure")
+		case cfg.GoogleTranslateKey != "":
+			engine = "google"
+		case cfg.AzureTranslatorKey != "":
+			engine = "azure"
+		}
 	}
 	switch engine {
 	case "":
@@ -316,9 +326,14 @@ func newTranslator(cfg config.Config) (provider.Translator, string, error) {
 			return nil, "", errors.New("TRANSLATE_ENGINE=google needs GOOGLE_TRANSLATE_KEY (put it in server/.env)")
 		}
 		return google.Translator{APIKey: cfg.GoogleTranslateKey}, engine, nil
+	case "azure":
+		if cfg.AzureTranslatorKey == "" {
+			return nil, "", errors.New("TRANSLATE_ENGINE=azure needs AZURE_TRANSLATOR_KEY (put it in server/.env)")
+		}
+		return azure.Translator{Key: cfg.AzureTranslatorKey, Region: cfg.AzureTranslatorRegion}, engine, nil
 	case "fake":
 		return fake.Translator{}, engine, nil
 	default:
-		return nil, "", fmt.Errorf("unknown TRANSLATE_ENGINE %q: want google, fake, or nothing for none", cfg.TranslateEngine)
+		return nil, "", fmt.Errorf("unknown TRANSLATE_ENGINE %q: want google, azure, fake, or nothing for none", cfg.TranslateEngine)
 	}
 }
