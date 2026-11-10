@@ -4,8 +4,8 @@
 # one static library for iPhones and one for the simulator (both arm64), with
 # the headers and a module map so Swift can `import whisper`.
 #
-# Does nothing when the xcframework already matches the submodule's commit.
-# ADR 0004 (addendum) has the reasons for the settings.
+# Does nothing when the xcframework already matches the submodule's commit and
+# the settings below. ADR 0004 (addendum) has the reasons for the settings.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -14,13 +14,16 @@ OUT=$ROOT/ios/build
 XCFRAMEWORK=$OUT/whisper.xcframework
 STAMP=$OUT/whisper.commit
 
-# The app's deployment target. iOS 26 runs on the A13 and later, whose CPU has
-# the dot-product and half-precision instructions ggml's fast paths use. Left
-# to itself the compiler would assume the oldest 64-bit iPhone and skip them.
-MIN_IOS=26.0
+# The app's deployment target, and the processor the code is compiled for: the
+# A13 and later, whose CPU has the dot-product and half-precision instructions
+# ggml's fast paths use. Left to itself the compiler would assume the oldest
+# 64-bit iPhone and skip them. iOS 18 also runs on the A12 (iPhone XS and XR),
+# which lacks the dot-product ones; the app never runs Whisper there
+# (WhisperSupport.swift).
+MIN_IOS=18.0
 ARM_ARCH=armv8.4-a+fp16+dotprod
 
-commit=$(git -C "$WHISPER" rev-parse HEAD)
+commit="$(git -C "$WHISPER" rev-parse HEAD) $MIN_IOS $ARM_ARCH"
 if [[ -d $XCFRAMEWORK && -f $STAMP && $(cat "$STAMP") == "$commit" ]]; then
     echo "whisper.xcframework is up to date (whisper.cpp $(git -C "$WHISPER" describe --tags))"
     exit 0

@@ -28,12 +28,18 @@ struct WhisperContextTests {
         }
     }
 
-    // The build script targets the A13, the oldest chip iOS 26 runs on. Without that the compiler assumes a far
-    // older one, and the instructions below, which the quantised model's fast paths use, are left out.
+    // The build script targets the A13. Without that the compiler assumes a far older chip, and the instructions
+    // below, which the quantised model's fast paths use, are left out.
     @Test func isBuiltWithTheFastArmInstructions() {
         let info = WhisperContext.systemInfo
 
         #expect(info.contains("NEON = 1"), "\(info)")
         #expect(info.contains("DOTPROD = 1"), "\(info)")
+    }
+
+    // The simulator runs on the Mac's own chip, which has those instructions, as does every iPhone from the A13 on.
+    // Were this check wrong, every phone would lose on-device transcription.
+    @Test func aProcessorWithThoseInstructionsCountsAsSupported() {
+        #expect(WhisperSupport.processorSupported)
     }
 }

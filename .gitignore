@@ -27,6 +27,13 @@
 # iOS: Xcode's per-user state (open files, breakpoints), and build output
 xcuserdata/
 /ios/build/
+# Google's ML Kit frameworks, downloaded by `make ios-mlkit`, and SwiftPM's own
+# files should the package be opened on its own (the app pins its versions in
+# the Xcode project's Package.resolved)
+/ios/MLKit/Frameworks/
+/ios/MLKit/.build/
+/ios/MLKit/.swiftpm/
+/ios/MLKit/Package.resolved
 
 # Whisper models are downloaded, never committed
 *.bin

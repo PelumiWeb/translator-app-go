@@ -175,6 +175,13 @@ use them; left to itself, the compiler assumes the oldest 64-bit iPhone. A test
 checks that the build reports them. Android cannot do the same, since its
 oldest supported phones lack these instructions.
 
+*Since 2026-11-10 (ADR 0025)*, the app runs from iOS 18, which also runs on the
+A12 of the iPhone XS and XR, without the dot-product instructions. The build
+still targets the A13: building for the A12 would slow every newer iPhone for
+two models from 2018. `WhisperSupport` reads the processor's features, and on a
+phone without them the app never loads Whisper and sends every recording to the
+server.
+
 **Tested on the simulator.** The tests load the model from
 `server/data/models/` and the clip from the submodule, where they already are:
 a simulator can read the Mac's files. Without the model, the transcription

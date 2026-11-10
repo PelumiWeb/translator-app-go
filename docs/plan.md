@@ -1020,6 +1020,36 @@ request, ahead of the rest of this milestone)
 - Known limits: the files on the machine's disk are not backed up yet; one
   machine, so a deploy pauses the server for a few seconds
 
+**Checkpoint 18.3: iPhones from iOS 18, and ML Kit on iOS** (built
+2026-11-10, at the owner's request, ahead of the rest of this milestone)
+- The app needed iOS 26, so anyone who had not updated, and every iPhone XS
+  and XR, could not install it. The owner does not want people to have to
+  update iOS. It now needs iOS 18.0 (ADR 0025)
+- The iPhone translates with ML Kit, as Android does: the same 59 languages,
+  packs of about 35 MB downloaded by the app, no iOS sheet, no screen needed.
+  Apple's translator, `TranslationDownloads` and the root view's download
+  hook are gone (ADR 0024, replacing 0012). The owner approved the
+  dependencies on 2026-11-10
+- `make ios-mlkit` fetches Google's three ML Kit files from Google, checks
+  their SHA-256, and repackages them for Xcode with a simulator copy; the
+  local package `ios/MLKit` links them with GTMSessionFetcher,
+  GoogleDataTransport, GoogleUtilities and ZipArchive (Swift packages) and
+  GoogleToolboxForMac 4.2.1 (built from source). No CocoaPods
+- For iOS 18: `nextChange` in place of `Observations`, a plain `deinit` for
+  the Whisper actor, and the bordered button where iOS 26 has Liquid Glass
+- iPhone XS and XR: their A12 lacks instructions the Whisper build uses, so
+  they never load Whisper and send every recording to the server
+  (`WhisperSupport`); Advanced settings says so
+- Checked here: iOS tests pass on the iOS 26.4 simulator and on the iOS 18.1
+  simulator (187 each, none skipped; ML Kit translates for real in the
+  simulator). An unsigned App Store archive builds with no embedded
+  frameworks, one dSYM and every privacy manifest; the app is 34 MB, about
+  31 MB of it ML Kit
+- Not checked yet: ML Kit on a real iPhone, the TestFlight upload with the
+  new libraries, and any iPhone XS or XR
+- For the store listings (later in this milestone): ML Kit reports usage and
+  diagnostics to Google, not linked to the user, on both phones
+
 Asked on 2026-11-02 and put off by the owner: telling people when a new
 version is out. Two ways were weighed: our server answering with the latest
 and minimum build for each phone (works on TestFlight and both phones, a
@@ -1111,6 +1141,8 @@ for iOS has no build for Apple-silicon simulators (checked in its 8.0.0
 binary), and Xcode 26 no longer runs simulators under Rosetta: with it, the
 whole app would stop running in the simulator. The keyboard of milestone 11
 types the original words; typing the translation may come later.
+Revisited on 2026-11-10: ML Kit on both phones after all, from Google's own
+files with a simulator copy made by our script (ADR 0024, checkpoint 18.3).
 
 Decided on 2026-10-14: an iOS app, native Swift, built next (milestone 10);
 then the rest of milestone 9 on both phones; then voice keyboards on both

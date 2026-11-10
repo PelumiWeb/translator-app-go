@@ -1,7 +1,7 @@
 import Foundation
 
-/// Translates text between two languages. The app depends on this protocol only; Apple's Translation framework is
-/// one implementation of it.
+/// Translates text between two languages. The app depends on this protocol only; Google's ML Kit is one
+/// implementation of it.
 protocol Translator: Sendable {
     /// Every language this translator can translate from and to.
     var supportedLanguages: [Language] { get async }

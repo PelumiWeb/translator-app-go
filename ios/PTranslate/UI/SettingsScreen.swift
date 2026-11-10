@@ -14,41 +14,14 @@ struct AdvancedSettings: View {
 
     var body: some View {
         List {
-            Section {
-                Picker("Turn speech into text", selection: Binding(get: { viewModel.route }, set: { viewModel.routeSelected($0) })) {
-                    ForEach(TranscriptionRoute.allCases, id: \.self) { route in
-                        Text(route.label).tag(route)
-                    }
-                }
-                .pickerStyle(.inline)
-                .labelsHidden()
-                .font(.pearlMessage)
-            } header: {
-                sectionHeader("Turn speech into text")
-            } footer: {
-                Text(viewModel.route.description)
-                    .font(.pearlSmall)
-                    .foregroundStyle(Palette.fg2)
-            }
-            .listRowBackground(Palette.bgRaised)
-
-            Section {
-                ModelStatus(model: viewModel.model, onDownload: viewModel.downloadModelTapped)
-            } header: {
-                sectionHeader("Speech model on this phone")
-            }
-            .listRowBackground(Palette.bgRaised)
-
-            if case .ready = viewModel.model {
+            if viewModel.onDeviceAvailable {
+                onDevice
+            } else {
                 Section {
-                    Text(speedDescription)
+                    Text("On the server. This iPhone's processor is too old for the speech model, so every recording is sent to the server.")
                         .font(.pearlMessage)
-                    if !viewModel.measuringSpeed {
-                        Button("Measure again", action: viewModel.measureSpeedTapped)
-                            .font(.pearlMessage)
-                    }
                 } header: {
-                    sectionHeader("This phone's speed")
+                    sectionHeader("Turn speech into text")
                 }
                 .listRowBackground(Palette.bgRaised)
             }
@@ -72,6 +45,49 @@ struct AdvancedSettings: View {
         .background(Palette.bg)
         .navigationTitle("Advanced")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// The route, the model and its speed, on a phone that can run the model.
+    @ViewBuilder
+    private var onDevice: some View {
+        Section {
+            Picker("Turn speech into text", selection: Binding(get: { viewModel.route }, set: { viewModel.routeSelected($0) })) {
+                ForEach(TranscriptionRoute.allCases, id: \.self) { route in
+                    Text(route.label).tag(route)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            .font(.pearlMessage)
+        } header: {
+            sectionHeader("Turn speech into text")
+        } footer: {
+            Text(viewModel.route.description)
+                .font(.pearlSmall)
+                .foregroundStyle(Palette.fg2)
+        }
+        .listRowBackground(Palette.bgRaised)
+
+        Section {
+            ModelStatus(model: viewModel.model, onDownload: viewModel.downloadModelTapped)
+        } header: {
+            sectionHeader("Speech model on this phone")
+        }
+        .listRowBackground(Palette.bgRaised)
+
+        if case .ready = viewModel.model {
+            Section {
+                Text(speedDescription)
+                    .font(.pearlMessage)
+                if !viewModel.measuringSpeed {
+                    Button("Measure again", action: viewModel.measureSpeedTapped)
+                        .font(.pearlMessage)
+                }
+            } header: {
+                sectionHeader("This phone's speed")
+            }
+            .listRowBackground(Palette.bgRaised)
+        }
     }
 
     private var speedDescription: String {

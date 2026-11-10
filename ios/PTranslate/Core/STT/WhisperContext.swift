@@ -16,7 +16,9 @@ actor WhisperContext {
         let noSpeechProbability: Float?
     }
 
-    private let context: OpaquePointer
+    // nonisolated(unsafe) only so that deinit, which is not isolated, may free it; every other use is in the
+    // actor's methods, one at a time.
+    nonisolated(unsafe) private let context: OpaquePointer
 
     // whisper_full blocks its thread for seconds. Running the actor on a queue of its own keeps that off Swift's
     // shared thread pool, which has one thread per core and is meant for work that does not block.
@@ -30,8 +32,9 @@ actor WhisperContext {
         self.context = context
     }
 
-    // Isolated, so the model is freed on the actor's own queue, never while a call is still using it.
-    isolated deinit {
+    // No call can still be using the model here: an actor's method keeps the actor alive while it runs, so the
+    // last reference cannot go before the call has finished.
+    deinit {
         whisper_free(context)
     }
 
@@ -40,6 +43,11 @@ actor WhisperContext {
     /// - Throws: `TranscriptionError` if the file is missing or is not a Whisper model.
     @concurrent
     static func load(_ model: URL) async throws(TranscriptionError) -> WhisperContext {
+        // Before any of whisper.cpp's code runs: on a processor without the instructions it was built for, it
+        // would stop the app.
+        guard WhisperSupport.processorSupported else {
+            throw .failed("This iPhone's processor cannot run the speech model")
+        }
         let path = model.path(percentEncoded: false)
         guard FileManager.default.isReadableFile(atPath: path) else {
             throw .failed("No model file at \(path)")

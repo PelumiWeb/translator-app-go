@@ -15,7 +15,8 @@ struct TranslateViewModelTests {
         transcriber: any Transcriber,
         translator: FakeTranslator = FakeTranslator(),
         synthesizer: FakeSynthesizer = FakeSynthesizer(),
-        microphoneAllowed: Bool = true
+        microphoneAllowed: Bool = true,
+        onDeviceAvailable: Bool = true
     ) -> TranslateViewModel {
         TranslateViewModel(
             recorder: recorder,
@@ -24,6 +25,7 @@ struct TranslateViewModelTests {
             models: models,
             route: route,
             speed: speed,
+            onDeviceAvailable: onDeviceAvailable,
             requestMicrophone: { microphoneAllowed },
             now: { [clock] in clock.elapsed }
         )
@@ -145,6 +147,25 @@ struct TranslateViewModelTests {
         viewModel.routeSelected(.onDevice)
         #expect(route.current == .cloud)
         #expect(viewModel.route == .cloud)
+    }
+
+    /// An iPhone XS or XR: Whisper cannot run there, so the server is the only route, and there is no model to get.
+    @Test func aPhoneThatCannotRunWhisperKeepsToTheServer() async {
+        route.current = .cloud // as the container sets it on such a phone
+        let viewModel = makeViewModel(
+            recorder: FakeRecorder(audio: oneSecond),
+            transcriber: FakeTranscriber(events: []),
+            onDeviceAvailable: false
+        )
+
+        viewModel.routeSelected(.onDevice)
+        viewModel.routeSelected(.automatic)
+        viewModel.downloadModelTapped()
+
+        #expect(route.current == .cloud)
+        #expect(viewModel.route == .cloud)
+        #expect(viewModel.download == nil)
+        #expect(models.installCalls == 0)
     }
 
     @Test func saysWhyAResultWasSentToTheServer() async {

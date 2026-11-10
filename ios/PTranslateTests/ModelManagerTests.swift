@@ -172,9 +172,11 @@ struct ModelManagerTests {
         let manager = manager()
         let watcher = Task {
             var seen: [ModelState] = []
-            for await state in Observations({ manager.state }) {
+            while true {
+                let state = manager.state
                 seen.append(state)
                 if case .ready = state { break }
+                await nextChange { _ = manager.state }
             }
             return seen
         }

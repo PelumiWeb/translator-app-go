@@ -1,6 +1,6 @@
 # ADR 0012: Translation on iOS
 
-Status: accepted, 2026-10-29 (chosen 2026-10-17, built at checkpoint 10.5)
+Status: superseded by ADR 0024 on 2026-11-10 (accepted 2026-10-29, chosen 2026-10-17, built at checkpoint 10.5)
 
 ## Context
 

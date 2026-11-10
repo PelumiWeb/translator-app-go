@@ -92,7 +92,7 @@ private struct InterpreterContent: View {
                         .foregroundStyle(Palette.fg2)
                         .frame(width: 36, height: 36)
                 }
-                .buttonStyle(.glass)
+                .glassButtonStyle()
                 .buttonBorderShape(.circle)
                 .disabled(!idle)
                 .accessibilityLabel("Settings")

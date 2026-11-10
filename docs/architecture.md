@@ -290,10 +290,11 @@ app target, `PTranslate`. The bundle id was `pelumi.PTranslate` (the owner's
 own prefix: installing on an iPhone needs an identifier registered to their
 Apple developer team, which `com.example` cannot be) and is `com.pelumi.shinar`
 since 2026-11-01 (ADR 0021); the display name comes from the `APP_NAME` build
-setting. iOS 26 and later: the owner's
-iPhone runs it, and Apple's translation can only be used without a screen from
-iOS 26 (section 3.4). whisper.cpp is built for arm64 only, which covers
-iPhones and the simulator on Apple silicon.
+setting. iOS 18 and later since 2026-11-10 (ADR 0025), which reaches every
+iPhone from the XS and XR; until then iOS 26, for Apple's translator
+(ADR 0012). whisper.cpp is built for arm64 only, which covers iPhones and the
+simulator on Apple silicon, and for the A13's instructions, so the A12 of the
+XS and XR never runs it and transcribes on the server (section 3.3).
 
 Everything in section 2 applies unless this section says otherwise: the same
 pipeline and seams, the same fallback triggers and thresholds, the same model
@@ -328,8 +329,8 @@ Android.
 | `Dispatchers` | Swift concurrency. The target's default actor isolation is left at nonisolated, not Xcode's newer main-actor default, so `Core/` assumes no actor and can move into a framework unchanged; screens and view models are `@MainActor` explicitly |
 | `WhisperContext` through JNI | `WhisperContext` calling whisper's C functions directly: Swift imports C headers, so there is no bridge layer to write |
 | a single-thread dispatcher for whisper | `WhisperContext` is an actor on a dispatch queue of its own, so one transcription runs at a time and it never blocks Swift's shared thread pool |
-| whisper.cpp built by Gradle through CMake | a script builds the same submodule with CMake and Ninja into `whisper.xcframework` (iPhone and simulator), git-ignored; on the CPU like Android, compiled for the A13 (ADR 0004 addendum) |
-| ML Kit Translate | Apple's Translation framework (section 3.4) |
+| whisper.cpp built by Gradle through CMake | a script builds the same submodule with CMake and Ninja into `whisper.xcframework` (iPhone and simulator), git-ignored; on the CPU like Android, compiled for the A13 (ADR 0004 addendum). A phone without the A13's instructions (the A12 of the XS and XR) never loads it: `WhisperSupport` reads the processor's features, and such a phone sends every recording to the server, with no route to choose and no model to download (ADR 0025) |
+| ML Kit Translate | ML Kit Translate too, from Google's own pre-built files, fetched and repackaged by a script (section 3.4) |
 | `TextToSpeech` | `AVSpeechSynthesizer`, in the voice for the language's default region. iOS installs its voices with the system, so there is no first-use download to retry (ADR 0008 addendum) |
 | `AudioTrack` | `AVAudioPlayerNode` on an `AVAudioEngine`; the mixer converts 16 kHz to the output's rate |
 | `SpeechSynthesizer.stop()`, a plain function | `async`: the player belongs to the main actor, which another thread reaches only by waiting. The voice store and the player reach `RemoteSpeechSynthesizer` as main-actor closures |
@@ -339,59 +340,50 @@ Android.
 | `ModelManager` with a `StateFlow` | `ModelManager`, `@Observable` on the main actor; the download (read from `URLSession.bytes`) and the checksum run off it |
 | `java.util.zip.Deflater` for the repetition check | zlib's `compress2`, the same algorithm and level, so the ratio is identical |
 | `<files>/models/` | Application Support `models/`, excluded from iCloud backup since it can be downloaded again |
-| `DeviceBenchmark` with `StateFlow`s, started from the app's scope when a model is ready | `DeviceBenchmark`, `@Observable` on the main actor; the container watches the installed model with `Observations` and measures when one appears |
+| `DeviceBenchmark` with `StateFlow`s, started from the app's scope when a model is ready | `DeviceBenchmark`, `@Observable` on the main actor; the container watches the installed model with `nextChange` (built on `withObservationTracking`, since `Observations` needs iOS 26) and measures when one appears |
 | `SharedPreferences` | `UserDefaults` |
 | ViewModel and `StateFlow` | `@Observable` view model classes |
 | JUnit and `MockWebServer` | Swift Testing and a `URLProtocol` stub |
 
 ### 3.4 Translation
 
-Apple's Translation framework is the iPhone's own translator, the one behind
-Apple's Translate app. It runs on the phone, costs nothing, and adds nothing
-to the project. Its language packs are downloaded by iOS, can be managed in
-Settings, and are shared with the Translate app.
+ML Kit, as on Android, since 2026-11-10 (ADR 0024). Until then the iPhone used
+Apple's Translation framework (ADR 0012): 22 languages, without a screen only
+from iOS 26, and language packs iOS downloads itself behind its own sheet.
+With ML Kit both phones offer the same 59 languages and translate the same
+way, the app downloads the packs (31 to 48 MB each) behind its own
+"Downloading language pack", and nothing needs a screen on any iOS version.
 
-Compared with using ML Kit on iOS as well:
+`MLKitTranslator` follows Android's `MlKitTranslator`: the same languages,
+readiness check (both packs downloaded), downloads allowed over mobile data,
+and messages. ML Kit keeps one translator per pair itself, so the class keeps
+none. The real English-to-Spanish test runs in the simulator.
 
-- It covers about 20 languages against ML Kit's 59, so the "To" list on an
-  iPhone is shorter than on Android. The exact list is read from the
-  framework at runtime.
-- iOS asks the user before downloading a language, in its own sheet, so a
-  download starts from a screen. `Core/` translates between installed
-  languages with no screen involved (`TranslationSession(installedSource:target:)`,
-  iOS 26) and reports a pair that is missing; the screen asks iOS for it.
-- ML Kit on iOS is distributed only through CocoaPods, which stops accepting
-  new releases on 2 December 2026. Using it would mean adopting CocoaPods
-  weeks before it freezes.
-- ML Kit for iOS has no build for Apple-silicon simulators: its binary holds
-  an iPhone slice and an Intel-simulator slice only, and its package turns
-  off Apple-silicon simulator builds for the whole app. Xcode 26 no longer
-  runs simulators under Rosetta, so with ML Kit the app would not run in the
-  simulator at all.
+Google publishes ML Kit for iOS only for CocoaPods, as pre-built frameworks
+with no code for the simulator on an Apple-silicon Mac. Neither CocoaPods nor
+anyone else's repackaging is used:
 
-Chosen on 2026-10-17: Apple's Translation framework, for now. The owner
-prefers ML Kit in principle, for the same languages on both phones; the
-simulator problem decided it. ADR 0012 has the reasons.
+- `ios/scripts/fetch-mlkit.sh` (`make ios-mlkit`) downloads MLKitTranslate
+  8.0.0, MLKitNaturalLanguage 10.0.0 and MLKitCommon 14.0.0 from Google's
+  server, checks each against a SHA-256 in the script, and repackages them
+  into `ios/MLKit/Frameworks/` (git-ignored), as xcframeworks of static
+  libraries: Xcode embeds a package's frameworks even when they are static,
+  which would put three empty frameworks in the app.
+- Each holds Google's arm64 iPhone code untouched, and a copy for the
+  simulator: the same machine code, with the platform in each object's
+  build-version load command changed from iOS to the simulator
+  (`retag-for-simulator.py`). The App Store build never contains the copy.
+- The local package `ios/MLKit` links them with the open-source code they
+  call, from those libraries' own Swift packages, at the versions Google's
+  podspecs ask for (pinned in the project's `Package.resolved`), and
+  GoogleToolboxForMac 4.2.1, built from source by the same script, since its
+  Swift package cannot be linked by Xcode.
+- Google's privacy manifest ships in `MLKitTranslate_resource.bundle`, which
+  the app copies and the translator reads its pack list from.
 
-How it is used, from checkpoint 10.5:
-
-- `AppleTranslator` translates through `TranslationSession(installedSource:target:)`,
-  which needs no screen. `prepare` asks `LanguageAvailability` whether the
-  pair is installed. When it is not, it waits on `TranslationDownloads`, a
-  main-actor object in `Core/`, while a view modifier at the app's root
-  (`PTranslateApp.swift`, with the wiring) runs the request through SwiftUI's
-  `translationTask`, where iOS shows its download sheet. The screens in `UI/`
-  see no Translation type. If the user declines, the run fails and the
-  transcript stays, as when a download fails on Android.
-- Apple lists some languages once per region: 38 entries for 22 languages on
-  iOS 26.4. The app offers each language once, as the variant iOS treats as
-  the default (American English, Brazilian Portuguese, simplified Chinese),
-  with the tags Android and Whisper use. Apple's Norwegian, `nb`, is `no`.
-- It does not translate in the simulator. The iOS 26.4 simulator lists the
-  languages, then reports every pair as unsupported and cannot download any
-  (checked 2026-10-29). The app says so there, and translation is checked on
-  an iPhone. ML Kit would have been worse: it stops the whole app building
-  for the simulator.
+It costs about 31 MB in the app (16 MB on Android). ML Kit reports usage and
+diagnostics to Google, not linked to the user, as its privacy manifest
+declares; the store listings must say so on both phones.
 
 ### 3.5 Reaching the server
 
@@ -793,13 +785,15 @@ No DI framework, no Retrofit, no Room.
 | SwiftUI, AVFoundation, CryptoKit, Foundation (`URLSession`) | part of the SDK; nothing to install |
 | AuthenticationServices, Security (Keychain) | part of the SDK; Sign in with Apple and keeping the session token (ADR 0018) |
 | Core Image, VisionKit | part of the SDK; drawing the user's QR code, and scanning someone's |
-| Translation (Apple) | part of the SDK; the iOS translator, chosen 2026-10-17 |
 | whisper.cpp (the same submodule) | the same engine as on Android |
 | CMake and Ninja, through Homebrew | build whisper.cpp into an xcframework. Already installed on the dev machine (CMake 4.0, Ninja 1.12), but new as build tools of this project |
 | Swift Testing | tests; part of Xcode |
+| ML Kit Translate for iOS: MLKitTranslate 8.0.0, MLKitNaturalLanguage 10.0.0, MLKitCommon 14.0.0 (*added* 2026-11-10) | the translator, as on Android (ADR 0024), in place of Apple's Translation framework. Google's pre-built files from `dl.google.com`, fetched and checked by `make ios-mlkit` |
+| Swift packages GTMSessionFetcher 3.x, GoogleDataTransport 10.x (with nanopb and Promises), GoogleUtilities 8.x, ZipArchive 2.x (*added* 2026-11-10) | the open-source code ML Kit calls, at the versions its podspecs ask for, linked by the local package `ios/MLKit` |
+| GoogleToolboxForMac 4.2.1 (*added* 2026-11-10) | three small parts ML Kit calls, built from Google's tagged source by the same script: version 4 has no Swift package, and the later one cannot be linked |
 
-No CocoaPods, no third-party Swift packages, no project generator: the owner
-creates the Xcode project, as with the Android one.
+No CocoaPods and no project generator: the owner creates the Xcode project, as
+with the Android one. The only Swift packages are the ones ML Kit needs.
 
 **Builds** (*added* 2026-11-02, ADR 0022)
 
@@ -834,7 +828,7 @@ Written in the milestone where the decision is implemented.
 | 0010 | Voice-cloning engine: Fish Audio (written) | 9 |
 | 0004 addendum | whisper.cpp on iOS: the build, GPU or CPU | 10 |
 | 0011 | A native iOS app on the same server | 10 |
-| 0012 | Translation on iOS | 10 |
+| 0012 | Translation on iOS (superseded by 0024) | 10 |
 | 0013 | Voice keyboards, and recording for the iPhone keyboard | 11 |
 | 0014 | Voice notes from other apps (not written: milestone 12 was dropped) | 12 |
 | 0015 | From a portfolio piece to a social product (written) | 13 |
@@ -846,6 +840,8 @@ Written in the milestone where the decision is implemented.
 | 0021 | The name Shinar, and the app identifiers (written) | 13 |
 | 0022 | TestFlight builds from GitHub Actions (written) | 18 |
 | 0023 | Hosting the server on Azure (written) | 18 |
+| 0024 | ML Kit on iOS (written) | 18 |
+| 0025 | iOS 18 as the iPhone app's minimum (written) | 18 |
 
 ## 8. Known limits
 
@@ -857,10 +853,9 @@ Written in the milestone where the decision is implemented.
 - ML Kit translation covers about 59 languages and translates through English
   when neither side is English, so quality between two non-English languages is
   modest.
-- On iPhone, Apple's translation covers 22 languages, so the "To" list is
-  shorter than on Android.
-- Apple's translation does not run in the iOS simulator, so translation on
-  iOS can only be seen on an iPhone.
+- ML Kit adds about 31 MB to the iPhone app.
+- On the iPhone XS and XR, speech is always turned into text on the server:
+  the Whisper build needs the A13's instructions.
 - Recordings are limited to 30 seconds.
 - The low-confidence fallback makes the user wait twice: once for the device,
   then for the cloud.
@@ -894,8 +889,8 @@ What changes:
   section 2.10 ends here, and the onboarding screens say so.
 - **Translation on the server, for messages** (milestone 14, ADR 0017). A
   message is translated into its listener's language before it is spoken in
-  the sender's voice, which happens on the server. Apple's translator cannot
-  run on a server, so this needs a translation service.
+  the sender's voice, which happens on the server. The phones' translators
+  cannot run on a server, so this needs a translation service.
 - **A voice note's path.** The sender's phone records and transcribes it, as
   today, and uploads the audio, the transcript and its language. The server
   stores the message, translates the transcript for the listener, speaks the

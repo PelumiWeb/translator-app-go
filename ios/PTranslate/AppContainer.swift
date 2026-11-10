@@ -11,18 +11,18 @@ final class AppContainer {
     /// Downloads the Whisper model from the backend and keeps it in the app's files.
     let models: ModelManager
 
+    /// Whether this phone can run Whisper at all. When it cannot, every recording goes to the server.
+    let onDeviceTranscription = WhisperSupport.processorSupported
+
     /// Which transcriber the next recording uses. The choice on screen sets it.
-    let route = RouteSetting(.automatic)
+    let route = RouteSetting(WhisperSupport.processorSupported ? .automatic : .cloud)
 
     let thresholds = FallbackThresholds()
 
     /// How fast this phone runs the model, measured once per model.
     let speed: any DeviceSpeed
 
-    /// Language pack downloads, which iOS lets only a screen start. The app's root view runs them.
-    let translationDownloads: TranslationDownloads
-
-    let translator: any Translator
+    let translator: any Translator = MLKitTranslator()
 
     /// Says translations aloud in the user's own voice, through the server, or in one of the phone's voices when
     /// that cannot be done.
@@ -112,17 +112,15 @@ final class AppContainer {
         )
         speed = benchmark
         measureWhenReady = Task {
-            for await model in Observations({ models.installedModel }) where model != nil {
-                await benchmark.ensureMeasured()
+            // A phone that cannot run Whisper never measures it (WhisperSupport).
+            guard WhisperSupport.processorSupported else { return }
+            while !Task.isCancelled {
+                if models.installedModel != nil {
+                    await benchmark.ensureMeasured()
+                }
+                await nextChange { _ = models.installedModel }
             }
         }
-
-        let downloads = TranslationDownloads()
-        translationDownloads = downloads
-        let translator = AppleTranslator(download: { source, target in
-            try await downloads.download(from: source, to: target)
-        })
-        self.translator = translator
 
         let (voice, player) = (voice, player)
         let phoneVoice = SystemSpeechSynthesizer()

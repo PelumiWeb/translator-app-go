@@ -166,8 +166,14 @@ IOS_DEST    := platform=iOS Simulator,name=$(IOS_SIM)
 ios-whisper: ## Build whisper.cpp for iOS into ios/build/whisper.xcframework (once, about a minute)
 	ios/scripts/build-whisper.sh
 
+# Google's ML Kit translator, fetched from Google and repackaged for Xcode
+# (ADR 0024). Like the whisper build, it does nothing once it is in place.
+.PHONY: ios-mlkit
+ios-mlkit: ## Fetch Google's ML Kit translator into ios/MLKit/Frameworks (once: 35 MB to download, 120 MB on disk)
+	ios/scripts/fetch-mlkit.sh
+
 .PHONY: ios-build
-ios-build: ios-whisper ## Build the iOS app for the simulator
+ios-build: ios-whisper ios-mlkit ## Build the iOS app for the simulator
 	xcodebuild build -project $(IOS_PROJECT) -scheme PTranslate -destination '$(IOS_DEST)' -quiet
 
 # The Whisper tests read the model from server/data/models; without it they
@@ -177,7 +183,7 @@ ios-build: ios-whisper ## Build the iOS app for the simulator
 IOS_RESULTS := ios/build/test-results.xcresult
 
 .PHONY: ios-test
-ios-test: ios-whisper ## Run the iOS tests on the simulator and print the counts
+ios-test: ios-whisper ios-mlkit ## Run the iOS tests on the simulator and print the counts
 	@rm -rf $(IOS_RESULTS)
 	@echo "xcodebuild test on $(IOS_SIM)"
 	@xcodebuild test -project $(IOS_PROJECT) -scheme PTranslate -destination '$(IOS_DEST)' -quiet \
@@ -196,7 +202,7 @@ IOS_DEVICE ?= iPhone
 MAC_HOST   := $(shell scutil --get LocalHostName 2>/dev/null).local
 
 .PHONY: ios-device
-ios-device: ios-whisper ## Build, install and open the app on the connected iPhone; start the server first
+ios-device: ios-whisper ios-mlkit ## Build, install and open the app on the connected iPhone; start the server first
 	xcodebuild build -project $(IOS_PROJECT) -scheme PTranslate -destination 'platform=iOS,name=$(IOS_DEVICE)' \
 		-allowProvisioningUpdates -quiet BACKEND_URL=http://$(MAC_HOST):8080
 	@app=$$(xcodebuild -project $(IOS_PROJECT) -scheme PTranslate -destination 'generic/platform=iOS' -showBuildSettings 2>/dev/null \
@@ -209,7 +215,7 @@ ios-device: ios-whisper ## Build, install and open the app on the connected iPho
 # (.github/workflows/testflight.yml) runs it; it runs the same here given the
 # signing files and settings the script lists at its top. ADR 0022.
 .PHONY: ios-testflight
-ios-testflight: ios-whisper ## Build for the App Store and upload to TestFlight (signing files: see ios/scripts/testflight.sh)
+ios-testflight: ios-whisper ios-mlkit ## Build for the App Store and upload to TestFlight (signing files: see ios/scripts/testflight.sh)
 	ios/scripts/testflight.sh
 
 # --- Whisper model ----------------------------------------------------------

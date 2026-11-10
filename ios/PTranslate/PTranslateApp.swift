@@ -1,6 +1,5 @@
 import AVFoundation
 import SwiftUI
-import Translation
 
 @main
 struct PTranslateApp: App {
@@ -26,6 +25,7 @@ struct PTranslateApp: App {
                 models: container.models,
                 route: container.route,
                 speed: container.speed,
+                onDeviceAvailable: container.onDeviceTranscription,
                 thresholds: container.thresholds,
                 requestMicrophone: requestMicrophone
             )
@@ -58,22 +58,9 @@ struct PTranslateApp: App {
                     .zIndex(1)
                 }
             }
-            .modifier(LanguagePackDownloads(downloads: container.translationDownloads))
             .onOpenURL { url in
                 if let handle = handle(fromCode: url.absoluteString) { addHandle = handle }
             }
-        }
-    }
-}
-
-/// Lets iOS show its language pack download sheet over whichever screen is showing. It lives here, with the
-/// wiring, so that the screens in `UI/` never see a Translation type.
-private struct LanguagePackDownloads: ViewModifier {
-    let downloads: TranslationDownloads
-
-    func body(content: Content) -> some View {
-        content.translationTask(downloads.request) { session in
-            await downloads.run(session)
         }
     }
 }

@@ -104,7 +104,9 @@ UI/              SwiftUI views and their view models
 ```
 
 whisper.cpp is built into an xcframework by a script; Swift calls its C API
-directly, so there is no bridge code.
+directly, so there is no bridge code. ML Kit is Google's pre-built files,
+fetched and repackaged by another script into the local Swift package
+`ios/MLKit` (ADR 0024). The app needs iOS 18 (ADR 0025).
 
 Server layout:
 
@@ -159,7 +161,7 @@ migrations/          plain SQL, embedded in the binary
   (the counterpart of `GlobalScope`). Blocking and native work stays off the
   main actor.
 - `Transcriber`, `Translator` and `SpeechSynthesizer` are the seams, as
-  protocols. UI and pipeline code never see whisper.cpp, Translation or
+  protocols. UI and pipeline code never see whisper.cpp, ML Kit or
   `AVSpeechSynthesizer` types.
 - One Swift type owns the whisper context and is the only caller of whisper's
   C functions.
@@ -220,6 +222,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make model-download` | download the Whisper model into `server/data/models/` (57 MB, git-ignored) |
 | `make android-push-model` | copy the model to the device for the device tests; the app itself downloads its model from the server |
 | `make ios-whisper` | build whisper.cpp for iOS into `ios/build/` (once after cloning, about a minute; Xcode needs it) |
+| `make ios-mlkit` | fetch Google's ML Kit for iOS into `ios/MLKit/Frameworks/` (once after cloning, about 35 MB to download; Xcode needs it) |
 | `make ios-build` | build the iOS app for the simulator |
 | `make ios-test` | iOS tests on the simulator (`IOS_SIM="..."` picks another one); the Whisper test needs `make model-download` |
 | `make ios-device` | build, install and open the app on the connected iPhone, pointed at this Mac's server (start it first); `MAC_HOST=<ip>` if the `.local` name does not resolve |

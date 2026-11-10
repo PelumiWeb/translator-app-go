@@ -52,6 +52,10 @@ final class TranslateViewModel {
     private(set) var sourceLanguages: [Language] = []
     private(set) var targetLanguages: [Language] = []
 
+    /// False on a phone that cannot run Whisper (`WhisperSupport`): every recording goes to the server, and there
+    /// is no route to choose or model to download.
+    let onDeviceAvailable: Bool
+
     /// The on-device speech model: missing, downloading, ready or failed.
     var model: ModelState { models.state }
 
@@ -93,6 +97,7 @@ final class TranslateViewModel {
         models: any ModelInstaller,
         route: RouteSetting,
         speed: any DeviceSpeed,
+        onDeviceAvailable: Bool = true,
         thresholds: FallbackThresholds = FallbackThresholds(),
         requestMicrophone: @escaping () async -> Bool,
         maxRecording: Duration = .seconds(30),
@@ -105,6 +110,7 @@ final class TranslateViewModel {
         routeSetting = route
         self.route = route.current
         self.speed = speed
+        self.onDeviceAvailable = onDeviceAvailable
         self.thresholds = thresholds
         self.requestMicrophone = requestMicrophone
         self.maxRecording = maxRecording
@@ -133,7 +139,7 @@ final class TranslateViewModel {
     /// The choice of route: automatic, this device, or the server. Not during a recording: the next result must
     /// come from the route that was showing when it was made.
     func routeSelected(_ selected: TranscriptionRoute) {
-        guard phase == .idle else { return }
+        guard phase == .idle, onDeviceAvailable || selected == .cloud else { return }
         routeSetting.current = selected
         route = selected
     }
@@ -176,6 +182,7 @@ final class TranslateViewModel {
 
     /// Starts, or after a failure continues, the download of the speech model.
     func downloadModelTapped() {
+        guard onDeviceAvailable else { return }
         switch model {
         case .downloading, .verifying: return
         case .missing, .ready, .failed: break

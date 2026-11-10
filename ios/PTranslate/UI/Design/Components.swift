@@ -15,6 +15,19 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
+extension View {
+    /// The design's glass buttons. Liquid Glass came with iOS 26; before that they are the plain bordered button,
+    /// the nearest look iOS 18 has.
+    @ViewBuilder
+    func glassButtonStyle() -> some View {
+        if #available(iOS 26, *) {
+            buttonStyle(.glass)
+        } else {
+            buttonStyle(.bordered)
+        }
+    }
+}
+
 /// A quiet action: underlined text, as "Not now, use the phone's voice" in the design.
 struct LinkButton: View {
     let title: String
