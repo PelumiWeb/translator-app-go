@@ -59,6 +59,9 @@ android {
 
     buildTypes {
         release {
+            // A release build goes to phones far from this machine: the
+            // hosted server (ADR 0023). Debug builds keep the dev server above.
+            buildConfigField("String", "BACKEND_URL", "\"https://shinar-api.southafricanorth.cloudapp.azure.com\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

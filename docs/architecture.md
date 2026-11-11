@@ -223,8 +223,9 @@ the server continues from the next event. It gives up after five consecutive
 tries that bring nothing new, and never retries when the server refused the
 request or the job itself failed.
 
-The backend URL is a build config field, `http://localhost:8080` for now;
-`adb reverse` forwards it to the dev machine. Debug builds allow cleartext HTTP
+The backend URL is a build config field. Debug builds use
+`http://localhost:8080`, which `adb reverse` forwards to the dev machine;
+release builds use the hosted server (section 4.8). Debug builds allow cleartext HTTP
 to `localhost` and `10.0.2.2` through a debug-only network security config;
 release builds do not.
 
@@ -391,9 +392,10 @@ The simulator shares the Mac's network, so `http://localhost:8080` works as on
 the Android emulator. A real iPhone has no `adb reverse`: it uses the Mac's
 address on the same Wi-Fi, such as `http://<mac-name>.local:8080`. The server
 already listens on every interface (`HTTP_ADDR` defaults to `:8080`). The
-address is a build setting, `BACKEND_URL`: `localhost` for the simulator, and
-for iPhone builds the owner's Mac by its Bonjour name
-(`http://OgundipePelumi.local:8080`). `make ios-device` reads the Mac's name
+address is a build setting, `BACKEND_URL`. In the Debug configuration it is
+`localhost` for the simulator, and for iPhone builds the owner's Mac by its
+Bonjour name (`http://OgundipePelumi.local:8080`); in Release, the hosted
+server (section 4.8). `make ios-device` reads the Mac's name
 afresh, builds, installs on the connected iPhone and opens the app;
 `MAC_HOST=<address>` overrides the name, for a network where Bonjour names do
 not resolve. Plain HTTP is allowed only to local addresses, through App
@@ -723,10 +725,16 @@ South Africa North), with Caddy in front for HTTPS on the machine's Azure
 name and the server under systemd behind it, its files in `/var/lib/shinar`,
 its settings in `/etc/shinar/env` (template `deploy/env.example`); and Azure
 Database for PostgreSQL 18 (flexible server, B1ms) in the same region,
-reachable only from the machine. `deploy/setup.sh` prepares the machine once. GitHub Actions
-(`.github/workflows/server.yml`) tests every push to `main` that changes the
-server and ships it with `deploy/ship.sh`, which `make server-ship` also
-runs.
+reachable only from the machine. `deploy/setup.sh` prepares the machine
+once. GitHub Actions (`.github/workflows/server.yml`) tests every push to
+`main` that changes the server and ships it with `deploy/ship.sh`, which
+`make server-ship` also runs.
+
+Release builds of both apps talk to it
+(`https://shinar-api.southafricanorth.cloudapp.azure.com`): the iOS Release
+configuration's `BACKEND_URL`, and the Android `release` build type's. That
+covers every TestFlight build, archived in Xcode or by the workflow. Debug
+builds keep talking to the Mac (sections 2.8 and 3.5).
 
 ## 5. Testing
 

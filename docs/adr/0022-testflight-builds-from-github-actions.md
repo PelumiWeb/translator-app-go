@@ -41,7 +41,8 @@ developers report it on Apple's forums, and nothing confirms a fix.
 
 **The server address is a repository variable, `BACKEND_URL`.** For now it
 is the Mac's address on the owner's Wi-Fi. A hosted server (milestone 18)
-changes the variable, not the code.
+changes the variable, not the code. (Changed on 2026-11-11, see the
+addendum.)
 
 **Every build answers App Store Connect's questions itself:**
 `ITSAppUsesNonExemptEncryption` is false in Info.plist (the app's only
@@ -82,7 +83,7 @@ Once, by the owner:
    | Secret | `ASC_KEY_P8` | the `.p8` file's text: `pbcopy < AuthKey_XXXX.p8` |
    | Secret | `ASC_KEY_ID` | the Key ID |
    | Secret | `ASC_ISSUER_ID` | the Issuer ID |
-   | Variable | `BACKEND_URL` | `http://OgundipePelumi.local:8080`, for now |
+   | Variable | `BACKEND_URL` | optional since 2026-11-11: only to send TestFlight builds to a server other than the hosted one |
 
 6. **Testers.** In App Store Connect, the app, TestFlight: an internal
    group, for people added to the team in Users and Access, with automatic
@@ -117,3 +118,19 @@ what `xcodebuild` and `security` already do.
 - Builds are not uploaded for pull requests or other branches. A pull
   request check, and the server and Android tests, can be added as jobs of
   their own.
+
+## Addendum, 2026-11-11: Release builds talk to the hosted server
+
+The first TestFlight builds were archived in Xcode, which reads the address
+from the project, not from the workflow's variable. The project's Release
+configuration still named the Mac (`http://OgundipePelumi.local:8080`), so
+on testers' phones the app reached no server at all.
+
+The Release configuration now holds the hosted server's address
+(`https://shinar-api.southafricanorth.cloudapp.azure.com`, ADR 0023), so an
+archive from Xcode and one from the workflow talk to the same server.
+`BACKEND_URL` became an optional override. `ios/scripts/testflight.sh`
+reads the address back from the archived app and refuses to upload one that
+is not `https://`. Android's `release` build type got the same address, so
+the two apps keep one rule: debug builds talk to the Mac, release builds to
+the hosted server.

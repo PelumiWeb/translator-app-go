@@ -8,7 +8,11 @@
 #
 #   PROFILE_PATH=~/Downloads/Shinar_App_Store.mobileprovision \
 #   ASC_KEY_PATH=~/keys/AuthKey_ABC123.p8 ASC_KEY_ID=ABC123 ASC_ISSUER_ID=... \
-#   BACKEND_URL=http://OgundipePelumi.local:8080 make ios-testflight
+#   make ios-testflight
+#
+# The build talks to the server named in the Release configuration, the
+# hosted one (ADR 0023); BACKEND_URL overrides it. It must be an https://
+# address: TestFlight builds go to phones anywhere, far from the Mac.
 #
 # Signing is spelled out rather than automatic: on a fresh machine, automatic
 # signing tries to make a development certificate it then cannot use. The API
@@ -19,7 +23,6 @@ set -euo pipefail
 : "${ASC_KEY_PATH:?the App Store Connect API key (.p8)}"
 : "${ASC_KEY_ID:?the API key ID}"
 : "${ASC_ISSUER_ID:?the API key issuer ID}"
-: "${BACKEND_URL:?the server address the build talks to}"
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 WORK=$ROOT/ios/build/testflight
@@ -36,13 +39,28 @@ profiles="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 mkdir -p "$profiles"
 cp "$PROFILE_PATH" "$profiles/$uuid.mobileprovision"
 
-echo "Archiving for the App Store, talking to $BACKEND_URL"
+overrides=()
+if [[ -n ${BACKEND_URL:-} ]]; then
+    overrides+=(BACKEND_URL="$BACKEND_URL")
+fi
+
+echo "Archiving for the App Store"
+# The ${a[@]+...} form, because macOS's bash 3.2 calls an empty array unset.
 xcodebuild archive \
     -project "$ROOT/ios/PTranslate.xcodeproj" -scheme PTranslate -configuration Release \
     -destination 'generic/platform=iOS' -archivePath "$WORK/Shinar.xcarchive" -quiet \
     CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM" \
     CODE_SIGN_IDENTITY="Apple Distribution" PROVISIONING_PROFILE_SPECIFIER="$uuid" \
-    BACKEND_URL="$BACKEND_URL"
+    ${overrides[@]+"${overrides[@]}"}
+
+# Read the address back from the built app, so a build that could never
+# reach its server is caught here, not on a tester's phone.
+backend=$(/usr/libexec/PlistBuddy -c 'Print :BackendURL' "$WORK/Shinar.xcarchive/Products/Applications/PTranslate.app/Info.plist")
+if [[ $backend != https://* ]]; then
+    echo "The build talks to $backend; a TestFlight build needs an https:// server." >&2
+    exit 1
+fi
+echo "The build talks to $backend"
 
 # "upload" sends the build to App Store Connect instead of writing an .ipa.
 # Xcode gives it the next build number App Store Connect expects, so builds

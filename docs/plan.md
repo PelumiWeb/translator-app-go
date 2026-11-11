@@ -1017,6 +1017,11 @@ request, ahead of the rest of this milestone)
   HTTPS (Let's Encrypt), the migrations ran on PostgreSQL 18.6, plain HTTP
   redirects, and transcribing and speaking answer 401 without a sign-in.
   The GitHub workflow has not run yet: it needs the secrets
+- Fixed 2026-11-11: the first TestFlight builds, archived in Xcode, still
+  talked to the Mac (`http://OgundipePelumi.local:8080`) and reached no
+  server on testers' phones. Release builds of both apps now talk to the
+  hosted server, and `testflight.sh` refuses a build whose server is not
+  `https://`. ADR 0022, addendum
 - Known limits: the files on the machine's disk are not backed up yet; one
   machine, so a deploy pauses the server for a few seconds
 

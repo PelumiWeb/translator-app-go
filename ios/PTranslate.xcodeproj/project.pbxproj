@@ -23,10 +23,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		844B83A2307F59A2003153E6 /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = build/whisper.xcframework; sourceTree = "<group>"; };
-		844B83B3307F59A2003153E6 /* MLKitTranslate_resource.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; name = MLKitTranslate_resource.bundle; path = MLKit/Frameworks/MLKitTranslate_resource.bundle; sourceTree = "<group>"; };
 		844B8367307F599E003153E6 /* PTranslate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PTranslate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		844B8376307F59A2003153E6 /* PTranslateTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PTranslateTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		844B83A2307F59A2003153E6 /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = build/whisper.xcframework; sourceTree = "<group>"; };
+		844B83B3307F59A2003153E6 /* MLKitTranslate_resource.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; name = MLKitTranslate_resource.bundle; path = MLKit/Frameworks/MLKitTranslate_resource.bundle; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -34,7 +34,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				PTranslate.entitlements,
 			);
 			target = 844B8366307F599E003153E6 /* PTranslate */;
 		};
@@ -86,15 +85,6 @@
 			);
 			sourceTree = "<group>";
 		};
-		844B83A3307F59A2003153E6 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				844B83A2307F59A2003153E6 /* whisper.xcframework */,
-				844B83B3307F59A2003153E6 /* MLKitTranslate_resource.bundle */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		844B8368307F599E003153E6 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -102,6 +92,15 @@
 				844B8376307F59A2003153E6 /* PTranslateTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		844B83A3307F59A2003153E6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				844B83A2307F59A2003153E6 /* whisper.xcframework */,
+				844B83B3307F59A2003153E6 /* MLKitTranslate_resource.bundle */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -363,17 +362,17 @@
 		844B838B307F59A2003153E6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BACKEND_URL = "http://localhost:8080";
-				"BACKEND_URL[sdk=iphoneos*]" = "http://OgundipePelumi.local:8080";
 				APP_NAME = Shinar;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				BACKEND_URL = "http://localhost:8080";
+				"BACKEND_URL[sdk=iphoneos*]" = "http://OgundipePelumi.local:8080";
+				CODE_SIGN_ENTITLEMENTS = PTranslate/PTranslate.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 4USZRKF452;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = PTranslate/PTranslate.entitlements;
 				INFOPLIST_FILE = PTranslate/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -398,17 +397,16 @@
 		844B838C307F59A2003153E6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BACKEND_URL = "http://localhost:8080";
-				"BACKEND_URL[sdk=iphoneos*]" = "http://OgundipePelumi.local:8080";
 				APP_NAME = Shinar;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				BACKEND_URL = "https://shinar-api.southafricanorth.cloudapp.azure.com";
+				CODE_SIGN_ENTITLEMENTS = PTranslate/PTranslate.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 4USZRKF452;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = PTranslate/PTranslate.entitlements;
 				INFOPLIST_FILE = PTranslate/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
