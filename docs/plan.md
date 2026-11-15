@@ -954,8 +954,33 @@ the room, each message appears as soon as it is ready.
 - Verify: two phones, one English and one Spanish, the server running with
   `TRANSLATE_ENGINE=fake` (or a Google key)
 
-- 14.5 Push notifications, through APNs and FCM, for a phone not in the room
-  (needs an APNs key from the developer account, and a decision on FCM)
+**Checkpoint 14.5: push notifications, for a phone not in the room** (built, 2026-11-15)
+- Decided on 2026-11-15: Apple's push service (APNs) directly for the
+  iPhone, with the key from the developer account, and Firebase Cloud
+  Messaging for Android (`firebase-messaging` and the `google-services`
+  plugin, approved the same day). Not FCM on the iPhone too: ringing an
+  iPhone for a call (milestone 17) needs a VoIP push, which only APNs
+  delivers. ADR 0026
+- Server: migration 0007 (a push address per session, a `push` job kind);
+  `PUT /v1/sessions/current/push`; a `push` job added in the transaction
+  that makes a note ready for a language, sent by the workers to every
+  phone of its listeners; addresses the services call gone are forgotten;
+  `internal/push` signs its own tokens with the standard library;
+  `make push-check`
+- Both phones: register the address whenever someone is signed in; the
+  notification reads "Rosa" / "Sent a voice note · 0:14" (the brief's
+  wording, not the words of the note); not shown while its room is on the
+  screen; tapping it opens the room; opening a room clears its
+  notifications; permission is the system's own question, the first time
+  the rooms are shown; the privacy page says what the notification carries
+- Not yet: the screen before the permission question (brief 3.11, not
+  designed); a badge with the unread count
+- Owner: the APNs key (Key ID to Claude, the file in `~/keys/shinar/`) and
+  Push Notifications on the App ID. The Firebase key is in place and passes
+  `make push-check`
+- Verify: `make server-test`; `make push-check`; two phones signed in, one
+  app in the background: a note from the other shows a notification, and
+  tapping it opens the room
 
 ---
 
@@ -981,6 +1006,20 @@ Live calls, each side hearing the other in their own language and the
 speaker's voice. Starts with a research checkpoint: recognising, translating
 and speaking as a stream, within about two seconds, and what a minute costs.
 Premium only, so it brings billing: in-app purchases on both stores.
+
+Measured and estimated on 2026-11-15: with today's batch engines (Groq,
+Azure, Fish Audio) a phrase reaches the listener 5 to 8 seconds after it
+ends; streamed at every stage, about 2 to 3. It will feel like talking
+through an interpreter, in turns, not like a WhatsApp call. About 4 to 5
+cents a minute of conversation. It also needs a server that relays live
+audio, the phones' call screens (CallKit, ConnectionService) and VoIP push.
+
+**Before calls: a hands-free mode in rooms** (asked by the owner on
+2026-11-15). Hold to talk, release to send; the other phone plays the note
+as it arrives, in the listener's language and the speaker's voice: a
+translated walkie-talkie. Built almost entirely from the rooms' existing
+pieces, it gives most of the feel of a call for little cost, and shows
+whether people want calls before they are built. Within the usage limits.
 
 ---
 

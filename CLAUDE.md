@@ -81,6 +81,7 @@ core/voice       the user's recorded voice sample: storage and rules
 core/pipeline    transcribe -> translate -> speak, the reusable entry point
 core/account     the signed-in user: session, profile, sign-up progress
 core/rooms       rooms and voice messages: models, live feed, playback
+core/push        push notifications: registering the phone, showing them
 ui/              Compose screens and ViewModels
 ```
 
@@ -100,6 +101,7 @@ Core/Voice       the user's recorded voice sample: storage and rules
 Core/Pipeline    transcribe -> translate -> speak, the reusable entry point
 Core/Account     the signed-in user: session, profile, sign-up progress
 Core/Rooms       rooms and voice messages: models, live feed, playback
+Core/Push        push notifications: registering the phone, what they do
 UI/              SwiftUI views and their view models
 ```
 
@@ -117,7 +119,8 @@ internal/queue       job store (Postgres), worker pool, event listener and bus
 internal/provider    Provider, Synthesizer and Translator interfaces, fakes, Whisper on Groq (groq/), Fish Audio (fish/), Google Cloud Translation (google/), Azure AI Translator (azure/)
 internal/accounts    users, identities, sessions, handles, kept voices
 internal/auth        Apple and Google identity token checks
-internal/rooms       rooms, messages, renditions; the deliverer and the change hub
+internal/rooms       rooms, messages, renditions; the deliverer, its push notifications, and the change hub
+internal/push        sending notifications through APNs and FCM
 internal/models      manifest and model file serving
 internal/storage     audio blob storage
 migrations/          plain SQL, embedded in the binary
@@ -187,7 +190,10 @@ migrations/          plain SQL, embedded in the binary
 
 ## Commands
 
-After cloning, fetch whisper.cpp: `git submodule update --init`.
+After cloning, fetch whisper.cpp: `git submodule update --init`. Push
+notifications on Android need `android/app/google-services.json` from the
+Firebase console (git-ignored: the repository is public); without it the
+app builds with them off.
 
 Postgres is a local Homebrew install (`postgresql@16`), not Docker: the dev
 machine is short on disk and RAM. For the same reason, run the Android
@@ -212,6 +218,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make sample-job` | upload a test clip to the running server and stream its events |
 | `make voice-check` | one real request to Fish Audio (key from `server/.env`), then plays what it made |
 | `make transcribe-check` | one real transcription from Groq (key from `server/.env`) of whisper.cpp's sample clip |
+| `make push-check` | sign in to Apple's and Google's push services with the key files named in `server/.env`, and send to a made-up phone, so nothing arrives (ADR 0026) |
 | `make translate-check` | a few real translations from Azure AI Translator (key from `server/.env`), English to Yoruba among them |
 | `make sample-speech` | ask the running server to speak a sentence, and play the result; start the server with `VOICE_ENGINE=fake make server-run`, since without a voice engine it refuses |
 | `make android-build` | `./gradlew assembleDebug` |

@@ -490,6 +490,7 @@ with code `unauthenticated`.
 | `POST /v1/sessions/apple` | JSON `identity_token`, `nonce`, optional `name`. Checks the token, creates the account on its first sign-in, answers `{ "token", "user", "new_user" }`: `201` for a new account, `200` otherwise. `401 invalid_token` for a token that fails a check; `503 sign_in_unavailable` when Apple's keys cannot be fetched |
 | `POST /v1/sessions/google` | the same, with a Google ID token; `501 sign_in_not_configured` when the server has no `GOOGLE_CLIENT_ID` |
 | `DELETE /v1/sessions/current` | signs out this session |
+| `PUT /v1/sessions/current/push` | JSON `service` (`apns`, `apns-sandbox` for builds run from Xcode, or `fcm`) and `token` (Apple's device token, or the app's Firebase installation ID): where this phone receives notifications (ADR 0026). `204`; `400` for a token not of that service's shape. Kept with the session, so signing out forgets it |
 | `GET /v1/me` | the profile: `{ "id", "display_name", "handle", "language" }` |
 | `PATCH /v1/me` | changes any of `display_name`, `handle`, `language`; `409 handle_taken` |
 | `DELETE /v1/me` | deletes the account, its sessions and its voice |
@@ -523,6 +524,11 @@ rendition is `{ "lang", "status", "text", "voice", "audio_url" }`, with
 of `own` (the sender's voice), `original` (their recording) or `phone` (the
 listener's phone reads `text`). The sender sees a rendition per language the
 others speak; a listener sees their own.
+
+When a rendition becomes ready, the same transaction adds a `push` job, and
+a worker tells the listeners' phones through APNs or FCM (ADR 0026): the
+sender's name and "Sent a voice note · 0:14", with the room and message IDs
+for the app. Not the words.
 
 **`GET /v1/models/manifest`**
 
@@ -572,6 +578,9 @@ CREATE INDEX jobs_ready ON jobs (run_at) WHERE status = 'queued';
 -- and renditions (one per message and listener language: status, text,
 -- voice, audio). jobs.kind gains 'deliver', with jobs.message_id. See
 -- migration 0006 and ADR 0020.
+-- Push notifications (14.5): push_tokens (session -> service and token, one
+-- per session, each token once), and jobs.kind gains 'push'. See migration
+-- 0007 and ADR 0026.
 
 CREATE TABLE job_events (
     job_id     uuid NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -716,8 +725,12 @@ Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 `WORKERS`, `AUDIO_DIR`, `VOICES_DIR`, `MODELS_DIR`, `JOB_LEASE`,
 `SWEEP_INTERVAL`, `VOICE_ENGINE`, `FISH_AUDIO_API_KEY`, `FISH_AUDIO_MODEL`,
 `APPLE_AUDIENCE` (default `com.pelumi.shinar`), `GOOGLE_CLIENT_ID`, `MESSAGES_DIR`, `TRANSLATE_ENGINE`,
-`GOOGLE_TRANSLATE_KEY`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`). Secrets live in
-`server/.env`, which git ignores and the Makefile's server targets load.
+`GOOGLE_TRANSLATE_KEY`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`,
+`TRANSCRIBE_ENGINE`, `GROQ_API_KEY`, `GROQ_MODEL`, `APNS_KEY_FILE`,
+`APNS_KEY_ID`, `APNS_TEAM_ID`, `FCM_SERVICE_ACCOUNT_FILE`). Secrets live in
+`server/.env`, which git ignores and the Makefile's server targets load; the
+push notification keys are files outside the repository, which the settings
+name (ADR 0026).
 Structured logs with `log/slog`, with
 the job id on every line that concerns a job.
 
@@ -766,6 +779,7 @@ in the original spec; the owner approved them on 2026-10-04.
 | Google Cloud Translation API, basic edition (*added* 2026-10-31) | translates room messages, a paid service (ADR 0020). Called with `net/http`: no Go module. |
 | Azure AI Translator, free tier F0 (*added* 2026-11-09) | translates room messages while Google cannot be billed (ADR 0020, addendum). Called with `net/http`: no Go module. |
 | Groq, Whisper large-v3 (*added* 2026-11-11) | transcribes the recordings phones cannot (ADR 0009). Called with `net/http` and `mime/multipart`: no Go module. |
+| Apple Push Notification service and Firebase Cloud Messaging (*added* 2026-11-15) | notifications to iPhones and Android phones (ADR 0026). Called with `net/http`; the tokens are signed with `crypto/ecdsa` and `crypto/rsa`: no Go module. |
 
 No router (Go 1.22+ `ServeMux` covers method and path patterns, so chi is not
 needed), no migration tool (SQL files embedded with `embed`, applied by a small
@@ -786,6 +800,7 @@ runner at startup), no UUID library (Postgres generates ids), no test library.
 | `androidx.credentials:credentials` and `credentials-play-services-auth` 1.6.0, `com.google.android.libraries.identity.googleid:googleid` 1.2.0 (*added* 2026-10-31) | Sign in with Google through Android's Credential Manager (ADR 0018). The second artefact makes it work on Android 13 and older, through Play services. `googleid` 1.2.1 was approved, but it is built with Kotlin 2.4, which the Kotlin bundled with AGP 9 cannot read, so 1.2.0 is used |
 | `com.google.zxing:core` 3.5.4 (*added* 2026-10-31) | draws the user's QR code. Plain Java, no other libraries |
 | `com.google.android.gms:play-services-code-scanner` 16.1.0 (*added* 2026-10-31) | scans someone's QR code. Play services draws the camera screen, so the app needs no camera permission |
+| `com.google.firebase:firebase-messaging`, through the Firebase BoM 35.2.0, and the `com.google.gms.google-services` Gradle plugin 4.6.0 (*added* 2026-11-15) | receives push notifications (ADR 0026). The plugin reads `app/google-services.json`, which git ignores; without the file the plugin is left off and the app builds without notifications. Not Firebase Analytics |
 
 No DI framework, no Retrofit, no Room.
 
@@ -797,6 +812,7 @@ No DI framework, no Retrofit, no Room.
 | SwiftUI, AVFoundation, CryptoKit, Foundation (`URLSession`) | part of the SDK; nothing to install |
 | AuthenticationServices, Security (Keychain) | part of the SDK; Sign in with Apple and keeping the session token (ADR 0018) |
 | Core Image, VisionKit | part of the SDK; drawing the user's QR code, and scanning someone's |
+| UserNotifications, and the Push Notifications capability | part of the SDK; notifications through APNs, with no Firebase (ADR 0026) |
 | whisper.cpp (the same submodule) | the same engine as on Android |
 | CMake and Ninja, through Homebrew | build whisper.cpp into an xcframework. Already installed on the dev machine (CMake 4.0, Ninja 1.12), but new as build tools of this project |
 | Swift Testing | tests; part of Xcode |
@@ -854,6 +870,7 @@ Written in the milestone where the decision is implemented.
 | 0023 | Hosting the server on Azure (written) | 18 |
 | 0024 | ML Kit on iOS (written) | 18 |
 | 0025 | iOS 18 as the iPhone app's minimum (written) | 18 |
+| 0026 | Push notifications through APNs and FCM (written) | 14 |
 
 ## 8. Known limits
 
