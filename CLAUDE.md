@@ -114,7 +114,7 @@ Server layout:
 cmd/server           main: wiring, config, graceful shutdown
 internal/api         HTTP handlers, SSE
 internal/queue       job store (Postgres), worker pool, event listener and bus
-internal/provider    Provider, Synthesizer and Translator interfaces, fakes, Fish Audio (fish/), Google Cloud Translation (google/), Azure AI Translator (azure/)
+internal/provider    Provider, Synthesizer and Translator interfaces, fakes, Whisper on Groq (groq/), Fish Audio (fish/), Google Cloud Translation (google/), Azure AI Translator (azure/)
 internal/accounts    users, identities, sessions, handles, kept voices
 internal/auth        Apple and Google identity token checks
 internal/rooms       rooms, messages, renditions; the deliverer and the change hub
@@ -211,6 +211,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make server-ship` | build the server for the Azure machine and ship it over SSH; GitHub Actions runs the same on pushes to `main` that change `server/` (ADR 0023) |
 | `make sample-job` | upload a test clip to the running server and stream its events |
 | `make voice-check` | one real request to Fish Audio (key from `server/.env`), then plays what it made |
+| `make transcribe-check` | one real transcription from Groq (key from `server/.env`) of whisper.cpp's sample clip |
 | `make translate-check` | a few real translations from Azure AI Translator (key from `server/.env`), English to Yoruba among them |
 | `make sample-speech` | ask the running server to speak a sentence, and play the result; start the server with `VOICE_ENGINE=fake make server-run`, since without a voice engine it refuses |
 | `make android-build` | `./gradlew assembleDebug` |

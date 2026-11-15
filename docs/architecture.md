@@ -676,7 +676,10 @@ it.
 delay, and can be told to fail the first N attempts. It serves local dev and
 tests, and is what makes retries demoable.
 
-A real provider is chosen in milestone 7 and gets its own ADR.
+Since 2026-11-11 the real one is `groq.Transcriber`: OpenAI's Whisper
+large-v3 on Groq, given the language, and leaving out what Whisper's own
+rules say is not speech (ADR 0009). A `GROQ_API_KEY` on its own chooses it;
+without one the fake stands in.
 
 Speech synthesis has the same shape, a second interface in the same package:
 
@@ -762,6 +765,7 @@ in the original spec; the owner approved them on 2026-10-04.
 | Fish Audio API (*added* 2026-10-31) | the voice-cloning engine, a paid service (ADR 0010). Called with `net/http` and a small MessagePack encoder of our own: no Go module. |
 | Google Cloud Translation API, basic edition (*added* 2026-10-31) | translates room messages, a paid service (ADR 0020). Called with `net/http`: no Go module. |
 | Azure AI Translator, free tier F0 (*added* 2026-11-09) | translates room messages while Google cannot be billed (ADR 0020, addendum). Called with `net/http`: no Go module. |
+| Groq, Whisper large-v3 (*added* 2026-11-11) | transcribes the recordings phones cannot (ADR 0009). Called with `net/http` and `mime/multipart`: no Go module. |
 
 No router (Go 1.22+ `ServeMux` covers method and path patterns, so chi is not
 needed), no migration tool (SQL files embedded with `embed`, applied by a small
@@ -832,7 +836,7 @@ Written in the milestone where the decision is implemented.
 | 0006 | `LISTEN/NOTIFY` as the cross-process event bus | 5 |
 | 0007 | Fallback policy and thresholds | 6 |
 | 0008 | Speech output with the phone's voices (written) | 8 |
-| 0009 | Cloud transcription provider | 7 |
+| 0009 | Cloud transcription: Whisper large-v3 on Groq (written) | 7 |
 | 0010 | Voice-cloning engine: Fish Audio (written) | 9 |
 | 0004 addendum | whisper.cpp on iOS: the build, GPU or CPU | 10 |
 | 0011 | A native iOS app on the same server | 10 |
@@ -853,11 +857,13 @@ Written in the milestone where the decision is implemented.
 
 ## 8. Known limits
 
-- The job, speech and model endpoints need no sign-in yet: anyone who can
-  reach the server can upload audio and ask for speech. Job ids are random
-  UUIDs, so one client cannot guess another's event stream, and uploads are
-  size-limited. Not suitable for a public deployment. They will require a
-  session once both phones sign in (ADR 0018).
+- Transcribing and speaking need a signed-in user (since 2026-11-09, ADR
+  0023). A job's event stream needs none: job ids are random UUIDs, so one
+  client cannot guess another's. The model files are public, the same for
+  everyone.
+- Transcription on the server is held to Groq's limits, about 2,000
+  recordings and 8 hours of audio a day; past them, jobs are retried and then
+  fail (ADR 0009).
 - ML Kit translation covers about 59 languages and translates through English
   when neither side is English, so quality between two non-English languages is
   modest.

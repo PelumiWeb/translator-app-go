@@ -314,6 +314,21 @@ model handles badly, falls back to a real cloud transcription.
 
 Checkpoints: (7.1) provider, (7.2) UI, (7.3) README and CI.
 
+**Checkpoint 7.1: the real provider** (built 2026-11-11, at the owner's
+request: testers on TestFlight met the fake transcript)
+- The owner chose Groq, with OpenAI's Whisper large-v3, over whisper.cpp on
+  the server (no better than the phone's own model on a 1 GB machine) and
+  Azure AI Speech (no Yoruba, Hausa or Igbo). ADR 0009
+- `internal/provider/groq`: the recording, the language and the model to
+  Groq's OpenAI-compatible API; segments Whisper's own rules call silence
+  left out; "no speech was recognised" when nothing is left; rate limits and
+  outages retried, everything else failed at once. No Go module
+- A `GROQ_API_KEY` on its own chooses Groq; `TRANSCRIBE_ENGINE=fake` keeps
+  the fake (`make server-run-flaky` does). `make transcribe-check`
+- Both privacy pages say Groq writes the words down when the phone cannot
+- Tests: the request, the model, which failures retry, and what is not
+  speech (seven cases); a live test behind the key
+
 ---
 
 ## [~] Milestone 8: Speak the translation
@@ -1061,6 +1076,26 @@ and minimum build for each phone (works on TestFlight and both phones, a
 minimum can force an update), or Apple's public App Store lookup (no server
 work, but iPhone only, App Store releases only, and no minimum).
 
+Asked on 2026-11-15, to come before the app is opened to the public: usage
+limits, so the paid engines (Fish Audio, Azure AI Translator, Groq) cannot
+run up a bill. The owner's examples: a voice note of at most a minute, and
+an hour of conversation a day. Also: people would pay for access, with
+limits. Not built yet; the owner put Groq first. To settle when it is
+designed:
+- The limits must be kept by the server, not only shown by the phones: a
+  signed-in user can call the API without the app. The phones show what is
+  left and stop recording at the limit; the server refuses past it.
+- What is counted per user and day: seconds of audio transcribed on the
+  server, characters translated, characters spoken in a kept voice. Plus a
+  monthly budget for the whole server per engine, past which it stops
+  calling that engine (messages then use the phone's voice), so a bug or an
+  abuser cannot spend more than the budget.
+- Recordings stop at 30 seconds today, one Whisper window. A minute needs
+  the on-device transcriber to take two windows.
+- Paying for access is billing, which CLAUDE.md keeps out until calls
+  (milestone 17). Moving it earlier is the owner's decision, and needs the
+  App Store's and Google Play's in-app purchase rules looked at first.
+
 ---
 
 ## [x] Milestone 19: The design
@@ -1163,7 +1198,7 @@ milestone 11 and makes push notifications possible on iOS.
 
 Still open:
 
-1. Which real cloud transcription provider (milestone 7).
+1. Settled 2026-11-11: Groq, with Whisper large-v3 (ADR 0009).
 2. When to add API credit on Fish Audio, to move from the free model to the
    paid one (checkpoint 9.4).
 3. The profile's details beyond name, ID and language (milestone 13).

@@ -120,8 +120,12 @@ stop the workers, and staying on costs more than the free machine.
 - Free for 12 months within the free amounts, once the account is upgraded
   to Pay as you go (by about 2026-12-09, as the translator needs anyway).
   The machine's public IP address may cost about $3.65 a month; it is not
-  clearly among the free services. After the 12 months, roughly $20 to $25
-  a month, or a move.
+  clearly among the free services. After the 12 months, about $40 a month
+  at the portal's list prices for South Africa North: the machine $8.91, the
+  database $20.52 (B1ms $15.69, 32 GiB $4.83), the disk about $5 to $10 and
+  the address about $3.65; or a move. (Corrected 2026-11-15: the first
+  estimate here, $20 to $25, left out the database's storage, the disk and
+  the address.)
 - One machine: a deploy restarts the server, and notes wait a few seconds.
   An outage of the machine stops the app until it is back.
 - Postgres is backed up by Azure; the files on the machine's disk
