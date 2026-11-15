@@ -74,9 +74,23 @@ final class AccountClient: Sendable {
         try await rest.send(await rest.request("/v1/sessions/current", method: "DELETE"))
     }
 
+    /// Tells the server where this phone receives notifications: its `token` at a push `service` ("apns", or
+    /// "apns-sandbox" for a build run from Xcode). It belongs to the session, so signing out forgets it.
+    func setPushToken(service: String, token: String) async throws {
+        var request = await rest.request("/v1/sessions/current/push", method: "PUT")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(PushTokenRequest(service: service, token: token))
+        try await rest.send(request)
+    }
+
     func deleteAccount() async throws {
         try await rest.send(await rest.request("/v1/me", method: "DELETE"))
     }
+}
+
+private struct PushTokenRequest: Encodable {
+    let service: String
+    let token: String
 }
 
 private struct SignInRequest: Encodable {

@@ -62,6 +62,20 @@ struct AccountTests {
         #expect(account.step == .name)
     }
 
+    @Test func registeringForPushTellsTheServerTheServiceAndTheAddressForThisSession() async throws {
+        server.enqueue(.status(204))
+        let account = testAccount(server: server, store: MemorySessionStore(signedUp), progress: MemoryProgress(.done))
+
+        try await account.registerPush(service: "apns", token: "ab01")
+
+        let request = try #require(server.requests.first)
+        #expect(request.method == "PUT")
+        #expect(request.path == "/v1/sessions/current/push")
+        #expect(request.header("Authorization") == "Bearer tok")
+        let body = try JSONSerialization.jsonObject(with: request.body) as? [String: String]
+        #expect(body == ["service": "apns", "token": "ab01"])
+    }
+
     @Test func anAccountSetUpElsewhereGoesStraightIn() async throws {
         server.enqueue(.json(status: 200, body: #"{"token":"t2","user":{"id":"u1","display_name":"Ada","handle":"ada","language":"en"},"new_user":false}"#))
         let account = testAccount(server: server)

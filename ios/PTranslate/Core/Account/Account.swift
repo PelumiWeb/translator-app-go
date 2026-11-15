@@ -96,6 +96,11 @@ final class Account {
         try await client.deleteVoice()
     }
 
+    /// Tells the server where this phone receives notifications, for as long as this session lasts.
+    func registerPush(service: String, token: String) async throws {
+        try await client.setPushToken(service: service, token: token)
+    }
+
     /// Records the next step of signing up as reached.
     func move(to step: OnboardingStep) {
         progress.step = step

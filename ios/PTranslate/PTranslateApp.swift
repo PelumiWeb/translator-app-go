@@ -1,8 +1,10 @@
 import AVFoundation
 import SwiftUI
+import UserNotifications
 
 @main
 struct PTranslateApp: App {
+    @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     private let container: AppContainer
     @State private var translate: TranslateViewModel
     @State private var voiceSetup: VoiceSetupViewModel
@@ -41,6 +43,8 @@ struct PTranslateApp: App {
             )
         )
         playsIntro = container.account.session == nil && !UserDefaults.standard.bool(forKey: Self.introSeen)
+        // Set before the app finishes launching, so that a tap on a notification that launched it is not missed.
+        UNUserNotificationCenter.current().delegate = container.notifications
     }
 
     private static let introSeen = "introSeen"
@@ -61,6 +65,36 @@ struct PTranslateApp: App {
             .onOpenURL { url in
                 if let handle = handle(fromCode: url.absoluteString) { addHandle = handle }
             }
+            .task {
+                // Apple answers registerForRemoteNotifications through the app delegate.
+                appDelegate.onDeviceToken = { [push = container.push] in push.onAddress($0) }
+            }
         }
+    }
+}
+
+/// Receives what only an app delegate is told: the address Apple gives this phone for notifications.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    /// Set once the app's objects exist. An address that comes first waits for it.
+    var onDeviceToken: (@MainActor (Data) -> Void)? {
+        didSet {
+            if let waiting, let onDeviceToken {
+                self.waiting = nil
+                onDeviceToken(waiting)
+            }
+        }
+    }
+    private var waiting: Data?
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        if let onDeviceToken {
+            onDeviceToken(deviceToken)
+        } else {
+            waiting = deviceToken
+        }
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: any Error) {
+        // No address, no notifications: the simulator before iOS 16, or no network. Tried again at the next launch.
     }
 }

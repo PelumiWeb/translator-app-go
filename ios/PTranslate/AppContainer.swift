@@ -49,6 +49,15 @@ final class AppContainer {
         .map { Language($0.identifier == "nb" ? "no" : $0.identifier) }
         .flatMap { WhisperLanguages.supports($0) ? $0 : nil }
 
+    /// What happens to voice notes' notifications: shown, or not, and where tapping one leads.
+    let notifications = VoiceNoteNotifications()
+
+    /// Tells the server where Apple reaches this phone, whenever someone is signed in (ADR 0026).
+    let push: PushRegistration
+
+    /// Hands the session to `push` each time it changes. Lives as long as the app.
+    private let followSession: Task<Void, Never>
+
     /// The recording of the user's voice, in the app's private files.
     let voice: any VoiceSampleStore = FileVoiceSampleStore(directory: .applicationSupportDirectory.appending(path: "voice"))
     let voiceSetup: any VoiceSetupPreference = UserDefaultsVoiceSetup(defaults: .standard)
@@ -77,6 +86,22 @@ final class AppContainer {
         )
         box.account = account
         self.account = account
+        #if DEBUG
+        // A build run from Xcode is signed for Apple's test service; TestFlight and App Store builds for the real one.
+        let pushService = "apns-sandbox"
+        #else
+        let pushService = "apns"
+        #endif
+        let push = PushRegistration(service: pushService) { [weak account] service, token in
+            try await account?.registerPush(service: service, token: token)
+        }
+        self.push = push
+        followSession = Task { [weak account] in
+            while let account, !Task.isCancelled {
+                push.onSession(account.token)
+                await nextChange { _ = account.session }
+            }
+        }
         let rooms = RoomsClient(rest: rest)
         self.rooms = rooms
         roomFeed = RoomFeed(rooms: rooms)
@@ -161,6 +186,7 @@ final class AppContainer {
 
     isolated deinit {
         measureWhenReady.cancel()
+        followSession.cancel()
     }
 
     /// Multilingual "base", quantised: 57 MB. The reasons are in ADR 0004.

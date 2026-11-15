@@ -125,6 +125,19 @@ private struct MainTabs: View {
                 roomsPath = []
             }
         }
+        .onChange(of: container.notifications.roomToOpen, initial: true) { _, room in
+            if let room {
+                tab = .rooms
+                roomsPath = [room]
+                container.notifications.roomOpened()
+            }
+        }
+        .task {
+            // Apple asks for an address on every launch; it is the same one unless Apple has changed it.
+            if await container.notifications.requestPermission() {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+        }
     }
 
     @ViewBuilder
@@ -148,10 +161,15 @@ private struct MainTabs: View {
 
 /// A room, with its own view model for as long as it is open.
 private struct RoomDestination: View {
+    let roomID: String
+    let notifications: VoiceNoteNotifications
     let onRecordVoice: () -> Void
     @State private var viewModel: RoomViewModel
+    @Environment(\.scenePhase) private var scenePhase
 
     init(container: AppContainer, roomID: String, onRecordVoice: @escaping () -> Void) {
+        self.roomID = roomID
+        notifications = container.notifications
         self.onRecordVoice = onRecordVoice
         _viewModel = State(
             initialValue: RoomViewModel(
@@ -169,6 +187,15 @@ private struct RoomDestination: View {
 
     var body: some View {
         RoomScreen(viewModel: viewModel, onRecordVoice: onRecordVoice)
+            // While the room is on the screen its notes appear as they arrive, so they need no notification, and
+            // those that may have brought the person here are done with.
+            .onAppear { notifications.roomOnScreen = roomID }
+            .onDisappear {
+                if notifications.roomOnScreen == roomID { notifications.roomOnScreen = nil }
+            }
+            .task(id: scenePhase) {
+                if scenePhase == .active { await notifications.clear(roomID: roomID) }
+            }
     }
 }
 
