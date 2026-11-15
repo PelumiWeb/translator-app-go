@@ -67,6 +67,18 @@ type Config struct {
 	// project, which Google writes into the tokens it issues for the Android
 	// app. Empty turns Sign in with Google off.
 	GoogleClientID string
+
+	// Push notifications to iPhones (ADR 0026): the path of the key file
+	// from the developer account (AuthKey_<id>.p8), its key ID, and the
+	// team's ID. AppleAudience, the bundle ID, is where they go. No file
+	// turns iPhone notifications off.
+	APNsKeyFile string
+	APNsKeyID   string
+	APNsTeamID  string
+	// FCMServiceAccountFile is the path of the Firebase project's service
+	// account key, for notifications to Android phones. Empty turns them off.
+	// Both key files are secret, and kept outside the repository.
+	FCMServiceAccountFile string
 }
 
 // Load is called once from main. Nothing else in the server reads the
@@ -104,6 +116,11 @@ func Load() Config {
 
 		AppleAudience:  env("APPLE_AUDIENCE", "com.pelumi.shinar"),
 		GoogleClientID: env("GOOGLE_CLIENT_ID", ""),
+
+		APNsKeyFile:           env("APNS_KEY_FILE", ""),
+		APNsKeyID:             env("APNS_KEY_ID", ""),
+		APNsTeamID:            env("APNS_TEAM_ID", "4USZRKF452"),
+		FCMServiceAccountFile: env("FCM_SERVICE_ACCOUNT_FILE", ""),
 	}
 }
 

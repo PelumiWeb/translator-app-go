@@ -59,7 +59,9 @@ visudo -cf /etc/sudoers.d/shinar-deploy
 for dir in audio voices messages models; do
     install -d -m 750 -o shinar -g shinar "/var/lib/shinar/$dir"
 done
-install -d -m 750 /etc/shinar
+# The shinar group may enter it, to read the push notification keys (root:shinar,
+# 640) the server opens itself; the settings stay root's, read by systemd.
+install -d -m 750 -o root -g shinar /etc/shinar
 [[ -f /etc/shinar/env ]] || install -m 600 /dev/null /etc/shinar/env
 
 echo "== Speech model"

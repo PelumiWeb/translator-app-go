@@ -29,6 +29,7 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fish"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/google"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/groq"
+	"github.com/PelumiWeb/translator-app-go/server/internal/push"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 	"github.com/PelumiWeb/translator-app-go/server/internal/rooms"
 	"github.com/PelumiWeb/translator-app-go/server/internal/storage"
@@ -177,6 +178,11 @@ func run(logger *slog.Logger) error {
 	wake := func() {}
 
 	if role.runsWorkers() {
+		pushes, err := newPushServices(cfg)
+		if err != nil {
+			return err
+		}
+		logger.Info("push notifications", "apns", pushes.APNs != nil, "fcm", pushes.FCM != nil)
 		deliverer := &rooms.Deliverer{
 			Store:      roomStore,
 			Translator: translator,
@@ -184,6 +190,12 @@ func run(logger *slog.Logger) error {
 			Voices:     accountStore,
 			Files:      voices,
 			Messages:   messages,
+			Phones:     accountStore,
+		}
+		// Left nil, not an empty Services, when neither is set up: the
+		// deliverer checks for nil to skip the work of finding phones.
+		if pushes.Enabled() {
+			deliverer.Pusher = pushes
 		}
 		workers := queue.NewPool(store, transcriber, synthesizer, deliverer, audio, logger, queue.Config{
 			Workers:       cfg.Workers,
@@ -366,4 +378,33 @@ func newTranslator(cfg config.Config) (provider.Translator, string, error) {
 	default:
 		return nil, "", fmt.Errorf("unknown TRANSLATE_ENGINE %q: want google, azure, fake, or nothing for none", cfg.TranslateEngine)
 	}
+}
+
+// newPushServices reads the push services' key files, for those that are set
+// up. A file named but unreadable stops the server, rather than leaving
+// notifications quietly off.
+func newPushServices(cfg config.Config) (push.Services, error) {
+	var services push.Services
+	if cfg.APNsKeyFile != "" {
+		if cfg.APNsKeyID == "" {
+			return push.Services{}, errors.New("APNS_KEY_FILE needs APNS_KEY_ID, the key's ID from the developer account")
+		}
+		p8, err := os.ReadFile(cfg.APNsKeyFile)
+		if err != nil {
+			return push.Services{}, fmt.Errorf("reading APNS_KEY_FILE: %w", err)
+		}
+		if services.APNs, err = push.NewAPNs(p8, cfg.APNsKeyID, cfg.APNsTeamID, cfg.AppleAudience); err != nil {
+			return push.Services{}, err
+		}
+	}
+	if cfg.FCMServiceAccountFile != "" {
+		account, err := os.ReadFile(cfg.FCMServiceAccountFile)
+		if err != nil {
+			return push.Services{}, fmt.Errorf("reading FCM_SERVICE_ACCOUNT_FILE: %w", err)
+		}
+		if services.FCM, err = push.NewFCM(account); err != nil {
+			return push.Services{}, err
+		}
+	}
+	return services, nil
 }

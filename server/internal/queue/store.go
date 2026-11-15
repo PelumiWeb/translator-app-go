@@ -27,6 +27,7 @@ const (
 	KindTranscribe = "transcribe"
 	KindSynthesize = "synthesize"
 	KindDeliver    = "deliver" // a room message, for the listeners of one language
+	KindPush       = "push"    // telling those listeners' phones it is ready
 )
 
 // Job statuses, as stored in jobs.status.
@@ -49,7 +50,7 @@ const (
 // Job is what a worker needs to process one claimed job.
 type Job struct {
 	ID   string
-	Kind string // KindTranscribe, KindSynthesize or KindDeliver
+	Kind string // KindTranscribe, KindSynthesize, KindDeliver or KindPush
 
 	// AudioKey is the stored audio the job works from: the speech to
 	// transcribe, or the voice sample to imitate. Empty for a delivery,
@@ -57,9 +58,9 @@ type Job struct {
 	AudioKey string
 
 	SourceLang string // transcription: the language spoken
-	TargetLang string // synthesis and delivery: the language to speak in
+	TargetLang string // synthesis, delivery and push: the language to speak in
 	Text       string // synthesis: what to say
-	MessageID  string // delivery: the message to deliver
+	MessageID  string // delivery and push: the message
 
 	Attempt     int // 1 on the first try
 	MaxAttempts int // the job fails for good once Attempt reaches this
@@ -113,19 +114,37 @@ func (s *Store) EnqueueSynthesis(ctx context.Context, targetLang, text, voiceKey
 // transaction, the one that adds the message, so that a message never exists
 // without the work to deliver it, nor the work without the message.
 func (s *Store) EnqueueDeliveries(ctx context.Context, tx pgx.Tx, messageID string, langs []string) error {
+	if err := enqueueForMessage(ctx, tx, KindDeliver, messageID, langs); err != nil {
+		return fmt.Errorf("enqueueing a delivery: %w", err)
+	}
+	return nil
+}
+
+// EnqueuePushes adds a job for each language in langs, to tell the phones of
+// that language's listeners that the message is ready for them. It runs in
+// the caller's transaction, the one that makes the message ready, so the
+// phones hear of it if and only if it happened.
+func (s *Store) EnqueuePushes(ctx context.Context, tx pgx.Tx, messageID string, langs []string) error {
+	if err := enqueueForMessage(ctx, tx, KindPush, messageID, langs); err != nil {
+		return fmt.Errorf("enqueueing a push: %w", err)
+	}
+	return nil
+}
+
+func enqueueForMessage(ctx context.Context, tx pgx.Tx, kind, messageID string, langs []string) error {
 	for _, lang := range langs {
 		var id string
 		err := tx.QueryRow(ctx, `
 			INSERT INTO jobs (status, kind, audio_path, target_lang, message_id)
 			VALUES ('queued', $1, '', $2, $3)
 			RETURNING id`,
-			KindDeliver, lang, messageID,
+			kind, lang, messageID,
 		).Scan(&id)
 		if err != nil {
-			return fmt.Errorf("enqueueing a delivery: %w", err)
+			return err
 		}
 		if _, err := insertEvent(ctx, tx, id, EventQueued, struct{}{}); err != nil {
-			return fmt.Errorf("enqueueing a delivery: %w", err)
+			return err
 		}
 	}
 	return nil
@@ -256,7 +275,7 @@ func (s *Store) CompleteSynthesis(ctx context.Context, job Job, resultKey string
 	)
 }
 
-// CompleteDelivery marks a delivery job as done. What it delivered is
+// CompleteDelivery marks a delivery or push job as done. What it did is
 // recorded with the message, by the rooms package.
 func (s *Store) CompleteDelivery(ctx context.Context, job Job) error {
 	return s.finish(ctx, job, `

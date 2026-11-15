@@ -22,6 +22,9 @@ type Deliverer interface {
 	// DeliveryFailed is told when a delivery has failed for good, so that the
 	// message can say so.
 	DeliveryFailed(ctx context.Context, messageID, lang, reason string) error
+	// Push tells the phones of the listeners of one language that the
+	// message is ready for them.
+	Push(ctx context.Context, messageID, lang string) error
 }
 
 // AudioStore is what the workers need from audio storage.
@@ -279,6 +282,8 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 		record, err = p.synthesize(workCtx, job)
 	case KindDeliver:
 		record, err = p.deliver(workCtx, job)
+	case KindPush:
+		record, err = p.push(workCtx, job)
 	default:
 		record, err = p.transcribe(workCtx, logger, job)
 	}
@@ -356,6 +361,20 @@ func (p *Pool) deliver(ctx context.Context, job Job) (record func(context.Contex
 		return nil, provider.Permanent(errors.New("this worker cannot deliver messages"))
 	}
 	if err := p.deliverer.Deliver(ctx, job.MessageID, job.TargetLang, job.Attempt); err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context) error {
+		return p.store.CompleteDelivery(ctx, job)
+	}, nil
+}
+
+// push hands a ready message to the deliverer, to tell the listeners'
+// phones. It returns the function that marks the job done.
+func (p *Pool) push(ctx context.Context, job Job) (record func(context.Context) error, err error) {
+	if p.deliverer == nil {
+		return nil, provider.Permanent(errors.New("this worker cannot send notifications"))
+	}
+	if err := p.deliverer.Push(ctx, job.MessageID, job.TargetLang); err != nil {
 		return nil, err
 	}
 	return func(ctx context.Context) error {

@@ -88,6 +88,12 @@ voice-check: ## Ask Fish Audio to speak once (key from server/.env) and play wha
 transcribe-check: ## Ask Groq to transcribe whisper.cpp's sample clip once (key from server/.env)
 	cd server && $(SERVER_ENV) go test ./internal/provider/groq -run TestLiveTranscription -count=1 -v
 
+# Signs in to Apple's and Google's push services with the key files named in
+# server/.env, and sends to a made-up phone, so nothing arrives anywhere.
+.PHONY: push-check
+push-check: ## Check the push notification keys with Apple and Google (files named in server/.env)
+	cd server && $(SERVER_ENV) go test ./internal/push -run TestLiveKeys -count=1 -v
+
 .PHONY: translate-check
 translate-check: ## Ask Azure AI Translator for a few translations (key from server/.env), English to Yoruba among them
 	cd server && $(SERVER_ENV) go test ./internal/provider/azure -run TestLiveTranslation -count=1 -v

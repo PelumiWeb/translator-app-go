@@ -100,6 +100,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/sessions/apple", a.handleSignIn(accounts.ProviderApple, a.Apple))
 	mux.HandleFunc("POST /v1/sessions/google", a.handleSignIn(accounts.ProviderGoogle, a.Google))
 	mux.HandleFunc("DELETE /v1/sessions/current", a.signedIn(a.handleSignOut))
+	mux.HandleFunc("PUT /v1/sessions/current/push", a.signedIn(a.handlePutPush))
 	mux.HandleFunc("GET /v1/me", a.signedIn(a.handleGetMe))
 	mux.HandleFunc("PATCH /v1/me", a.signedIn(a.handleUpdateMe))
 	mux.HandleFunc("DELETE /v1/me", a.signedIn(a.handleDeleteMe))

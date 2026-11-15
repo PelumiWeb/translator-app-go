@@ -710,6 +710,7 @@ type fakeDeliverer struct {
 	errs      []error
 	delivered []string // "message lang attempt"
 	failed    []string // "message lang: reason"
+	pushes    []string // "message lang"
 }
 
 func (d *fakeDeliverer) Deliver(_ context.Context, messageID, lang string, attempt int) error {
@@ -729,6 +730,23 @@ func (d *fakeDeliverer) DeliveryFailed(_ context.Context, messageID, lang, reaso
 	return nil
 }
 
+// Push fails with errs, one per call, like Deliver.
+func (d *fakeDeliverer) Push(_ context.Context, messageID, lang string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.pushes = append(d.pushes, messageID+" "+lang)
+	if len(d.pushes) <= len(d.errs) {
+		return d.errs[len(d.pushes)-1]
+	}
+	return nil
+}
+
+func (d *fakeDeliverer) pushCalls() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.pushes)
+}
+
 func (d *fakeDeliverer) calls() (delivered, failed []string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -738,6 +756,15 @@ func (d *fakeDeliverer) calls() (delivered, failed []string) {
 // enqueueDelivery adds a message from a new user in a new room, and a job to
 // deliver it in Spanish.
 func enqueueDelivery(t *testing.T, db *pgxpool.Pool, store *Store) (jobID, messageID string) {
+	t.Helper()
+	return enqueueForSpanish(t, db, store, store.EnqueueDeliveries)
+}
+
+// enqueueForSpanish adds a message from a new user in a new room, and a job
+// for it in Spanish, added by enqueue.
+func enqueueForSpanish(t *testing.T, db *pgxpool.Pool, store *Store,
+	enqueue func(ctx context.Context, tx pgx.Tx, messageID string, langs []string) error,
+) (jobID, messageID string) {
 	t.Helper()
 	ctx := context.Background()
 	err := db.QueryRow(ctx, `
@@ -751,7 +778,7 @@ func enqueueDelivery(t *testing.T, db *pgxpool.Pool, store *Store) (jobID, messa
 		t.Fatal(err)
 	}
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		return store.EnqueueDeliveries(ctx, tx, messageID, []string{"es"})
+		return enqueue(ctx, tx, messageID, []string{"es"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -814,6 +841,40 @@ func TestPoolTellsTheDelivererWhenADeliveryFailsForGood(t *testing.T) {
 			last := tt.errs[len(tt.errs)-1].Error()
 			if want := []string{message + " es: " + last}; !slices.Equal(failed, want) {
 				t.Errorf("failed = %v, want %v", failed, want)
+			}
+		})
+	}
+}
+
+func TestPoolSendsPushes(t *testing.T) {
+	tests := []struct {
+		name         string
+		errs         []error
+		wantStatus   string
+		wantAttempts int
+	}{
+		{"after a temporary failure", []error{errors.New("APNs busy")}, "done", 2},
+		{"not again after a permanent one", []error{provider.Permanent(errors.New("bad topic"))}, "failed", 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := testdb.New(t)
+			store := NewStore(db)
+			deliverer := &fakeDeliverer{errs: tt.errs}
+
+			id, message := enqueueForSpanish(t, db, store, store.EnqueuePushes)
+			startPoolWithDeliverer(t, store, fake.Provider{}, nil, deliverer, &fakeAudio{}, Config{Lease: testLease, ShutdownGrace: time.Second})
+
+			row := waitForStatus(t, db, id, tt.wantStatus)
+			if row.Attempts != tt.wantAttempts {
+				t.Errorf("attempts = %d, want %d", row.Attempts, tt.wantAttempts)
+			}
+			if got := deliverer.pushCalls(); len(got) != tt.wantAttempts || got[0] != message+" es" {
+				t.Errorf("pushes = %v", got)
+			}
+			// A failed push leaves the message as it is: it was delivered.
+			if delivered, failed := deliverer.calls(); len(delivered)+len(failed) != 0 {
+				t.Errorf("delivered = %v, failed = %v, want neither", delivered, failed)
 			}
 		})
 	}

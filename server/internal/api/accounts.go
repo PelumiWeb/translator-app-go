@@ -28,6 +28,8 @@ type AccountStore interface {
 	HandleFree(ctx context.Context, userID, handle string) (bool, error)
 	SuggestHandles(ctx context.Context, handle, name string, n int) ([]string, error)
 	UserByHandle(ctx context.Context, handle string) (accounts.User, error)
+
+	SetPushToken(ctx context.Context, sessionToken, service, pushToken string) error
 }
 
 // TokenVerifier checks an identity token from Sign in with Apple or Google.

@@ -92,10 +92,12 @@ type NewMessage struct {
 	IdempotencyKey string // empty for none
 }
 
-// Enqueuer adds the jobs that deliver a message. It runs in the transaction
-// that adds the message, so that neither can exist without the other.
+// Enqueuer adds the jobs that deliver a message, and those that tell the
+// listeners' phones it is ready. It runs in the transaction that adds the
+// message or makes it ready, so that neither can happen without the other.
 type Enqueuer interface {
 	EnqueueDeliveries(ctx context.Context, tx pgx.Tx, messageID string, langs []string) error
+	EnqueuePushes(ctx context.Context, tx pgx.Tx, messageID string, langs []string) error
 }
 
 // Store keeps rooms in Postgres.
@@ -340,10 +342,11 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 		created = true
 
 		// Listeners of the language it was said in hear the sender's own
-		// recording; the others wait for a translation.
-		var toTranslate []string
+		// recording, at once; the others wait for a translation.
+		var toTranslate, ready []string
 		for _, lang := range langs {
 			if lang == m.Lang {
+				ready = append(ready, lang)
 				_, err = tx.Exec(ctx, `
 					INSERT INTO renditions (message_id, lang, status, text, voice)
 					VALUES ($1, $2, 'ready', $3, 'original')`, id, lang, m.Transcript)
@@ -357,6 +360,9 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 			}
 		}
 		if err := s.jobs.EnqueueDeliveries(ctx, tx, id, toTranslate); err != nil {
+			return err
+		}
+		if err := s.jobs.EnqueuePushes(ctx, tx, id, ready); err != nil {
 			return err
 		}
 		return notifyMessage(ctx, tx, id)

@@ -21,6 +21,7 @@ type fakeAccounts struct {
 	bySub    map[string]string         // subject to user ID
 	sessions map[string]string         // token to user ID
 	voices   map[string]accounts.Voice // by user ID
+	pushes   map[string]string         // session token to "service token"
 }
 
 func newFakeAccounts() *fakeAccounts {
@@ -29,7 +30,18 @@ func newFakeAccounts() *fakeAccounts {
 		bySub:    map[string]string{},
 		sessions: map[string]string{},
 		voices:   map[string]accounts.Voice{},
+		pushes:   map[string]string{},
 	}
+}
+
+func (f *fakeAccounts) SetPushToken(_ context.Context, session, service, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.sessions[session]; !ok {
+		return accounts.ErrNoSession
+	}
+	f.pushes[session] = service + " " + token
+	return nil
 }
 
 func (f *fakeAccounts) SignIn(_ context.Context, provider, subject, _, name string) (string, accounts.User, bool, error) {

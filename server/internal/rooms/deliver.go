@@ -31,8 +31,9 @@ type MessageFiles interface {
 }
 
 // Deliverer makes what a message becomes for the listeners of one language:
-// the translation, then the translation spoken in the sender's voice. The
-// queue's workers run it, one job per message and language, and retry it.
+// the translation, then the translation spoken in the sender's voice; then it
+// tells their phones. The queue's workers run it, one job per message and
+// language, and retry it.
 type Deliverer struct {
 	Store *Store
 
@@ -46,6 +47,11 @@ type Deliverer struct {
 	Voices   VoiceKeeper
 	Files    VoiceFiles   // where kept voices are stored
 	Messages MessageFiles // where message audio is stored
+
+	// Pusher is nil when the server has no push service: the listeners
+	// then see a message when they next open the app.
+	Pusher Pusher
+	Phones PhoneBook
 }
 
 // Deliver translates the message and speaks it. A retry picks up where the
@@ -149,13 +155,15 @@ func (s *Store) delivery(ctx context.Context, messageID, lang string) (deliveryW
 func (s *Store) saveTranslation(ctx context.Context, messageID, lang, text string) error {
 	return s.updateRendition(ctx, messageID, lang, `
 		UPDATE renditions SET status = 'speaking', text = $3, updated_at = now()
-		WHERE message_id = $1 AND lang = $2`, text)
+		WHERE message_id = $1 AND lang = $2
+		RETURNING status`, text)
 }
 
 func (s *Store) ready(ctx context.Context, messageID, lang, voice, audioKey string) error {
 	return s.updateRendition(ctx, messageID, lang, `
 		UPDATE renditions SET status = 'ready', voice = $3, audio_key = NULLIF($4, ''), updated_at = now()
-		WHERE message_id = $1 AND lang = $2`, voice, audioKey)
+		WHERE message_id = $1 AND lang = $2
+		RETURNING status`, voice, audioKey)
 }
 
 func (s *Store) failDelivery(ctx context.Context, messageID, lang string) error {
@@ -164,17 +172,29 @@ func (s *Store) failDelivery(ctx context.Context, messageID, lang string) error 
 			status = CASE WHEN text IS NULL THEN 'failed' ELSE 'ready' END,
 			voice  = CASE WHEN text IS NULL THEN NULL ELSE 'phone' END,
 			updated_at = now()
-		WHERE message_id = $1 AND lang = $2 AND status <> 'ready'`)
+		WHERE message_id = $1 AND lang = $2 AND status <> 'ready'
+		RETURNING status`)
 }
 
 // updateRendition runs update, whose first two parameters are the message
-// and the language, and announces the change, together.
+// and the language and which returns the rendition's new status, and
+// announces the change, together. A rendition now ready is also pushed to
+// its listeners' phones.
 func (s *Store) updateRendition(ctx context.Context, messageID, lang, update string, extra ...any) error {
 	args := append([]any{messageID, lang}, extra...)
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, update, args...)
-		if err != nil || tag.RowsAffected() == 0 {
+		var status string
+		err := tx.QueryRow(ctx, update, args...).Scan(&status)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil // nothing changed
+		}
+		if err != nil {
 			return err
+		}
+		if status == StatusReady {
+			if err := s.jobs.EnqueuePushes(ctx, tx, messageID, []string{lang}); err != nil {
+				return err
+			}
 		}
 		return notifyMessage(ctx, tx, messageID)
 	})

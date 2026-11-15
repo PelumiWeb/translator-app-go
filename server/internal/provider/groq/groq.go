@@ -1,5 +1,5 @@
 // Package groq transcribes speech with OpenAI's Whisper large-v3, run by
-// Groq behind an OpenAI-compatible API (ADR 0026). It is the server's
+// Groq behind an OpenAI-compatible API (ADR 0009). It is the server's
 // transcriber for phones that cannot transcribe on their own.
 package groq
 
