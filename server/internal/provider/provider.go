@@ -1,7 +1,8 @@
 // Package provider defines what the server needs from the outside engines it
 // uses: a speech-to-text service, a voice-cloning speech synthesizer, and a
-// translation service. Implementations live in sub-packages: fake, fish
-// (Fish Audio) and google (Google Cloud Translation).
+// translation service. Implementations live in sub-packages: fake, groq
+// (Whisper on Groq), fish (Fish Audio), google (Google Cloud Translation) and
+// azure (Azure AI Translator).
 package provider
 
 import (

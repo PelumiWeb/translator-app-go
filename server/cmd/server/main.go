@@ -28,6 +28,7 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fake"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/fish"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/google"
+	"github.com/PelumiWeb/translator-app-go/server/internal/provider/groq"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 	"github.com/PelumiWeb/translator-app-go/server/internal/rooms"
 	"github.com/PelumiWeb/translator-app-go/server/internal/storage"
@@ -117,12 +118,12 @@ func run(logger *slog.Logger) error {
 	}
 	logger.Info("models loaded", "dir", cfg.ModelsDir, "count", len(catalog.List()))
 
-	// The only provider so far. A real one is chosen in milestone 7.
-	transcriber := fake.Provider{
-		Text:         "this is a fake transcript from the fake provider",
-		WordDelay:    300 * time.Millisecond,
-		FailAttempts: cfg.FakeFailAttempts,
+	transcriber, transcriberName, err := newTranscriber(cfg)
+	if err != nil {
+		return err
 	}
+	logger.Info("transcription", "engine", transcriberName)
+
 	// The voice engine. A nil interface value means there is none: the API
 	// then refuses requests to speak, and the phones speak in their own
 	// voices. A Fish Audio key on its own is enough to choose Fish Audio.
@@ -299,6 +300,35 @@ func run(logger *slog.Logger) error {
 
 	logger.Info("server stopped cleanly")
 	return nil
+}
+
+// newTranscriber picks the service that transcribes the recordings phones
+// send. Unlike the voice and translation engines there is no "none": the
+// phones expect an answer, so without a key the fake stands in, which keeps
+// local development free of keys.
+func newTranscriber(cfg config.Config) (provider.Provider, string, error) {
+	engine := cfg.TranscribeEngine
+	if engine == "" {
+		engine = "fake"
+		if cfg.GroqAPIKey != "" {
+			engine = "groq"
+		}
+	}
+	switch engine {
+	case "groq":
+		if cfg.GroqAPIKey == "" {
+			return nil, "", errors.New("TRANSCRIBE_ENGINE=groq needs GROQ_API_KEY (put it in server/.env)")
+		}
+		return groq.Transcriber{APIKey: cfg.GroqAPIKey, Model: cfg.GroqModel}, engine, nil
+	case "fake":
+		return fake.Provider{
+			Text:         "this is a fake transcript from the fake provider",
+			WordDelay:    300 * time.Millisecond,
+			FailAttempts: cfg.FakeFailAttempts,
+		}, engine, nil
+	default:
+		return nil, "", fmt.Errorf("unknown TRANSCRIBE_ENGINE %q: want groq or fake", cfg.TranscribeEngine)
+	}
 }
 
 // newTranslator picks the service that translates room messages. A nil

@@ -73,7 +73,7 @@ server-run-worker: ## Run only the job workers (pair with server-run-api)
 
 .PHONY: server-run-flaky
 server-run-flaky: ## Run the server with a provider that fails each job twice, to watch retries
-	cd server && $(SERVER_ENV) FAKE_FAIL_ATTEMPTS=2 go run ./cmd/server
+	cd server && $(SERVER_ENV) TRANSCRIBE_ENGINE=fake FAKE_FAIL_ATTEMPTS=2 go run ./cmd/server
 
 # One real request to the voice engine, with whisper.cpp's sample clip as the
 # voice, then plays the result. Costs a fraction of a cent.
@@ -81,6 +81,12 @@ server-run-flaky: ## Run the server with a provider that fails each job twice, t
 voice-check: ## Ask Fish Audio to speak once (key from server/.env) and play what it made
 	cd server && $(SERVER_ENV) FISH_LIVE_OUT=/tmp/vt-fish.wav go test ./internal/provider/fish -run TestLiveSynthesis -count=1 -v
 	afplay /tmp/vt-fish.wav
+
+# One real request to Groq with whisper.cpp's sample clip. Free within the
+# free plan's daily allowance.
+.PHONY: transcribe-check
+transcribe-check: ## Ask Groq to transcribe whisper.cpp's sample clip once (key from server/.env)
+	cd server && $(SERVER_ENV) go test ./internal/provider/groq -run TestLiveTranscription -count=1 -v
 
 .PHONY: translate-check
 translate-check: ## Ask Azure AI Translator for a few translations (key from server/.env), English to Yoruba among them

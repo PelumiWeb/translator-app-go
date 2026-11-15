@@ -25,6 +25,16 @@ type Config struct {
 	// every job, to watch retries happen. 0 in normal use.
 	FakeFailAttempts int
 
+	// TranscribeEngine names the service that transcribes recordings the
+	// phones send: "groq" for Whisper large-v3 on Groq, or "fake", which
+	// answers every recording with the same sentence. A Groq key on its own
+	// chooses "groq"; with no key and no engine named, it is "fake".
+	TranscribeEngine string
+	// GroqAPIKey is secret, like the other keys: server/.env. GroqModel
+	// picks one of Groq's Whisper models; empty for whisper-large-v3.
+	GroqAPIKey string
+	GroqModel  string
+
 	// VoiceEngine names the engine that speaks in users' voices: "fish" for
 	// Fish Audio; "fake", which answers with beeps, for development; or
 	// empty for none, in which case requests to speak are refused and the
@@ -77,6 +87,10 @@ func Load() Config {
 		SweepInterval: envDuration("SWEEP_INTERVAL", 30*time.Second),
 
 		FakeFailAttempts: envInt("FAKE_FAIL_ATTEMPTS", 0),
+
+		TranscribeEngine: env("TRANSCRIBE_ENGINE", ""),
+		GroqAPIKey:       env("GROQ_API_KEY", ""),
+		GroqModel:        env("GROQ_MODEL", ""),
 
 		VoiceEngine:     env("VOICE_ENGINE", ""),
 		FishAudioAPIKey: env("FISH_AUDIO_API_KEY", ""),
