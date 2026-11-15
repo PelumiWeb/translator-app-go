@@ -48,3 +48,7 @@ xcuserdata/
 *.p8
 *.p12
 *.mobileprovision
+
+# Firebase settings for the Android app (push notifications). Not a
+# secret, but it names the owner's project, and this repository is public.
+android/app/google-services.json

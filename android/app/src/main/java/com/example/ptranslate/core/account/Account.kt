@@ -88,6 +88,9 @@ class Account(
 
     suspend fun deleteVoice() = client.deleteVoice()
 
+    /** Tells the server where this phone receives notifications, for as long as this session lasts. */
+    suspend fun registerPush(service: String, token: String) = client.setPushToken(service, token)
+
     /** Records the next step of signing up as reached. */
     fun moveTo(step: OnboardingStep) {
         progress.step = step

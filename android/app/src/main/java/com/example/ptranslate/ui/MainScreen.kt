@@ -1,6 +1,10 @@
 package com.example.ptranslate.ui
 
+import android.Manifest
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,9 +56,16 @@ private enum class Tab(val label: String, val icon: ImageVector) {
  * of a navigation library, and back is handled by hand.
  *
  * @param addHandle an ID from a shinar://add link, to offer to add.
+ * @param roomToOpen a room whose notification was tapped.
  */
 @Composable
-fun MainScreen(addHandle: String?, onAddHandleUsed: () -> Unit, modifier: Modifier = Modifier) {
+fun MainScreen(
+    addHandle: String?,
+    onAddHandleUsed: () -> Unit,
+    roomToOpen: String?,
+    onRoomOpened: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val container = (LocalContext.current.applicationContext as PtranslateApp).container
     val colors = Pearl.colors
     val translate: TranslateViewModel = viewModel(factory = TranslateViewModel.Factory)
@@ -71,6 +82,25 @@ fun MainScreen(addHandle: String?, onAddHandleUsed: () -> Unit, modifier: Modifi
         if (addHandle != null) {
             tab = Tab.ROOMS
             openRoom = null
+        }
+    }
+    LaunchedEffect(roomToOpen) {
+        if (roomToOpen != null) {
+            tab = Tab.ROOMS
+            destination = null
+            openRoom = roomToOpen
+            onRoomOpened()
+        }
+    }
+
+    // Permission to notify (Android 13 and later) is asked once, the first time the rooms are shown: the system's
+    // own question, as the screen before it is not designed yet.
+    val askToNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        val notifications = container.notifications
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifications.permissionAsked) {
+            notifications.permissionAsked = true
+            askToNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 

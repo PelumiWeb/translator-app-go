@@ -1,7 +1,9 @@
 package com.example.ptranslate
 
 import android.app.Application
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import com.example.ptranslate.core.Language
 import com.example.ptranslate.core.account.Account
 import com.example.ptranslate.core.account.KeystoreSessionStore
@@ -21,6 +23,8 @@ import com.example.ptranslate.core.net.RoomsClient
 import com.example.ptranslate.core.rooms.MessagePlayer
 import com.example.ptranslate.core.rooms.RoomFeed
 import com.example.ptranslate.core.pipeline.SpeechTranslationPipeline
+import com.example.ptranslate.core.push.PushRegistration
+import com.example.ptranslate.core.push.VoiceNoteNotifications
 import com.example.ptranslate.core.speech.AndroidSpeechSynthesizer
 import com.example.ptranslate.core.speech.FallbackSpeechSynthesizer
 import com.example.ptranslate.core.speech.RemoteSpeechSynthesizer
@@ -41,6 +45,8 @@ import com.example.ptranslate.core.voice.SharedPreferencesVoiceSetup
 import com.example.ptranslate.core.voice.VoiceSampleStore
 import com.example.ptranslate.core.voice.VoiceSetupPreference
 import com.example.ptranslate.core.translate.Translator
+import com.google.firebase.FirebaseApp
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +55,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -182,6 +189,30 @@ class AppContainer(context: Context) {
         translator = translator,
         synthesizer = synthesizer,
     )
+
+    /** Notifications for voice notes that arrive while their room is not on the screen. */
+    val notifications = VoiceNoteNotifications(context, R.drawable.ic_notification, preferences) { roomId ->
+        val open = Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_ROOM_ID, roomId)
+        // One request code per room, so each notification opens its own.
+        PendingIntent.getActivity(context, roomId.hashCode(), open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** Tells the server where Firebase reaches this phone, whenever someone is signed in (ADR 0026). */
+    val push = PushRegistration(
+        service = "fcm",
+        sessions = account.session.map { it?.token },
+        register = account::registerPush,
+        scope = appScope,
+    )
+
+    init {
+        // A build without google-services.json has no Firebase, and so no notifications.
+        if (FirebaseApp.getApps(context).isNotEmpty()) {
+            push.start()
+            // Firebase answers in ShinarMessagingService.onRegistered, on every launch, with the app's address.
+            FirebaseMessaging.getInstance().register()
+        }
+    }
 
     init {
         // Signing out, or deleting the account, leaves nothing of the person

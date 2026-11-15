@@ -52,6 +52,9 @@ private val PRIVACY_SECTIONS = listOf(
     "Writing down your words" to
         "Your phone writes down what you say by itself when it can. When it cannot, on an older " +
         "phone or before its speech model has downloaded, the recording goes to our server, and Groq writes the words down for us.",
+    "Notifications" to
+        "When a voice note reaches you and its room is not open, our server tells your phone through Google's Firebase: " +
+        "the sender's name and how long the note is, never its words or its sound. Turn them off in your phone's settings, under Shinar.",
     "Deleting" to
         "Delete your voice in Profile, under Your voice: your messages then use the phone's voice. Delete your account, " +
         "and your profile, your voice and everything you said in your rooms are deleted with it.",

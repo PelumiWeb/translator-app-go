@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Android 13 and later ask the person before an app may notify. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
       Since Android 11 an app can only see other apps it declares an interest
@@ -51,6 +53,24 @@
                 <data android:scheme="shinar" android:host="add" />
             </intent-filter>
         </activity>
+
+        <!--
+          Firebase Messaging 26 reaches the app by its Firebase installation ID,
+          through register() and onRegistered(), in place of the registration
+          token it is retiring. This turns the new way on.
+        -->
+        <meta-data
+            android:name="firebase_messaging_installation_id_enabled"
+            android:value="true" />
+
+        <!-- Receives what the server sends through Firebase: voice notes ready in a room (ADR 0026). -->
+        <service
+            android:name=".ShinarMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

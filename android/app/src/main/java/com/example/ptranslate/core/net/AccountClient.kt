@@ -67,10 +67,21 @@ class AccountClient internal constructor(private val rest: Rest) {
         rest.delete("/v1/sessions/current")
     }
 
+    /**
+     * Tells the server where this phone receives notifications: its [token] at a push [service] ("fcm" here).
+     * It belongs to the session, so signing out forgets it.
+     */
+    suspend fun setPushToken(service: String, token: String) {
+        rest.send(rest.request("/v1/sessions/current/push").put(rest.body(PushTokenRequest(service, token))).build())
+    }
+
     suspend fun deleteAccount() {
         rest.delete("/v1/me")
     }
 }
+
+@Serializable
+private data class PushTokenRequest(val service: String, val token: String)
 
 @Serializable
 private data class SignInRequest(

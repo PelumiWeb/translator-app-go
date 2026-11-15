@@ -40,6 +40,20 @@ class AccountTest {
     }
 
     @Test
+    fun `registering for push tells the server the service and the address, for this session`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(204))
+        val account = testAccount(server, MemorySessionStore(signedUp), MemoryProgress(OnboardingStep.DONE))
+
+        account.registerPush("fcm", "phone-token")
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/v1/sessions/current/push", request.path)
+        assertEquals("Bearer tok", request.getHeader("Authorization"))
+        assertEquals("""{"service":"fcm","token":"phone-token"}""", request.body.readUtf8())
+    }
+
+    @Test
     fun `an account set up on another phone goes straight in`() = runTest {
         server.enqueue(json("""{"token":"t2","user":{"id":"u1","display_name":"Ada","handle":"ada","language":"en"},"new_user":false}"""))
         val account = testAccount(server)

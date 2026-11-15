@@ -28,9 +28,16 @@ import com.example.ptranslate.ui.onboarding.WelcomeScreen
  * session the server ended brings them back to the welcome from anywhere.
  *
  * @param addHandle an ID from a shinar://add link, offered once signed up.
+ * @param roomToOpen a room whose notification was tapped, opened once signed up.
  */
 @Composable
-fun AppRoot(addHandle: String?, onAddHandleUsed: () -> Unit, modifier: Modifier = Modifier) {
+fun AppRoot(
+    addHandle: String?,
+    onAddHandleUsed: () -> Unit,
+    roomToOpen: String?,
+    onRoomOpened: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val container = (LocalContext.current.applicationContext as PtranslateApp).container
     val session by container.account.session.collectAsStateWithLifecycle()
     val step by container.account.step.collectAsStateWithLifecycle()
@@ -56,7 +63,13 @@ fun AppRoot(addHandle: String?, onAddHandleUsed: () -> Unit, modifier: Modifier 
     }
 
     if (step == OnboardingStep.DONE) {
-        MainScreen(addHandle = addHandle, onAddHandleUsed = onAddHandleUsed, modifier = modifier)
+        MainScreen(
+            addHandle = addHandle,
+            onAddHandleUsed = onAddHandleUsed,
+            roomToOpen = roomToOpen,
+            onRoomOpened = onRoomOpened,
+            modifier = modifier,
+        )
         return
     }
 

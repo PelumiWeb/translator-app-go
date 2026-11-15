@@ -25,11 +25,17 @@ class MainActivity : ComponentActivity() {
     /** An ID from a shinar://add link that opened the app, waiting to be offered. */
     private var addHandle by mutableStateOf<String?>(null)
 
+    /** A room whose notification was tapped, waiting to be opened. */
+    private var roomToOpen by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Off the splash theme before anything is drawn, so its mark is not left behind the screens.
         setTheme(R.style.Theme_Ptranslate)
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null) addHandle = handleIn(intent)
+        if (savedInstanceState == null) {
+            addHandle = handleIn(intent)
+            roomToOpen = intent?.getStringExtra(EXTRA_ROOM_ID)
+        }
         val launch = getSharedPreferences("launch", MODE_PRIVATE)
         // The intro plays once, on the way to the welcome; anyone already signed in goes straight in.
         val playIntro = (application as PtranslateApp).container.account.session.value == null &&
@@ -46,6 +52,8 @@ class MainActivity : ComponentActivity() {
                         AppRoot(
                             addHandle = addHandle,
                             onAddHandleUsed = { addHandle = null },
+                            roomToOpen = roomToOpen,
+                            onRoomOpened = { roomToOpen = null },
                             modifier = Modifier.padding(innerPadding),
                         )
                     }
@@ -65,11 +73,14 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIn(intent)?.let { addHandle = it }
+        intent.getStringExtra(EXTRA_ROOM_ID)?.let { roomToOpen = it }
     }
 
     private fun handleIn(intent: Intent?): String? = intent?.dataString?.let(::handleFromCode)
 
-    private companion object {
-        const val INTRO_SEEN = "intro_seen"
+    companion object {
+        /** The room a notification opens. */
+        const val EXTRA_ROOM_ID = "room_id"
+        private const val INTRO_SEEN = "intro_seen"
     }
 }

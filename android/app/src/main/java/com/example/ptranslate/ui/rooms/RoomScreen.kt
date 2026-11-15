@@ -57,6 +57,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ptranslate.PtranslateApp
 import com.example.ptranslate.R
 import com.example.ptranslate.ui.components.Banner
 import com.example.ptranslate.ui.components.DotWaveform
@@ -102,6 +103,26 @@ fun RoomScreen(
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
+    }
+    // While the room is on the screen its notes appear as they arrive, so they need no notification, and the one
+    // that may have brought the person here is done with.
+    val notifications = (context.applicationContext as PtranslateApp).container.notifications
+    DisposableEffect(lifecycle, roomId) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    notifications.roomOnScreen = roomId
+                    notifications.cancel(roomId)
+                }
+                Lifecycle.Event.ON_PAUSE -> notifications.roomOnScreen = null
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            notifications.roomOnScreen = null
+        }
     }
     LaunchedEffect(state.recording) {
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
