@@ -23,7 +23,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -94,17 +99,32 @@ fun WelcomeScreen(onGetStarted: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** Sign in with Google: Android's own sheet does the choosing. */
+/**
+ * Sign in with Google: Android's own sheet does the choosing. Holding the line about email sign-in opens the sign-in
+ * for test accounts, which the server gives fixed codes until it can send codes by mail.
+ */
 @Composable
 fun SignInScreen(
     state: OnboardingUiState,
     googleSignIn: GoogleSignIn,
     onSignIn: (getToken: suspend (Nonce) -> String) -> Unit,
+    onTestAccountSignIn: (email: String, code: String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = Pearl.colors
     val context = LocalContext.current
+    var testAccount by rememberSaveable { mutableStateOf(false) }
+    if (testAccount) {
+        TestAccountDialog(
+            busy = state.signingIn,
+            onSignIn = { email, code ->
+                testAccount = false
+                onTestAccountSignIn(email, code)
+            },
+            onDismiss = { testAccount = false },
+        )
+    }
     Column(modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 16.dp)) {
         IconButton(onClick = onBack, modifier = Modifier.padding(start = 0.dp)) {
             Icon(PearlIcons.Back, contentDescription = "Back", tint = colors.fg, modifier = Modifier.size(28.dp))
@@ -136,7 +156,10 @@ fun SignInScreen(
             style = PearlType.body,
             color = colors.fg3,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 18.dp)
+                .pointerInput(Unit) { detectTapGestures(onLongPress = { testAccount = true }) },
         )
         Text(
             "By continuing you agree to the Terms and Privacy Policy.",
@@ -146,6 +169,50 @@ fun SignInScreen(
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 8.dp),
         )
     }
+}
+
+/** An address and the code the server holds for it. Only test accounts have one, until codes are sent by mail. */
+@Composable
+private fun TestAccountDialog(busy: Boolean, onSignIn: (email: String, code: String) -> Unit, onDismiss: () -> Unit) {
+    val colors = Pearl.colors
+    var email by rememberSaveable { mutableStateOf("") }
+    var code by rememberSaveable { mutableStateOf("") }
+    val ready = email.isNotBlank() && code.isNotBlank() && !busy
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Test account", style = PearlType.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Sign in with the email and code of a test account.", style = PearlType.message)
+                PearlTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = "Email",
+                    placeholder = "Email",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                    compact = true,
+                )
+                PearlTextField(
+                    value = code,
+                    onValueChange = { code = it },
+                    label = "Code",
+                    placeholder = "Code",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (ready) onSignIn(email, code) }),
+                    compact = true,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSignIn(email, code) }, enabled = ready) {
+                Text("Sign in", color = if (ready) colors.fg else colors.fg3, style = PearlType.chip)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = colors.fg, style = PearlType.chip) } },
+        containerColor = colors.bgRaised,
+        titleContentColor = colors.fg,
+        textContentColor = colors.fg2,
+    )
 }
 
 /**

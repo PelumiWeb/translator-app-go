@@ -55,6 +55,7 @@ fun AppRoot(
                 state = state,
                 googleSignIn = GoogleSignIn(BuildConfig.GOOGLE_WEB_CLIENT_ID),
                 onSignIn = onboarding::onSignInClicked,
+                onTestAccountSignIn = onboarding::onTestAccountSignIn,
                 onBack = { signingIn = false },
                 modifier = modifier,
             )

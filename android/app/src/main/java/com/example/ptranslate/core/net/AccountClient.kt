@@ -24,6 +24,15 @@ class AccountClient internal constructor(private val rest: Rest) {
         return SignIn(response.token, response.user, response.newUser)
     }
 
+    /**
+     * Signs in to a test account: an email address whose code is fixed on the server, as there is no mail service
+     * yet. Throws with code "invalid_code" when the two do not match.
+     */
+    suspend fun signInWithEmail(email: String, code: String): SignIn {
+        val response = rest.decode<SignInResponse>(rest.post("/v1/sessions/email", rest.body(EmailSignInRequest(email, code))))
+        return SignIn(response.token, response.user, response.newUser)
+    }
+
     /** The profile of the session [token] belongs to, before it is kept: used right after signing in. */
     suspend fun me(token: String): Profile =
         rest.decode(rest.send(rest.request("/v1/me").header("Authorization", "Bearer $token").build()))
@@ -88,6 +97,9 @@ private data class SignInRequest(
     @SerialName("identity_token") val identityToken: String,
     val nonce: String,
 )
+
+@Serializable
+private data class EmailSignInRequest(val email: String, val code: String)
 
 @Serializable
 private data class SignInResponse(

@@ -92,12 +92,24 @@ class OnboardingViewModel(
      * it, so its hash goes to Google and the raw value to the server.
      */
     fun onSignInClicked(getToken: suspend (Nonce) -> String) {
+        signIn {
+            val nonce = Nonce.random()
+            account.signInWithGoogle(getToken(nonce), nonce.raw)
+        }
+    }
+
+    /** Signs in to a test account: an address and the code the server holds for it. */
+    fun onTestAccountSignIn(email: String, code: String) {
+        if (email.isBlank() || code.isBlank()) return
+        signIn { account.signInWithEmail(email, code) }
+    }
+
+    private fun signIn(work: suspend () -> Unit) {
         if (_state.value.signingIn) return
         _state.update { it.copy(signingIn = true, signInProblem = null) }
         viewModelScope.launch {
             try {
-                val nonce = Nonce.random()
-                account.signInWithGoogle(getToken(nonce), nonce.raw)
+                work()
                 _state.value = initialState()
                 if (_state.value.handle.isNotEmpty()) onHandleChanged(_state.value.handle)
                 if (account.step.value == OnboardingStep.DONE) restoreVoice()
@@ -225,7 +237,8 @@ class OnboardingViewModel(
         e is NoCredentialException -> "There's no Google account on this phone. Add one in Settings, then try again."
         e is GetCredentialException -> "Google sign-in didn't finish. Please try again."
         e is BackendException && e.status == 0 -> "No connection. Check you're online, then try again."
-        e is BackendException && e.status == 501 -> "Sign in with Google isn't set up on the server yet."
+        e is BackendException && e.code == "invalid_code" -> "That email and code don't match. Check them, then try again."
+        e is BackendException && e.status == 501 -> "That way of signing in isn't set up on the server yet."
         e is BackendException && e.code == "invalid_token" -> "That sign-in couldn't be checked. Please try again."
         else -> "Sign-in didn't work just now. Please try again."
     }

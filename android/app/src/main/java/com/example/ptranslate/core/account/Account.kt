@@ -2,6 +2,7 @@ package com.example.ptranslate.core.account
 
 import android.content.SharedPreferences
 import com.example.ptranslate.core.net.AccountClient
+import com.example.ptranslate.core.net.SignIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -61,7 +62,15 @@ class Account(
      * account starts signing up from its name; an account already set up on another phone goes straight in.
      */
     suspend fun signInWithGoogle(idToken: String, nonce: String) {
-        val signIn = client.signInWithGoogle(idToken, nonce)
+        signedIn(client.signInWithGoogle(idToken, nonce))
+    }
+
+    /** Signs in to a test account, with the code the server holds for its address. Otherwise as with Google. */
+    suspend fun signInWithEmail(email: String, code: String) {
+        signedIn(client.signInWithEmail(email.trim(), code.trim()))
+    }
+
+    private fun signedIn(signIn: SignIn) {
         keep(Session(signIn.token, signIn.profile))
         moveTo(if (signIn.newUser || !signIn.profile.isComplete) OnboardingStep.NAME else OnboardingStep.DONE)
     }

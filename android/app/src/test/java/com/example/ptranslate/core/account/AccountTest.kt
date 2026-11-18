@@ -40,6 +40,34 @@ class AccountTest {
     }
 
     @Test
+    fun `a test account signs in with its address and code`() = runTest {
+        server.enqueue(json("""{"token":"t3","user":{"id":"u3","display_name":"","handle":"","language":""},"new_user":true}""", 201))
+        val account = testAccount(server)
+
+        account.signInWithEmail(" test1@shinar.test ", " code-1234567 ")
+
+        val request = server.takeRequest()
+        assertEquals("/v1/sessions/email", request.path)
+        assertEquals("""{"email":"test1@shinar.test","code":"code-1234567"}""", request.body.readUtf8())
+        assertEquals("t3", account.token)
+        assertEquals(OnboardingStep.NAME, account.step.value)
+    }
+
+    @Test
+    fun `a wrong code keeps the user signed out`() = runTest {
+        server.enqueue(json("""{"error":{"code":"invalid_code","message":"that email and code do not match"}}""", 401))
+        val account = testAccount(server)
+
+        try {
+            account.signInWithEmail("test1@shinar.test", "wrong")
+            fail("want the server's refusal")
+        } catch (e: BackendException) {
+            assertEquals("invalid_code", e.code)
+        }
+        assertNull(account.token)
+    }
+
+    @Test
     fun `registering for push tells the server the service and the address, for this session`() = runTest {
         server.enqueue(MockResponse().setResponseCode(204))
         val account = testAccount(server, MemorySessionStore(signedUp), MemoryProgress(OnboardingStep.DONE))
