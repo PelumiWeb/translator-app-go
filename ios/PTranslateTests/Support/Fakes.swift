@@ -13,6 +13,8 @@ final class FakeRecorder: AudioRecorder {
     var failure: RecorderError?
     private(set) var starts = 0
     var cancelled = 0
+    /// What its recordings were asked to do, in order, after starting.
+    var asked: [String] = []
 
     init(audio: PCMAudio, failure: RecorderError? = nil) {
         self.audio = audio
@@ -24,6 +26,7 @@ final class FakeRecorder: AudioRecorder {
             throw failure
         }
         starts += 1
+        asked.append("start")
         return FakeRecording(recorder: self, audio: audio)
     }
 }
@@ -37,10 +40,22 @@ final class FakeRecording: Recording {
         self.audio = audio
     }
 
-    func stop() -> PCMAudio { audio }
+    func pause() {
+        recorder.asked.append("pause")
+    }
+
+    func resume() {
+        recorder.asked.append("resume")
+    }
+
+    func stop() -> PCMAudio {
+        recorder.asked.append("stop")
+        return audio
+    }
 
     func cancel() {
         recorder.cancelled += 1
+        recorder.asked.append("cancel")
     }
 }
 

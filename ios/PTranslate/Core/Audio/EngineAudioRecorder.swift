@@ -58,6 +58,15 @@ private final class EngineRecording: Recording {
         self.capture = capture
     }
 
+    func pause() {
+        // Stops the hardware but keeps the tap and the converter, so resuming carries on the same capture.
+        engine.pause()
+    }
+
+    func resume() {
+        try? engine.start()
+    }
+
     func stop() -> PCMAudio {
         end()
         return PCMAudio(samples: capture.samples)
