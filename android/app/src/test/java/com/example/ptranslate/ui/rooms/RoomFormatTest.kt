@@ -38,6 +38,20 @@ class RoomFormatTest {
     }
 
     @Test
+    fun `a text message reads as soon as it is translated, and its voice is not waited for`() {
+        val text = message("t", "x").copy(kind = Message.KIND_TEXT, durationMs = 0)
+        val translating = text.copy(renditions = listOf(Rendition("en", RenditionStatus.TRANSLATING)))
+        val ready = text.copy(renditions = listOf(Rendition("en", RenditionStatus.READY, "hello")))
+        val voiceComing = text.copy(renditions = listOf(Rendition("en", RenditionStatus.SPEAKING, "hello")))
+
+        assertEquals("Message", translating.preview("en"))
+        assertEquals("hello", ready.preview("en"))
+        assertEquals("hello", voiceComing.preview("en"))
+        assertNull(translating.wordsFor("en"))
+        assertEquals("hello", voiceComing.wordsFor("en"))
+    }
+
+    @Test
     fun `times read as a list shows them`() {
         val today = LocalDate.of(2026, 10, 31)
         assertEquals("Yesterday", roomTime("2026-10-30T20:00:00Z", ZoneOffset.UTC, today))

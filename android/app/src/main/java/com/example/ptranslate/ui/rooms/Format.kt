@@ -39,15 +39,20 @@ fun Message.renditionFor(language: String?): Rendition? = renditions.firstOrNull
 /** The rendition of the user's own message that the listener gets; in a room of two, there is one. */
 val Message.delivery: Rendition? get() = renditions.firstOrNull()
 
+/**
+ * The words the user reads for someone else's message, once there are words to read: a voice note's when it can be
+ * heard, a text message's as soon as it is translated (its voice comes later, if asked for).
+ */
+fun Message.wordsFor(language: String?): String? {
+    val rendition = renditionFor(language) ?: return null
+    val readable = rendition.status == RenditionStatus.READY || (isText && rendition.status == RenditionStatus.SPEAKING)
+    return rendition.text.takeIf { readable && it.isNotEmpty() }
+}
+
 /** A room's last message, as one line of the list. */
 fun Message.preview(myLanguage: String?): String {
     if (mine) return "You: $transcript"
-    val rendition = renditionFor(myLanguage)
-    return if (rendition != null && rendition.status == RenditionStatus.READY && rendition.text.isNotEmpty()) {
-        rendition.text
-    } else {
-        "Voice note · ${clock(durationMs)}"
-    }
+    return wordsFor(myLanguage) ?: if (isText) "Message" else "Voice note · ${clock(durationMs)}"
 }
 
 val String.asLanguage: Language get() = Language(this)

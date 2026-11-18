@@ -257,7 +257,7 @@ fun TheirNoteCard(
 
 /** The translation, lighting up word by word as it plays. */
 @Composable
-private fun SpokenText(text: String, playing: Boolean, playingMs: Long?) {
+internal fun SpokenText(text: String, playing: Boolean, playingMs: Long?) {
     val colors = Pearl.colors
     val progress = remember(text) { Animatable(1f) }
     LaunchedEffect(playing, playingMs) {
@@ -285,7 +285,7 @@ private fun SpokenText(text: String, playing: Boolean, playingMs: Long?) {
 }
 
 @Composable
-private fun MyCard(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun MyCard(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier
             .widthIn(max = 270.dp)
@@ -363,7 +363,7 @@ private fun StepsBar(done: Int) {
 
 /** A dot in a ring, breathing slowly while the voice is made, so the card never looks frozen. */
 @Composable
-private fun BreathingRing(color: Color) {
+internal fun BreathingRing(color: Color) {
     val breath by rememberInfiniteTransition(label = "breath").animateFloat(
         initialValue = 0.85f,
         targetValue = 1.1f,
@@ -379,17 +379,17 @@ private fun BreathingRing(color: Color) {
 }
 
 @Composable
-private fun Status(text: String, strong: Boolean = false) {
+internal fun Status(text: String, strong: Boolean = false) {
     Text(text, style = if (strong) PearlType.smallStrong else PearlType.small, color = Pearl.colors.onYou)
 }
 
 @Composable
-private fun Meta(text: String) {
+internal fun Meta(text: String) {
     Text(text, style = PearlType.meta, color = Pearl.colors.fg2)
 }
 
 @Composable
-private fun ActionText(text: String, color: Color, onClick: () -> Unit, strong: Boolean = true, small: Boolean = false) {
+internal fun ActionText(text: String, color: Color, onClick: () -> Unit, strong: Boolean = true, small: Boolean = false) {
     Text(
         text,
         style = (if (small) PearlType.meta else if (strong) PearlType.smallStrong else PearlType.small).copy(textDecoration = TextDecoration.Underline),

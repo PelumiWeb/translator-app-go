@@ -10,9 +10,9 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 
 /**
- * Plays a voice message as a listener hears it: the audio the server made in
- * the sender's voice, or their own recording, or when the sender keeps no
- * voice, the translation read by this phone.
+ * Plays a message as a listener hears it: the audio the server made in the
+ * sender's voice, or their own recording, or when the sender keeps no voice,
+ * the translation read by this phone.
  */
 class MessagePlayer(
     private val rooms: RoomsClient,
@@ -41,6 +41,9 @@ class MessagePlayer(
             phoneVoice.speak(rendition.text, Language(rendition.lang)) { onStart(null) }
         }
     }
+
+    /** Plays a recording not sent yet, to listen to before sending it. */
+    suspend fun playRecording(audio: PcmAudio) = player.play(audio)
 
     fun stop() {
         player.stop()

@@ -72,6 +72,45 @@ class RoomsClientTest {
     }
 
     @Test
+    fun `a text message is sent as JSON, with its language and key`() = runTest {
+        server.enqueue(
+            json("""{"id":"m2","room_id":"r1","sender_id":"u1","mine":true,"kind":"text","lang":"en","transcript":"see you at eight","duration_ms":0,"created_at":"x","renditions":[{"lang":"es","status":"translating"}]}""", 201),
+        )
+
+        val sent = client.sendText("r1", "see you at eight", "en", idempotencyKey = "text-1")
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/v1/rooms/r1/messages", request.path)
+        assertEquals("text-1", request.getHeader("Idempotency-Key"))
+        assertTrue(request.getHeader("Content-Type")!!.startsWith("application/json"))
+        assertEquals("""{"text":"see you at eight","lang":"en"}""", request.body.readUtf8())
+        assertTrue(sent.isText)
+    }
+
+    @Test
+    fun `asking to hear a text message names it and the language`() = runTest {
+        server.enqueue(
+            json("""{"id":"m2","room_id":"r1","sender_id":"u2","mine":false,"kind":"text","lang":"en","transcript":"hi","duration_ms":0,"created_at":"x","renditions":[{"lang":"es","status":"speaking","text":"hola"}]}"""),
+        )
+
+        val asked = client.requestSpeech("m2", "es")
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/v1/messages/m2/speech?lang=es", request.path)
+        assertEquals(RenditionStatus.SPEAKING, asked.renditions.single().status)
+    }
+
+    @Test
+    fun `a message without a kind, from an older server, is a voice note`() = runTest {
+        server.enqueue(
+            json("""{"id":"m1","room_id":"r1","sender_id":"u1","mine":true,"lang":"en","transcript":"hi","duration_ms":900,"created_at":"x","renditions":[]}"""),
+        )
+        assertEquals(false, client.message("m1").isText)
+    }
+
+    @Test
     fun `the change stream says when it is ready, then what changed`() = runTest {
         server.enqueue(
             MockResponse().setHeader("Content-Type", "text/event-stream").setBody(

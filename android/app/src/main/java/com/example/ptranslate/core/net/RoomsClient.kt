@@ -73,6 +73,22 @@ class RoomsClient internal constructor(private val rest: Rest) {
         return rest.decode(rest.send(request))
     }
 
+    /** Sends a text message, with a key as for a voice note. */
+    suspend fun sendText(roomId: String, text: String, lang: String, idempotencyKey: String): Message {
+        val request = rest.request("/v1/rooms/$roomId/messages")
+            .header("Idempotency-Key", idempotencyKey)
+            .post(rest.body(TextMessage(text, lang)))
+            .build()
+        return rest.decode(rest.send(request))
+    }
+
+    /**
+     * Asks for a text message to be spoken in its sender's voice, in [lang]. The rendition is "speaking" until the
+     * voice is made, which the change stream announces; then it can be played like a voice note.
+     */
+    suspend fun requestSpeech(messageId: String, lang: String): Message =
+        rest.decode(rest.post("/v1/messages/$messageId/speech?lang=$lang"))
+
     suspend fun markRead(roomId: String) {
         rest.post("/v1/rooms/$roomId/read")
     }
@@ -125,6 +141,9 @@ private data class MessageList(val messages: List<Message>)
 
 @Serializable
 private data class OpenRoom(val handle: String)
+
+@Serializable
+private data class TextMessage(val text: String, val lang: String)
 
 @Serializable
 private data class ChangePayload(

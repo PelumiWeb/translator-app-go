@@ -19,21 +19,33 @@ data class Room(
     val other: Profile? get() = people.firstOrNull()
 }
 
-/** A voice message as it was said, and what it has become for its listeners. */
+/** A message as it was sent, a voice note or typed text, and what it has become for its listeners. */
 @Serializable
 data class Message(
     val id: String,
     @SerialName("room_id") val roomId: String,
     @SerialName("sender_id") val senderId: String,
     val mine: Boolean,
-    /** The language it was said in. */
+    /** "voice" or "text". A string, not an enum, so a kind from a newer server still reads. */
+    val kind: String = KIND_VOICE,
+    /** The language it was said or typed in. */
     val lang: String,
+    /** What was said, or for a text message, typed. */
     val transcript: String,
+    /** 0 for a text message. */
     @SerialName("duration_ms") val durationMs: Long,
     @SerialName("created_at") val createdAt: String,
     /** The sender sees one per language the others speak; a listener sees their own only. */
     val renditions: List<Rendition> = emptyList(),
-)
+) {
+    /** Typed words, heard only when someone asks: its voice is made then. */
+    val isText: Boolean get() = kind == KIND_TEXT
+
+    companion object {
+        const val KIND_VOICE = "voice"
+        const val KIND_TEXT = "text"
+    }
+}
 
 /** A message for the listeners of one language: translated, then spoken in the sender's voice. */
 @Serializable
@@ -70,6 +82,9 @@ enum class RenditionVoice {
     /** The sender keeps no voice: the listener's phone reads the text. */
     @SerialName("phone") PHONE,
 }
+
+/** Whether there is something to hear, now: a voice note ready, or a text message whose voice has been made. */
+val Rendition.audible: Boolean get() = status == RenditionStatus.READY && voice != RenditionVoice.NONE
 
 /** What the server's stream of room changes says. */
 sealed interface RoomChange {

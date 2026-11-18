@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -54,7 +55,9 @@ class MainActivity : ComponentActivity() {
                             onAddHandleUsed = { addHandle = null },
                             roomToOpen = roomToOpen,
                             onRoomOpened = { roomToOpen = null },
-                            modifier = Modifier.padding(innerPadding),
+                            // Consumed, so a screen's imePadding adds only what the keyboard covers beyond the
+                            // navigation bar, not the bar's height twice.
+                            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
                         )
                     }
                     // The splash screen's mark, still showing until the app is ready to be seen.

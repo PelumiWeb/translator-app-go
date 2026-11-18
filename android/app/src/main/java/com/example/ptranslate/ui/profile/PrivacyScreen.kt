@@ -47,14 +47,16 @@ private val PRIVACY_SECTIONS = listOf(
         "The recording you made, on our server, with the date you agreed. It is used only to speak your own words " +
         "when someone plays a message you sent. Fish Audio makes the speech for us. It is never given to other people.",
     "Your messages" to
-        "What you record in a room, the words written down from it, its translation, and the translation spoken in " +
-        "your voice. Microsoft's Azure AI Translator translates the words. They are kept so the people in the room can play them.",
+        "What you record or type in a room, the words written down from a recording, their translation, and the translation " +
+        "spoken in your voice. Microsoft's Azure AI Translator translates the words. They are kept so the people in the room " +
+        "can read and play them.",
     "Writing down your words" to
         "Your phone writes down what you say by itself when it can. When it cannot, on an older " +
         "phone or before its speech model has downloaded, the recording goes to our server, and Groq writes the words down for us.",
     "Notifications" to
-        "When a voice note reaches you and its room is not open, our server tells your phone through Google's Firebase: " +
-        "the sender's name and how long the note is, never its words or its sound. Turn them off in your phone's settings, under Shinar.",
+        "When a message reaches you and its room is not open, our server tells your phone through Google's Firebase: " +
+        "the sender's name, and for a voice note how long it is, never its words or its sound. Turn them off in your phone's " +
+        "settings, under Shinar.",
     "Deleting" to
         "Delete your voice in Profile, under Your voice: your messages then use the phone's voice. Delete your account, " +
         "and your profile, your voice and everything you said in your rooms are deleted with it.",
