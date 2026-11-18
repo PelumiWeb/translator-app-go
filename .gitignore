@@ -35,6 +35,13 @@ xcuserdata/
 /ios/MLKit/.swiftpm/
 /ios/MLKit/Package.resolved
 
+# Website: its packages, and what Next.js builds (ADR 0028)
+/web/node_modules/
+/web/.next/
+/web/out/
+/web/next-env.d.ts
+/web/*.tsbuildinfo
+
 # Whisper models are downloaded, never committed
 *.bin
 *.gguf

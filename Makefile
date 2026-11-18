@@ -230,6 +230,29 @@ ios-device: ios-whisper ios-mlkit ## Build, install and open the app on the conn
 ios-testflight: ios-whisper ios-mlkit ## Build for the App Store and upload to TestFlight (signing files: see ios/scripts/testflight.sh)
 	ios/scripts/testflight.sh
 
+# --- Website ----------------------------------------------------------------
+
+# The website is a Next.js project in web/, exported as plain files into
+# web/out/ (ADR 0028). Its packages are installed again whenever the lock
+# file is newer than the last install.
+WEB_DEPS := web/node_modules/.package-lock.json
+WEB_PORT ?= 3100
+
+$(WEB_DEPS): web/package-lock.json
+	cd web && npm ci --no-audit --no-fund
+
+.PHONY: web-dev
+web-dev: $(WEB_DEPS) ## Run the website on http://localhost:3100, reloading as files change
+	cd web && NEXT_TELEMETRY_DISABLED=1 npx next dev --port $(WEB_PORT)
+
+.PHONY: web-build
+web-build: $(WEB_DEPS) ## Build the website into web/out/ (plain files), checking the types
+	cd web && NEXT_TELEMETRY_DISABLED=1 npm run build
+
+.PHONY: web-preview
+web-preview: web-build ## Build the website and serve web/out/ on http://localhost:3100, as a host would
+	python3 -m http.server $(WEB_PORT) --bind 127.0.0.1 --directory web/out
+
 # --- Whisper model ----------------------------------------------------------
 
 # A file target: make skips the download when the file already exists.

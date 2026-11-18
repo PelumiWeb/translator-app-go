@@ -1,0 +1,499 @@
+.frame {
+  width: min(100%, 360px);
+  margin-inline: auto;
+}
+
+.place {
+  margin-bottom: 12px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg2);
+}
+
+/* A phone's screen: the page's petrol inside a bezel of the deepest layer,
+   as the handoff's mock-ups draw it. */
+.screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 460px;
+  padding: 20px;
+  border: 8px solid var(--bg-deep);
+  border-radius: 40px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* The onboarding progress bar: 3 high, 6 apart, done in fg, to do at 20%. */
+.progress {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+  padding-inline: 16px;
+}
+
+.step {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--fg);
+  opacity: 0.2;
+  transition: opacity 0.4s var(--ease);
+}
+
+.step[data-done="true"] {
+  opacity: 1;
+}
+
+/* Layouts inside the screen */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+/* Cards: mine warm white, theirs raised petrol. Radius 12, padding 16. */
+
+.card {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.mine {
+  background: var(--you);
+  color: var(--on-you);
+}
+
+.theirs {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.text {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.status {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.barRow {
+  margin-top: 14px;
+}
+
+.under {
+  color: var(--fg2);
+}
+
+.under .status {
+  margin-top: 8px;
+}
+
+.langLabel {
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg2);
+}
+
+.them {
+  color: var(--them);
+}
+
+.original {
+  font-size: 15px;
+  line-height: 1.45;
+  color: rgba(243, 238, 228, 0.72);
+}
+
+.hairline {
+  margin: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--outline);
+}
+
+.playerRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.duration {
+  font-size: 12px;
+  color: var(--fg2);
+  font-variant-numeric: tabular-nums;
+}
+
+.unread {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--them);
+}
+
+.meta {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--fg2);
+}
+
+.metaStack {
+  display: grid;
+  margin-top: 12px;
+}
+
+.metaStack > * {
+  grid-area: 1 / 1;
+  margin: 0;
+}
+
+.metaStack .them {
+  color: var(--them);
+}
+
+.link {
+  color: var(--them);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Stage 1: the record control. Timer 46/500; rings in a 200 area round a 96 button. */
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.timer {
+  margin: 8px 0 4px;
+  font-size: 46px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.recorder {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 200px;
+  height: 200px;
+}
+
+.recordButton {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--you);
+}
+
+.stopGlyph {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--on-you);
+}
+
+/* Stage 5: preparing the voice. A 220 ring stack round an 88 speaker. */
+
+.voice {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 220px;
+  height: 220px;
+}
+
+.voiceButton {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: var(--you);
+  color: var(--on-you);
+}
+
+.headline {
+  margin-top: 8px;
+  font-size: 19px;
+  font-weight: 500;
+}
+
+.sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--fg2);
+}
+
+/* Stage 6: the notification, as the app words it. */
+
+.notification {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--bg-raised);
+}
+
+.appIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: var(--bg);
+}
+
+.notifText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.notifTitle {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.notifBody {
+  font-size: 14px;
+  color: var(--fg2);
+}
+
+.notifTime {
+  align-self: flex-start;
+  font-size: 12px;
+  color: var(--fg2);
+}
+
+/* Stage 7: the original opens under the translation when the note has played. */
+
+.originalWrap {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.originalInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.whilePlaying {
+  opacity: 0;
+}
+
+/* Animations, only while the stage plays. Each one starts from the stage's
+   beginning and holds its end, which is the still state above. */
+
+.frame[data-playing="true"] .arriving {
+  position: relative;
+  animation: arrive 0.9s var(--ease) both;
+  animation-delay: calc(var(--i) * 0.2s);
+}
+
+/* The caret sits after the newest word for as long as it is the newest. */
+.frame[data-playing="true"] .arriving::after {
+  content: "";
+  position: absolute;
+  top: 0.2em;
+  right: -4px;
+  bottom: 0.15em;
+  width: 1.5px;
+  background: currentColor;
+  opacity: 0;
+  animation: caret 0.2s linear forwards;
+  animation-delay: calc(var(--i) * 0.2s);
+}
+
+.frame[data-playing="true"] .filling {
+  animation: grow 1.2s var(--ease) 0.3s both;
+}
+
+.frame[data-playing="true"] .fillingSlow {
+  animation: grow 2.2s var(--ease) 0.3s both;
+}
+
+.frame[data-playing="true"] .phrase {
+  animation: appear 0.6s var(--ease) both;
+  animation-delay: calc(0.4s + var(--i) * 0.7s);
+}
+
+.frame[data-playing="true"] .notification {
+  animation: drop 0.5s var(--ease) 0.2s both;
+}
+
+.frame[data-playing="true"] .arrived {
+  animation: rise 0.5s var(--ease) 0.9s both;
+}
+
+/* 15 words, 0.22 s each from 0.5 s: the note ends at about 3.8 s. */
+.frame[data-playing="true"] .lit {
+  animation: light 0.35s var(--ease) both;
+  animation-delay: calc(0.5s + var(--i) * 0.22s);
+}
+
+.frame[data-playing="true"] .dotsPlaying {
+  animation: reveal 3.3s linear 0.5s both;
+}
+
+.frame[data-playing="true"] .whilePlaying {
+  animation: untilEnd 3.8s linear both;
+}
+
+.frame[data-playing="true"] .afterPlaying {
+  animation: fromEnd 3.8s linear both;
+}
+
+.frame[data-playing="true"] .originalWrap {
+  animation: open 0.5s var(--ease) 4s both;
+}
+
+.frame[data-playing="true"] .originalInner {
+  animation: appear 0.5s var(--ease) 4.1s both;
+}
+
+@keyframes arrive {
+  0% {
+    opacity: 0;
+  }
+  20%,
+  70% {
+    opacity: 0.44;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes caret {
+  0%,
+  99% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes light {
+  from {
+    opacity: 0.44;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes untilEnd {
+  0%,
+  99% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fromEnd {
+  0%,
+  99% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes open {
+  from {
+    grid-template-rows: 0fr;
+  }
+  to {
+    grid-template-rows: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame *,
+  .frame *::after {
+    animation: none !important;
+  }
+
+  .step {
+    transition: none;
+  }
+}

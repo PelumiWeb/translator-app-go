@@ -1,0 +1,146 @@
+.header {
+  max-width: var(--max);
+  margin-inline: auto;
+  padding: 24px var(--gutter);
+}
+
+/* Hero: the promise at the welcome screen's 34/500 on a phone, larger on a
+   wide screen; the loop below it, or beside it. */
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+  max-width: var(--max);
+  margin-inline: auto;
+  padding: 32px var(--gutter) 64px;
+}
+
+.heroText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.promise {
+  max-width: 14em;
+  font-size: clamp(34px, 5.4vw, 64px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.promiseLine {
+  max-width: 28em;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--fg2);
+}
+
+.soon {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg2);
+}
+
+.heroVisual {
+  display: flex;
+  justify-content: center;
+}
+
+@media (min-width: 900px) {
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 64px;
+    min-height: min(78vh, 720px);
+    padding-block: 48px 96px;
+  }
+
+  .promiseLine {
+    font-size: 20px;
+  }
+}
+
+/* Your voice: three plain blocks, as on the consent screen. */
+
+.voice {
+  max-width: var(--max);
+  margin-inline: auto;
+  padding: 64px var(--gutter);
+}
+
+.blocks {
+  display: grid;
+  gap: 24px;
+  margin-top: 32px;
+}
+
+.block {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.blockTitle {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.blockText {
+  margin-top: 4px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--fg2);
+}
+
+.noVoice {
+  max-width: 40em;
+  margin-top: 32px;
+  font-size: 16px;
+  color: var(--fg2);
+}
+
+@media (min-width: 900px) {
+  .voice {
+    padding-block: 96px;
+  }
+
+  .blocks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 32px;
+  }
+}
+
+/* Closing: the two voices, and the promise again. */
+
+.closing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  max-width: var(--max);
+  margin-inline: auto;
+  padding: 64px var(--gutter) 96px;
+  text-align: center;
+}
+
+.closingTitle {
+  max-width: 14em;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: var(--max);
+  margin-inline: auto;
+  padding: 32px var(--gutter) 48px;
+  border-top: 1px solid var(--line);
+}
+
+.story {
+  font-size: 13px;
+  color: var(--fg2);
+}

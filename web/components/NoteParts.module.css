@@ -1,0 +1,177 @@
+/* Dot waveform: 22 dots in a 20 high row. Played at full opacity, unplayed at 0.3. */
+.dots {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+}
+
+.them {
+  color: var(--them);
+}
+
+.onYou {
+  color: var(--on-you);
+}
+
+.dotRow {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dot {
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.unplayed {
+  opacity: 0.3;
+}
+
+.played {
+  clip-path: inset(0 0 0 0);
+}
+
+/* Their play button: 44, mint, a 15 filled glyph in petrol. */
+.play {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--them);
+  color: var(--on-them);
+}
+
+.play > * {
+  grid-area: 1 / 1;
+}
+
+/* Four steps, 3 high, 6 apart. Done in the text colour, to do at 20%. */
+.seg {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.segItem {
+  position: relative;
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.segTrack,
+.segFill {
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+}
+
+.segTrack {
+  opacity: 0.2;
+}
+
+.segFill {
+  transform-origin: left center;
+}
+
+/* A 28 ring, 1.5 wide at 50%, with a 14 dot inside that breathes. */
+.breath {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+
+.breath::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.5;
+}
+
+.breathDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: breathe 3.2s var(--ease) infinite alternate;
+}
+
+@keyframes breathe {
+  from {
+    transform: scale(0.7);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Rings: filled circles, scale 0.48 to 1 and opacity 0.9 to 0, a third of the
+   period apart. Negative delays start them already spread out. */
+.rings {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.youRings {
+  --ring-color: var(--you-ring);
+}
+
+.themRings {
+  --ring-color: var(--them-ring);
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--ring-color);
+  opacity: 0;
+  transform: scale(0.48);
+}
+
+/* Still: one static halo. */
+.ring:first-child {
+  opacity: 0.6;
+  transform: scale(0.72);
+}
+
+.rings[data-playing="true"] .ring {
+  animation: ring var(--period) var(--ease) infinite;
+  animation-delay: calc(var(--offset) - var(--n) * var(--period) / 3);
+}
+
+@keyframes ring {
+  from {
+    transform: scale(0.48);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rings[data-playing="true"] .ring,
+  .breathDot {
+    animation: none;
+  }
+}

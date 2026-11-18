@@ -1,0 +1,330 @@
+/* One 9-second loop. Every part runs on the same clock, so each keyframe
+   percentage is a moment of the story:
+     0-4%    her note appears, warm white, in Spanish; "Translating"
+     22-30%  the Spanish gives way to English
+     27-49%  "Preparing her voice in English"
+     44-50%  the card changes side: warm white (hers) to raised petrol (his)
+     50-56%  the player opens; 58-90% it plays, the dots filling
+     93-100% it fades, and the loop starts again
+   Without animation (Reduce Motion) each part's own style is the end state:
+   his note, in English, in her voice. */
+
+.loop {
+  --loop: 9s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.stacked {
+  display: grid;
+}
+
+.stacked > * {
+  grid-area: 1 / 1;
+}
+
+.captions {
+  display: grid;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg2);
+  text-align: center;
+}
+
+.captions > * {
+  grid-area: 1 / 1;
+}
+
+.lang {
+  color: var(--fg);
+}
+
+.langThem {
+  color: var(--them);
+}
+
+.capA {
+  opacity: 0;
+  animation: capA var(--loop) var(--ease) infinite;
+}
+
+.capB {
+  animation: capB var(--loop) var(--ease) infinite;
+}
+
+.card {
+  width: min(100%, 340px);
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--bg-raised);
+  color: var(--fg);
+  animation: card var(--loop) var(--ease) infinite;
+}
+
+@media (min-width: 900px) {
+  .card {
+    width: 360px;
+    padding: 20px;
+  }
+}
+
+.playerWrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: playerRow var(--loop) var(--ease) infinite;
+}
+
+.playerInner {
+  min-height: 0;
+  overflow: hidden;
+  animation: playerShow var(--loop) var(--ease) infinite;
+}
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.duration {
+  font-size: 12px;
+  color: var(--fg2);
+  font-variant-numeric: tabular-nums;
+}
+
+.dotsPlayed {
+  animation: dotsPlayed var(--loop) linear infinite;
+}
+
+.es,
+.en {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+@media (min-width: 900px) {
+  .es,
+  .en {
+    font-size: 18px;
+    line-height: 1.45;
+  }
+}
+
+.es {
+  opacity: 0;
+  animation: es var(--loop) var(--ease) infinite;
+}
+
+.en {
+  animation: en var(--loop) var(--ease) infinite;
+}
+
+.statuses {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.st1 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0;
+  animation: st1 var(--loop) var(--ease) infinite;
+}
+
+.segFill {
+  animation: segFill var(--loop) var(--ease) infinite;
+}
+
+.st2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  animation: st2 var(--loop) var(--ease) infinite;
+}
+
+.st3 {
+  align-self: center;
+  color: var(--them);
+  font-weight: 400;
+  font-size: 12px;
+  animation: st3 var(--loop) var(--ease) infinite;
+}
+
+@keyframes card {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    background-color: var(--you);
+    color: var(--on-you);
+  }
+  4%,
+  44% {
+    opacity: 1;
+    transform: none;
+    background-color: var(--you);
+    color: var(--on-you);
+  }
+  50%,
+  93% {
+    opacity: 1;
+    transform: none;
+    background-color: var(--bg-raised);
+    color: var(--fg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+    background-color: var(--bg-raised);
+    color: var(--fg);
+  }
+}
+
+@keyframes capA {
+  0%,
+  2% {
+    opacity: 0;
+  }
+  6%,
+  44% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes capB {
+  0%,
+  50% {
+    opacity: 0;
+  }
+  56%,
+  93% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes es {
+  0%,
+  22% {
+    opacity: 1;
+  }
+  27%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes en {
+  0%,
+  24% {
+    opacity: 0;
+  }
+  30%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes st1 {
+  0%,
+  3% {
+    opacity: 0;
+  }
+  6%,
+  24% {
+    opacity: 1;
+  }
+  28%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes segFill {
+  0%,
+  6% {
+    transform: scaleX(0);
+  }
+  24%,
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes st2 {
+  0%,
+  27% {
+    opacity: 0;
+  }
+  31%,
+  45% {
+    opacity: 1;
+  }
+  49%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes st3 {
+  0%,
+  52% {
+    opacity: 0;
+  }
+  58%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes playerRow {
+  0%,
+  48% {
+    grid-template-rows: 0fr;
+  }
+  54%,
+  100% {
+    grid-template-rows: 1fr;
+  }
+}
+
+@keyframes playerShow {
+  0%,
+  50% {
+    opacity: 0;
+  }
+  56%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes dotsPlayed {
+  0%,
+  58% {
+    clip-path: inset(0 100% 0 0);
+  }
+  90%,
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loop *,
+  .loop *::before {
+    animation: none !important;
+  }
+}

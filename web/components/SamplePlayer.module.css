@@ -1,0 +1,33 @@
+.card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(100%, 400px);
+  padding: 12px 16px 12px 12px;
+  border-radius: 12px;
+  background: var(--bg-raised);
+}
+
+.play {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--them);
+  color: var(--on-them);
+  cursor: pointer;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.line {
+  font-size: 13px;
+  color: var(--fg2);
+}
