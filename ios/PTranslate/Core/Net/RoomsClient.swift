@@ -1,6 +1,6 @@
 import Foundation
 
-/// The backend's rooms: who the user talks with, and their voice messages.
+/// The backend's rooms: who the user talks with, and their messages, voice notes and text.
 final class RoomsClient: Sendable {
     private let rest: Rest
 
@@ -42,6 +42,21 @@ final class RoomsClient: Sendable {
         request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
         request.httpBody = form.body()
         return try rest.decode(try await rest.send(request))
+    }
+
+    /// Sends a text message, with a key as for a voice note.
+    func sendText(roomID: String, text: String, lang: String, idempotencyKey: String) async throws -> Message {
+        var request = await rest.request("/v1/rooms/\(roomID)/messages", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        request.httpBody = try JSONEncoder().encode(["text": text, "lang": lang])
+        return try rest.decode(try await rest.send(request))
+    }
+
+    /// Asks for a text message to be spoken in its sender's voice, in `lang`. The rendition is "speaking" until the
+    /// voice is made, which the change stream announces; then it can be played like a voice note.
+    func requestSpeech(messageID: String, lang: String) async throws -> Message {
+        try rest.decode(try await rest.send(await rest.request("/v1/messages/\(messageID)/speech?lang=\(lang)", method: "POST")))
     }
 
     func markRead(roomID: String) async throws {

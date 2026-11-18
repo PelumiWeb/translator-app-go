@@ -1,6 +1,6 @@
 import Foundation
 
-/// Plays a voice message as a listener hears it: the audio the server made in the sender's voice, or their own
+/// Plays a message as a listener hears it: the audio the server made in the sender's voice, or their own
 /// recording, or when the sender keeps no voice, the translation read by this phone.
 @MainActor
 final class MessagePlayer {
@@ -29,6 +29,11 @@ final class MessagePlayer {
             onStart(nil)
             try await phoneVoice.speak(rendition.text, language: Language(rendition.lang))
         }
+    }
+
+    /// Plays a recording not sent yet, to listen to before sending it.
+    func playRecording(_ audio: PCMAudio) async throws {
+        try await player.play(audio)
     }
 
     func stop() {

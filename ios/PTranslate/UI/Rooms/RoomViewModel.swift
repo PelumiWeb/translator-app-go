@@ -1,12 +1,14 @@
 import Foundation
 import Observation
 
-/// A room: its voice notes, kept up to date by the feed, and the composer. The user's note is recorded, written down
-/// on this phone, and sent with its words; the server translates it and speaks it in their voice.
+/// A room: its messages, kept up to date by the feed, and the composer. A voice note is recorded (with pauses, and a
+/// listen before sending if the user stops it), written down on this phone, and sent with its words; a text message is
+/// sent as typed. The server translates both, speaks a voice note in the sender's voice, and a text message when
+/// someone asks to hear it.
 @MainActor
 @Observable
 final class RoomViewModel {
-    /// A note of the user's on its way, before the server has it.
+    /// A message of the user's on its way, before the server has it: a voice note, or typed text.
     struct PendingNote: Identifiable, Equatable {
         enum Stage: Equatable {
             /// Turning the recording into words, on the phone or the server.
@@ -20,9 +22,10 @@ final class RoomViewModel {
         var text: String
         var stage: Stage
         let duration: Duration
+        var isText = false
     }
 
-    /// Why a recording was not sent, shown above the mic.
+    /// Why a recording was not sent, shown above the composer.
     enum Hint: Equatable {
         case tooShort, silent, noSpeech, unclear
     }
@@ -32,41 +35,49 @@ final class RoomViewModel {
     static let countdownFrom = Duration.seconds(25)
     /// Shorter than this is a tap, not a note.
     static let minNote = Duration.milliseconds(300)
+    /// As the server allows.
+    static let maxTextCharacters = 1000
 
     private(set) var room: Room?
     private(set) var messages: [Message] = []
     private(set) var pending: [PendingNote] = []
-    private(set) var recordingStarted: Date?
+    /// The voice note being recorded, paused, or stopped to listen to.
+    let notes: NoteRecorder
+    /// The stopped note is playing, to be listened to before it is sent.
+    private(set) var reviewing = false
+    /// What the user is typing.
+    var draft = "" {
+        didSet { if draft.count > Self.maxTextCharacters { draft = String(draft.prefix(Self.maxTextCharacters)) } }
+    }
     private(set) var hint: Hint?
     private(set) var micDenied = false
     /// The message playing now, and its length once it is audible.
     private(set) var playing: String?
     private(set) var playingLength: Duration?
     private(set) var played: Set<String> = []
-    /// Their notes that arrived unseen and have not been played.
+    /// Their voice notes that arrived unseen and have not been played.
     private(set) var fresh: Set<String> = []
-    /// Their notes showing the original words.
+    /// Their messages showing the original words.
     private(set) var originals: Set<String> = []
+    /// Text messages the user asked to hear, whose voice is being made: each plays once it is.
+    private(set) var waitingToHear: Set<String> = []
     private(set) var loading = true
     private(set) var problem: String?
 
     var myLanguage: String? { account.profile?.language }
     var connected: Bool { feed.connected }
-    var recording: Bool { recordingStarted != nil }
 
     @ObservationIgnored private let roomID: String
     @ObservationIgnored private let client: RoomsClient
     @ObservationIgnored private let account: Account
     @ObservationIgnored private let feed: RoomFeed
-    @ObservationIgnored private let recorder: any AudioRecorder
     @ObservationIgnored private let transcriber: any Transcriber
     @ObservationIgnored private let player: MessagePlayer
     @ObservationIgnored private let requestMicrophone: () async -> Bool
-    @ObservationIgnored private var activeRecording: (any Recording)?
-    /// The timer that ends a recording, the note being sent, and the playback: owned here, cancelled on leaving.
-    @ObservationIgnored private var autoStop: Task<Void, Never>?
+    /// The notes being sent, the playback and the listen before sending: owned here, cancelled on leaving.
     @ObservationIgnored private var sending: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var playback: Task<Void, Never>?
+    @ObservationIgnored private var review: Task<Void, Never>?
     /// The recordings of pending notes, for sending again.
     @ObservationIgnored private var wavs: [String: Data] = [:]
 
@@ -84,16 +95,16 @@ final class RoomViewModel {
         self.client = client
         self.account = account
         self.feed = feed
-        self.recorder = recorder
+        self.notes = NoteRecorder(recorder: recorder, maxNote: Self.maxNote)
         self.transcriber = transcriber
         self.player = player
         self.requestMicrophone = requestMicrophone
     }
 
     isolated deinit {
-        activeRecording?.cancel()
-        autoStop?.cancel()
+        notes.cancel()
         playback?.cancel()
+        review?.cancel()
         sending.values.forEach { $0.cancel() }
         player.stop()
     }
@@ -110,30 +121,82 @@ final class RoomViewModel {
         }
     }
 
-    /// Starts recording, or stops and sends.
+    /// Starts recording a voice note.
     func micTapped() {
-        if activeRecording != nil {
-            stopAndSend()
-        } else {
-            Task { await startRecording() }
+        Task { await startRecording() }
+    }
+
+    func pauseTapped() {
+        notes.pause()
+    }
+
+    func resumeTapped() {
+        notes.resume()
+    }
+
+    /// Ends the recording without sending it, to listen to first.
+    func stopTapped() {
+        notes.stop()
+        if let audio = notes.audio, let hint = Self.hint(for: audio) {
+            notes.cancel()
+            self.hint = hint
         }
     }
 
-    func cancelTapped() {
-        autoStop?.cancel()
-        activeRecording?.cancel()
-        activeRecording = nil
-        recordingStarted = nil
+    /// Sends the voice note, whether it is recording, paused or stopped.
+    func sendNoteTapped() {
+        stopReview()
+        guard let audio = notes.finish() else { return }
+        if let hint = Self.hint(for: audio) {
+            self.hint = hint
+        } else {
+            send(audio)
+        }
     }
 
-    /// Plays a note, or stops it if it is playing. On the user's own note, it plays what the listener hears.
+    /// Throws the voice note away.
+    func cancelTapped() {
+        stopReview()
+        notes.cancel()
+    }
+
+    /// Plays the stopped note, or stops it playing.
+    func reviewPlayTapped() {
+        if reviewing {
+            stopReview()
+            return
+        }
+        guard let audio = notes.audio else { return }
+        player.stop()
+        review = Task { [self] in
+            reviewing = true
+            playing = nil
+            try? await player.playRecording(audio)
+            reviewing = false
+        }
+    }
+
+    /// Sends what the user typed.
+    func sendTextTapped() {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, let lang = myLanguage, room?.other != nil else { return }
+        // One ID for the message: its place in the list, and the key that keeps a resend from sending it twice.
+        let id = UUID().uuidString
+        draft = ""
+        hint = nil
+        pending.append(PendingNote(id: id, text: text, stage: .sending, duration: .zero, isText: true))
+        sending[id] = Task { await uploadText(id, text: text, lang: lang) }
+    }
+
+    /// Plays a message, or stops it if it is playing. On the user's own, it plays what the listener hears.
     func playTapped(_ message: Message) {
         if playing == message.id {
             player.stop()
             return
         }
-        guard let rendition = message.mine ? message.delivery : message.rendition(for: myLanguage), rendition.status == .ready else { return }
+        guard let rendition = heard(message), rendition.status == .ready else { return }
         player.stop()
+        review?.cancel()
         playback?.cancel()
         playback = Task { [self] in
             playing = message.id
@@ -143,7 +206,7 @@ final class RoomViewModel {
                 try await player.play(rendition) { length in playingLength = length }
             } catch is CancellationError {
             } catch {
-                problem = "That note couldn't be played just now."
+                problem = "That message couldn't be played just now."
             }
             if playing == message.id { playing = nil }
             played.insert(message.id)
@@ -151,25 +214,56 @@ final class RoomViewModel {
         }
     }
 
+    /// Plays a text message in the sender's voice, or stops it. The first time anyone asks, the server makes the voice
+    /// first; it plays as soon as it is ready.
+    func listenTapped(_ message: Message) {
+        guard let rendition = heard(message) else { return }
+        if playing == message.id || rendition.audible {
+            playTapped(message)
+        } else if waitingToHear.contains(message.id) {
+            waitingToHear.remove(message.id)
+        } else if rendition.status == .speaking {
+            waitingToHear.insert(message.id)
+        } else if rendition.status == .ready {
+            waitingToHear.insert(message.id)
+            problem = nil
+            sending[message.id] = Task { [self] in
+                do {
+                    upsert(try await client.requestSpeech(messageID: message.id, lang: rendition.lang))
+                } catch {
+                    waitingToHear.remove(message.id)
+                    problem = "That message couldn't be spoken just now."
+                }
+                sending[message.id] = nil
+            }
+        }
+    }
+
     func originalToggled(_ message: Message) {
         if originals.contains(message.id) { originals.remove(message.id) } else { originals.insert(message.id) }
     }
 
-    /// Tries again to deliver a note the server could not translate.
+    /// Tries again to deliver a message the server could not translate.
     func retryTapped(_ message: Message) {
         sending[message.id] = Task { [self] in
             do {
                 upsert(try await client.retry(message.id))
             } catch {
-                problem = "That note couldn't be sent again just now."
+                problem = "That message couldn't be sent again just now."
             }
         }
     }
 
-    /// Sends again a note that never reached the server.
+    /// Sends again a message that never reached the server.
     func retryPending(_ note: PendingNote) {
         guard let lang = myLanguage else { return }
-        sending[note.id] = Task { await upload(note.id, text: note.text, duration: note.duration, lang: lang) }
+        sending[note.id] = Task {
+            if note.isText {
+                await uploadText(note.id, text: note.text, lang: lang)
+            } else {
+                await upload(note.id, text: note.text, duration: note.duration, lang: lang)
+            }
+        }
     }
 
     func permissionChecked(granted: Bool) {
@@ -177,41 +271,36 @@ final class RoomViewModel {
     }
 
     private func startRecording() async {
-        guard room?.other != nil else { return }
+        guard room?.other != nil, notes.phase == .idle else { return }
         guard await requestMicrophone() else {
             micDenied = true
             return
         }
         player.stop()
         do {
-            activeRecording = try recorder.start()
+            try notes.start()
         } catch {
             problem = "The microphone couldn't be started."
             return
         }
         hint = nil
         problem = nil
-        recordingStarted = .now
-        autoStop = Task { [weak self] in
-            try? await Task.sleep(for: Self.maxNote)
-            guard !Task.isCancelled else { return }
-            self?.stopAndSend()
-        }
     }
 
-    private func stopAndSend() {
-        guard let finished = activeRecording else { return }
-        activeRecording = nil
-        recordingStarted = nil
-        autoStop?.cancel()
-        let audio = finished.stop()
-        if audio.duration < Self.minNote {
-            hint = .tooShort
-        } else if audio.isSilent {
-            hint = .silent
-        } else {
-            send(audio)
-        }
+    private static func hint(for audio: PCMAudio) -> Hint? {
+        if audio.duration < minNote { return .tooShort }
+        if audio.isSilent { return .silent }
+        return nil
+    }
+
+    private func stopReview() {
+        if reviewing { player.stop() }
+        review?.cancel()
+    }
+
+    /// What the user hears of a message: on their own, what the listener gets; on someone else's, their language.
+    private func heard(_ message: Message) -> Rendition? {
+        message.mine ? message.delivery : message.rendition(for: myLanguage)
     }
 
     private func send(_ audio: PCMAudio) {
@@ -265,12 +354,28 @@ final class RoomViewModel {
             pending.removeAll { $0.id == id }
             upsert(message)
         } catch {
-            updatePending(id) { $0.stage = .failed }
-            if (error as? BackendError)?.code == "room_closed" {
-                problem = "This person has left, so the note can't reach them."
-            }
+            notSent(id, error)
         }
         sending[id] = nil
+    }
+
+    private func uploadText(_ id: String, text: String, lang: String) async {
+        updatePending(id) { $0.stage = .sending }
+        do {
+            let message = try await client.sendText(roomID: roomID, text: text, lang: lang, idempotencyKey: id)
+            pending.removeAll { $0.id == id }
+            upsert(message)
+        } catch {
+            notSent(id, error)
+        }
+        sending[id] = nil
+    }
+
+    private func notSent(_ id: String, _ error: any Error) {
+        updatePending(id) { $0.stage = .failed }
+        if (error as? BackendError)?.code == "room_closed" {
+            problem = "This person has left, so the message can't reach them."
+        }
     }
 
     private func load(firstTime: Bool) async {
@@ -279,10 +384,12 @@ final class RoomViewModel {
             let latest = try await client.messages(roomID: roomID)
             self.room = room
             if firstTime {
-                // Opening the room: the unread notes are the newest of theirs.
-                fresh = Set(latest.filter { !$0.mine }.suffix(room.unread).map(\.id))
+                // Opening the room: the unread notes are the newest of theirs. Only voice notes keep a "new" dot
+                // until played; a text is read as it shows.
+                fresh = Set(latest.filter { !$0.mine }.suffix(room.unread).filter { !$0.isText }.map(\.id))
             }
             messages = Self.merge(messages, latest)
+            latest.forEach(playIfWaited)
             problem = nil
             if room.unread > 0 { try? await client.markRead(roomID: roomID) }
         } catch is CancellationError {
@@ -301,13 +408,21 @@ final class RoomViewModel {
         let isNew = !message.mine && !messages.contains { $0.id == message.id }
         upsert(message)
         if isNew {
-            fresh.insert(message.id)
+            if !message.isText { fresh.insert(message.id) }
             try? await client.markRead(roomID: roomID)
         }
     }
 
     private func upsert(_ message: Message) {
         messages = Self.merge(messages, [message])
+        playIfWaited(message)
+    }
+
+    /// Plays a text message the user asked to hear, once its voice is made.
+    private func playIfWaited(_ message: Message) {
+        guard waitingToHear.contains(message.id), heard(message)?.audible == true else { return }
+        waitingToHear.remove(message.id)
+        playTapped(message)
     }
 
     private func updatePending(_ id: String, _ change: (inout PendingNote) -> Void) {

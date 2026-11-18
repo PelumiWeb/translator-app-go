@@ -30,6 +30,8 @@ final class StubServer: Sendable {
     struct Request: Sendable {
         let method: String
         let path: String
+        /// The part after "?", if any.
+        var query: String?
         let headers: [String: String]
         let body: Data
 
@@ -118,6 +120,7 @@ private final class StubProtocol: URLProtocol, @unchecked Sendable {
         let recorded = StubServer.Request(
             method: request.httpMethod ?? "GET",
             path: url.path(),
+            query: url.query(),
             headers: request.allHTTPHeaderFields ?? [:],
             body: requestBody()
         )

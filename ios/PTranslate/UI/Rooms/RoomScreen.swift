@@ -1,13 +1,14 @@
 import AVFoundation
 import SwiftUI
 
-/// A conversation: the notes, newest at the bottom, and the mic.
+/// A conversation: the messages, newest at the bottom, and the composer: type, or record a voice note.
 struct RoomScreen: View {
-    let viewModel: RoomViewModel
+    @Bindable var viewModel: RoomViewModel
     let onRecordVoice: () -> Void
 
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
+    @State private var callsSoon = false
 
     var body: some View {
         let other = viewModel.room?.other
@@ -34,6 +35,7 @@ struct RoomScreen: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 16)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .overlay {
                     if !viewModel.loading && viewModel.messages.isEmpty && viewModel.pending.isEmpty {
                         Text(emptyText(other))
@@ -64,6 +66,19 @@ struct RoomScreen: View {
                 }
                 .accessibilityElement(children: .combine)
             }
+            if other != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { callsSoon = true } label: {
+                        Image(systemName: "phone").foregroundStyle(Palette.fg)
+                    }
+                    .accessibilityLabel("Call, coming soon")
+                }
+            }
+        }
+        .alert("Calls are coming soon", isPresented: $callsSoon) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("You'll be able to call \(other?.shownName ?? "them") and hear each other in your own languages. Until then, send a voice note or a message.")
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
@@ -72,12 +87,30 @@ struct RoomScreen: View {
             // Back from Settings with the microphone allowed puts the mic back.
             if phase == .active { viewModel.permissionChecked(granted: AVAudioApplication.shared.recordPermission == .granted) }
         }
-        .sensoryFeedback(trigger: viewModel.recording) { _, recording in recording ? .impact(weight: .light) : .success }
+        .sensoryFeedback(trigger: viewModel.notes.phase) { _, phase in
+            switch phase {
+            case .recording: .impact(weight: .light)
+            case .stopped: .success
+            case .idle, .paused: nil
+            }
+        }
     }
 
     @ViewBuilder
     private func card(_ message: Message) -> some View {
-        if message.mine {
+        if message.isText && message.mine {
+            MyTextCard(
+                message: message, playing: viewModel.playing == message.id, waiting: viewModel.waitingToHear.contains(message.id),
+                onListen: { viewModel.listenTapped(message) }, onRetry: { viewModel.retryTapped(message) }
+            )
+        } else if message.isText {
+            TheirTextCard(
+                message: message, myLanguage: viewModel.myLanguage, playing: viewModel.playing == message.id,
+                playingLength: viewModel.playingLength, waiting: viewModel.waitingToHear.contains(message.id),
+                showOriginal: viewModel.originals.contains(message.id),
+                onListen: { viewModel.listenTapped(message) }, onToggleOriginal: { viewModel.originalToggled(message) }
+            )
+        } else if message.mine {
             MyNoteCard(
                 message: message, playing: viewModel.playing == message.id, playingLength: viewModel.playingLength,
                 onPlay: { viewModel.playTapped(message) }, onRetry: { viewModel.retryTapped(message) }, onRecordVoice: onRecordVoice
@@ -94,7 +127,7 @@ struct RoomScreen: View {
 
     private func emptyText(_ other: Profile?) -> String {
         guard let other else { return "No one else is in this room." }
-        return "Say something to \(other.displayName.isEmpty ? "them" : other.displayName). They'll hear it in \(other.lang?.localName ?? "their language"), in your voice."
+        return "Say something to \(other.displayName.isEmpty ? "them" : other.displayName), or write it. They'll get it in \(other.lang?.localName ?? "their language"), in your voice."
     }
 
     @ViewBuilder
@@ -106,31 +139,35 @@ struct RoomScreen: View {
             if let hint = viewModel.hint {
                 Hint(text: hint.words, systemImage: hint == .silent ? "ear" : "arrow.counterclockwise")
             }
-            if other == nil && viewModel.room != nil {
+            switch viewModel.notes.phase {
+            case _ where other == nil && viewModel.room != nil:
                 EmptyView()
-            } else if viewModel.micDenied {
-                Banner(
-                    systemImage: "mic.slash",
-                    title: "\(Brand.name) needs your microphone",
-                    message: "To record, allow microphone access in Settings.",
-                    action: "Open Settings"
-                ) {
-                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            case .recording, .paused:
+                RecordingComposer(
+                    notes: viewModel.notes, onPause: viewModel.pauseTapped, onResume: viewModel.resumeTapped,
+                    onStop: viewModel.stopTapped, onSend: viewModel.sendNoteTapped, onCancel: viewModel.cancelTapped
+                )
+            case .stopped:
+                ReviewComposer(
+                    audio: viewModel.notes.audio, playing: viewModel.reviewing, onPlay: viewModel.reviewPlayTapped,
+                    onDelete: viewModel.cancelTapped, onSend: viewModel.sendNoteTapped
+                )
+            case .idle:
+                // Without the microphone the user can still write; the banner says how to record.
+                if viewModel.micDenied {
+                    Banner(
+                        systemImage: "mic.slash",
+                        title: "\(Brand.name) needs your microphone",
+                        message: "To record, allow microphone access in Settings.",
+                        action: "Open Settings"
+                    ) {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    }
                 }
-            } else if let started = viewModel.recordingStarted {
-                RecordingComposer(started: started, onStop: viewModel.micTapped, onCancel: viewModel.cancelTapped)
-            } else {
-                Button(action: viewModel.micTapped) {
-                    Image(systemName: "mic")
-                        .font(.system(size: 24))
-                        .foregroundStyle(Palette.onYou)
-                        .frame(width: 68, height: 68)
-                        .background(Palette.you, in: Circle())
-                        .padding(14)
-                        .background(Palette.youHalo, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Record a voice note")
+                TextComposer(
+                    draft: $viewModel.draft, showsMic: !viewModel.micDenied,
+                    onSend: viewModel.sendTextTapped, onMic: viewModel.micTapped
+                )
             }
         }
         .padding(.horizontal, 16)
@@ -143,7 +180,7 @@ private extension RoomViewModel.Hint {
     /// The design's words for each recording that was not sent. No blame, and what to try next.
     var words: String {
         switch self {
-        case .tooShort: "That was very short. Tap, say something, then tap again to send."
+        case .tooShort: "That was very short. Tap the mic, say something, then send."
         case .silent: "We didn't hear anything. Check nothing is covering the microphone, then try again."
         case .noSpeech: "No words came through. Try again, a little closer to the phone."
         case .unclear: "We couldn't quite make that out. Please say it again."
@@ -151,47 +188,175 @@ private extension RoomViewModel.Hint {
     }
 }
 
-/// Recording: cancel, the live dots, and stop to send, with the time and the 30-second limit.
+/// Typing a message, with the mic beside it; once there are words, the mic becomes send.
+private struct TextComposer: View {
+    @Binding var draft: String
+    let showsMic: Bool
+    let onSend: () -> Void
+    let onMic: () -> Void
+
+    var body: some View {
+        let canSend = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        HStack(alignment: .bottom, spacing: 10) {
+            TextField("Message", text: $draft, axis: .vertical)
+                .font(.pearlMessage).foregroundStyle(Palette.fg)
+                .lineLimit(1...6)
+                .textInputAutocapitalization(.sentences)
+                .padding(.horizontal, 18).padding(.vertical, 14)
+                .frame(minHeight: 52)
+                .background(Palette.bgRaised, in: RoundedRectangle(cornerRadius: 26))
+            if canSend {
+                YouButton(systemImage: "arrow.up", label: "Send", action: onSend)
+            } else if showsMic {
+                YouButton(systemImage: "mic", label: "Record a voice note", action: onMic)
+            }
+        }
+    }
+}
+
+/// A round button in the colour that means "you".
+private struct YouButton: View {
+    let systemImage: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(Palette.onYou)
+                .frame(width: 52, height: 52)
+                .background(Palette.you, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
+/// Recording, or paused: the live dots and the time, with the 30-second limit; then cancel, pause or resume, stop (to
+/// listen before sending), and send.
 private struct RecordingComposer: View {
-    let started: Date
+    let notes: NoteRecorder
+    let onPause: () -> Void
+    let onResume: () -> Void
     let onStop: () -> Void
+    let onSend: () -> Void
     let onCancel: () -> Void
 
     var body: some View {
-        TimelineView(.periodic(from: started, by: 0.1)) { context in
-            let elapsed = Duration.seconds(context.date.timeIntervalSince(started))
-            let left = max(RoomViewModel.maxNote - elapsed, .zero)
-            let time = elapsed >= RoomViewModel.countdownFrom ? "\(Int((left / .seconds(1)).rounded(.up))) s left" : clock(elapsed)
-            // The dots move while recording. They do not yet follow the microphone's level.
-            let phase = context.date.timeIntervalSince(started) * 4.5
-            VStack(spacing: 4) {
+        let paused = notes.phase == .paused
+        VStack(spacing: 14) {
+            TimelineView(.animation(minimumInterval: 0.1, paused: paused)) { context in
+                let elapsed = notes.elapsed
+                let left = max(RoomViewModel.maxNote - elapsed, .zero)
+                let time = elapsed >= RoomViewModel.countdownFrom ? "\(Int((left / .seconds(1)).rounded(.up))) s left" : clock(elapsed)
+                // The dots move while recording and rest while paused. They do not yet follow the microphone's level.
+                let phase = context.date.timeIntervalSinceReferenceDate * 4.5
                 HStack(spacing: 12) {
-                    Button(action: onCancel) {
-                        Image(systemName: "xmark").font(.system(size: 16)).foregroundStyle(Palette.fg)
-                            .frame(width: 44, height: 44)
-                            .overlay(Circle().stroke(Palette.fg.opacity(0.28)))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Cancel")
-                    DotWaveform(levels: (0..<16).map { Float(0.3 + 0.7 * (sin(phase + Double($0) * 0.9) + 1) / 2) }, color: Palette.fg)
-                    Button(action: onStop) {
-                        RoundedRectangle(cornerRadius: 4).fill(Palette.onYou).frame(width: 22, height: 22)
-                            .frame(width: 64, height: 64)
-                            .background(Palette.you, in: Circle())
-                            .padding(10)
-                            .background(Palette.youHalo, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Stop and send")
-                    .accessibilityValue(time)
+                    DotWaveform(
+                        levels: (0..<16).map { paused ? 0.3 : Float(0.3 + 0.7 * (sin(phase + Double($0) * 0.9) + 1) / 2) },
+                        color: Palette.fg.opacity(paused ? 0.4 : 1)
+                    )
+                    Text(paused ? "Paused · \(time)" : time).font(.pearlMeta).monospacedDigit().foregroundStyle(Palette.fg)
                 }
-                HStack {
-                    Text("Cancel").foregroundStyle(Palette.fg2)
-                    Spacer()
-                    Text("\(time) · tap to send").monospacedDigit().foregroundStyle(Palette.fg)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(paused ? "Paused, \(time)" : "Recording, \(time)")
+            }
+            HStack(alignment: .bottom) {
+                ComposerControl(systemImage: "xmark", label: "Cancel", action: onCancel)
+                Spacer()
+                if paused {
+                    ComposerControl(systemImage: "mic", label: "Resume", action: onResume)
+                } else {
+                    ComposerControl(systemImage: "pause.fill", label: "Pause", action: onPause)
                 }
-                .font(.pearlMeta)
+                Spacer()
+                ComposerControl(systemImage: "stop.fill", label: "Stop", action: onStop)
+                Spacer()
+                SendControl(action: onSend)
             }
         }
+    }
+}
+
+/// A stopped note, to listen to before sending: play, its dots and length; then delete or send.
+private struct ReviewComposer: View {
+    let audio: PCMAudio?
+    let playing: Bool
+    let onPlay: () -> Void
+    let onDelete: () -> Void
+    let onSend: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 12) {
+                Button(action: onPlay) {
+                    Image(systemName: playing ? "pause.fill" : "play.fill")
+                        .font(.system(size: 15)).foregroundStyle(Palette.onYou)
+                        .frame(width: 44, height: 44)
+                        .background(Palette.you, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(playing ? "Stop" : "Listen to your note")
+                DotWaveform(levels: audio?.levels(22) ?? Array(repeating: 0.3, count: 22), color: Palette.you)
+                Text(clock(audio?.duration ?? .zero)).font(.pearlMeta).monospacedDigit().foregroundStyle(Palette.fg2)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(Palette.bgRaised, in: RoundedRectangle(cornerRadius: 12))
+            HStack(alignment: .bottom) {
+                ComposerControl(systemImage: "trash", label: "Delete", action: onDelete)
+                Spacer()
+                SendControl(action: onSend)
+            }
+        }
+    }
+}
+
+/// An outlined round control with its name under it.
+private struct ComposerControl: View {
+    let systemImage: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18)).foregroundStyle(Palette.fg)
+                    .frame(width: 52, height: 52)
+                    .overlay(Circle().stroke(Palette.fg.opacity(0.28)))
+                Text(label).font(.pearlMeta).foregroundStyle(Palette.fg2)
+            }
+            .padding(4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// Send, the composer's main action: the circle that means "you", in its halo.
+private struct SendControl: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 22, weight: .medium)).foregroundStyle(Palette.onYou)
+                    .frame(width: 56, height: 56)
+                    .background(Palette.you, in: Circle())
+                    .padding(8)
+                    .background(Palette.youHalo, in: Circle())
+                Text("Send").font(.pearlMeta).foregroundStyle(Palette.fg)
+            }
+            .padding(4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Send")
+        .accessibilityAddTraits(.isButton)
     }
 }

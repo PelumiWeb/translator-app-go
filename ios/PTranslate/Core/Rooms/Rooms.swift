@@ -20,15 +20,20 @@ struct Room: Decodable, Equatable, Identifiable, Sendable {
     }
 }
 
-/// A voice message as it was said, and what it has become for its listeners.
+/// A message as it was sent, a voice note or typed text, and what it has become for its listeners.
 struct Message: Decodable, Equatable, Identifiable, Sendable {
     let id: String
     let roomID: String
     let senderID: String
     let mine: Bool
-    /// The language it was said in.
+    /// "voice" or "text", as sent: a string, not an enum, so a kind from a newer server still reads; nil from a server
+    /// older than text messages, which means a voice note.
+    private let sentKind: String?
+    /// The language it was said or typed in.
     let lang: String
+    /// What was said, or for a text message, typed.
     let transcript: String
+    /// 0 for a text message.
     let durationMS: Int
     let createdAt: Date
     /// The sender sees one per language the others speak; a listener sees their own only.
@@ -44,8 +49,17 @@ struct Message: Decodable, Equatable, Identifiable, Sendable {
 
     var duration: Duration { .milliseconds(durationMS) }
 
+    var kind: String { sentKind ?? Self.voiceKind }
+
+    /// Typed words, heard only when someone asks: its voice is made then.
+    var isText: Bool { kind == Self.textKind }
+
+    static let voiceKind = "voice"
+    static let textKind = "text"
+
     enum CodingKeys: String, CodingKey {
         case id, mine, lang, transcript, renditions
+        case sentKind = "kind"
         case roomID = "room_id"
         case senderID = "sender_id"
         case durationMS = "duration_ms"
@@ -108,6 +122,11 @@ struct Rendition: Decodable, Equatable, Sendable {
         voice = try container.decodeIfPresent(Voice.self, forKey: .voice) ?? .none
         audioURL = try container.decodeIfPresent(String.self, forKey: .audioURL)
     }
+}
+
+extension Rendition {
+    /// Whether there is something to hear, now: a voice note ready, or a text message whose voice has been made.
+    var audible: Bool { status == .ready && voice != .none }
 }
 
 /// What the server's stream of room changes says.

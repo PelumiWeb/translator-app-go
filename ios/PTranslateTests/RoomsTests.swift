@@ -47,6 +47,38 @@ struct RoomsTests {
         }
     }
 
+    @Test func aTextMessageIsSentAsJSONWithItsLanguageAndKey() async throws {
+        server.enqueue(.json(status: 201, body: #"{"id":"m2","room_id":"r1","sender_id":"u1","mine":true,"kind":"text","lang":"en","transcript":"see you at eight","duration_ms":0,"created_at":"2026-10-31T09:00:00Z","renditions":[{"lang":"es","status":"translating"}]}"#))
+
+        let sent = try await client.sendText(roomID: "r1", text: "see you at eight", lang: "en", idempotencyKey: "text-1")
+
+        let request = try #require(server.requests.first)
+        #expect(request.method == "POST")
+        #expect(request.path == "/v1/rooms/r1/messages")
+        #expect(request.header("Idempotency-Key") == "text-1")
+        #expect(request.header("Content-Type")?.hasPrefix("application/json") == true)
+        let body = try JSONSerialization.jsonObject(with: request.body) as? [String: String]
+        #expect(body == ["text": "see you at eight", "lang": "en"])
+        #expect(sent.isText)
+    }
+
+    @Test func askingToHearATextMessageNamesItAndTheLanguage() async throws {
+        server.enqueue(.json(status: 200, body: #"{"id":"m2","room_id":"r1","sender_id":"u2","mine":false,"kind":"text","lang":"en","transcript":"hi","duration_ms":0,"created_at":"2026-10-31T09:00:00Z","renditions":[{"lang":"es","status":"speaking","text":"hola"}]}"#))
+
+        let asked = try await client.requestSpeech(messageID: "m2", lang: "es")
+
+        let request = try #require(server.requests.first)
+        #expect(request.method == "POST")
+        #expect(request.path == "/v1/messages/m2/speech")
+        #expect(request.query == "lang=es")
+        #expect(asked.renditions.first?.status == .speaking)
+    }
+
+    @Test func aMessageWithoutAKindFromAnOlderServerIsAVoiceNote() async throws {
+        server.enqueue(.json(status: 200, body: #"{"id":"m1","room_id":"r1","sender_id":"u1","mine":true,"lang":"en","transcript":"hi","duration_ms":900,"created_at":"2026-10-31T09:00:00Z","renditions":[]}"#))
+        #expect(try await client.message("m1").isText == false)
+    }
+
     @Test func theChangeStreamSaysWhenItIsReadyThenWhatChanged() async throws {
         server.enqueue(.events("event: ready\ndata: {}\n\nevent: room\ndata: {\"room_id\":\"r1\",\"message_id\":\"m1\"}\n\nevent: room\ndata: {\"room_id\":\"r2\"}\n\n"))
 
@@ -59,9 +91,9 @@ struct RoomsTests {
         #expect(server.requests.first?.path == "/v1/me/events")
     }
 
-    private func message(_ id: String, at seconds: TimeInterval, mine: Bool = false, renditions: [Rendition] = []) -> Message {
+    private func message(_ id: String, at seconds: TimeInterval, mine: Bool = false, kind: String = "voice", renditions: [Rendition] = []) -> Message {
         let json = """
-            {"id":"\(id)","room_id":"r","sender_id":"s","mine":\(mine),"lang":"es","transcript":"hola","duration_ms":12400,
+            {"id":"\(id)","room_id":"r","sender_id":"s","mine":\(mine),"kind":"\(kind)","lang":"es","transcript":"hola","duration_ms":12400,
             "created_at":"\(Date(timeIntervalSince1970: seconds).ISO8601Format())","renditions":[]}
             """
         var message = try! Rest.decoder.decode(Message.self, from: Data(json.utf8))
@@ -90,6 +122,18 @@ struct RoomsTests {
         #expect(waiting.preview(myLanguage: "en") == "Voice note · 0:12")
         #expect(mine.preview(myLanguage: "en") == "You: hola")
         #expect(ready.rendition(for: "fr") == nil)
+    }
+
+    @Test func aTextMessageReadsAsSoonAsItIsTranslatedAndItsVoiceIsNotWaitedFor() {
+        let translating = message("t", at: 0, kind: "text", renditions: [Rendition(lang: "en", status: .translating)])
+        let ready = message("t", at: 0, kind: "text", renditions: [Rendition(lang: "en", status: .ready, text: "hello")])
+        let voiceComing = message("t", at: 0, kind: "text", renditions: [Rendition(lang: "en", status: .speaking, text: "hello")])
+
+        #expect(translating.preview(myLanguage: "en") == "Message")
+        #expect(ready.preview(myLanguage: "en") == "hello")
+        #expect(voiceComing.preview(myLanguage: "en") == "hello")
+        #expect(translating.words(for: "en") == nil)
+        #expect(voiceComing.words(for: "en") == "hello")
     }
 
     @Test func aScannedCodeGivesAnIDOnlyWhenItIsOurs() {

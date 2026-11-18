@@ -201,7 +201,7 @@ struct TheirNoteCard: View {
 }
 
 /// The translation, lighting up word by word as it plays.
-private struct SpokenText: View {
+struct SpokenText: View {
     let text: String
     let playing: Bool
     let length: Duration?
@@ -279,16 +279,18 @@ private struct StepsBar: View {
 }
 
 /// A dot in a ring, breathing slowly while the voice is made, so the card never looks frozen.
-private struct BreathingRing: View {
+struct BreathingRing: View {
+    var color = Palette.onYou
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var breathing = false
 
     var body: some View {
         Circle()
-            .stroke(Palette.onYou.opacity(0.5), lineWidth: 1.5)
+            .stroke(color.opacity(0.5), lineWidth: 1.5)
             .frame(width: 28, height: 28)
             .overlay {
-                Circle().fill(Palette.onYou).frame(width: 14, height: 14)
+                Circle().fill(color).frame(width: 14, height: 14)
                     .scaleEffect(breathing ? 1.1 : 0.85)
             }
             .onAppear {

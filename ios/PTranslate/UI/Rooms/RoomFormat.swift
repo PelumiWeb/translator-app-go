@@ -33,13 +33,18 @@ func roomTime(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> 
 }
 
 extension Message {
+    /// The words the user reads for someone else's message, once there are words to read: a voice note's when it can
+    /// be heard, a text message's as soon as it is translated (its voice comes later, if asked for).
+    func words(for language: String?) -> String? {
+        guard let rendition = rendition(for: language), !rendition.text.isEmpty else { return nil }
+        let readable = rendition.status == .ready || (isText && rendition.status == .speaking)
+        return readable ? rendition.text : nil
+    }
+
     /// A room's last message, as one line of the list.
     func preview(myLanguage: String?) -> String {
         if mine { return "You: \(transcript)" }
-        if let rendition = rendition(for: myLanguage), rendition.status == .ready, !rendition.text.isEmpty {
-            return rendition.text
-        }
-        return "Voice note · \(clock(duration))"
+        return words(for: myLanguage) ?? (isText ? "Message" : "Voice note · \(clock(duration))")
     }
 }
 
