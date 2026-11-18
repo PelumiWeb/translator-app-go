@@ -33,7 +33,8 @@ type MessageFiles interface {
 // Deliverer makes what a message becomes for the listeners of one language:
 // the translation, then the translation spoken in the sender's voice; then it
 // tells their phones. The queue's workers run it, one job per message and
-// language, and retry it.
+// language, and retry it. A text message stops at the translation; a second
+// job speaks it when someone asks to hear it (Store.RequestSpeech).
 type Deliverer struct {
 	Store *Store
 
@@ -77,6 +78,10 @@ func (d *Deliverer) Deliver(ctx context.Context, messageID, lang string, attempt
 		text, err = d.Translator.Translate(ctx, work.transcript, work.lang, lang)
 		if err != nil {
 			return err
+		}
+		if work.kind == KindText {
+			// Read, not heard: the words are what the listener waits for.
+			return d.Store.wordsReady(ctx, messageID, lang, text)
 		}
 		if err := d.Store.saveTranslation(ctx, messageID, lang, text); err != nil {
 			return err
@@ -130,6 +135,7 @@ func (d *Deliverer) DeliveryFailed(ctx context.Context, messageID, lang, _ strin
 // deliveryWork is what Deliver needs to know about a message and a language.
 type deliveryWork struct {
 	senderID   string
+	kind       string
 	lang       string // what the message was said in
 	transcript string
 	status     string // of the rendition
@@ -139,10 +145,10 @@ type deliveryWork struct {
 func (s *Store) delivery(ctx context.Context, messageID, lang string) (deliveryWork, error) {
 	var w deliveryWork
 	err := s.db.QueryRow(ctx, `
-		SELECT m.sender_id, m.lang, m.transcript, r.status, coalesce(r.text, '')
+		SELECT m.sender_id, m.kind, m.lang, m.transcript, r.status, coalesce(r.text, '')
 		FROM messages m JOIN renditions r ON r.message_id = m.id AND r.lang = $2
 		WHERE m.id = $1`, messageID, lang,
-	).Scan(&w.senderID, &w.lang, &w.transcript, &w.status, &w.text)
+	).Scan(&w.senderID, &w.kind, &w.lang, &w.transcript, &w.status, &w.text)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return deliveryWork{}, ErrNoMessage
 	}
@@ -152,46 +158,62 @@ func (s *Store) delivery(ctx context.Context, messageID, lang string) (deliveryW
 	return w, nil
 }
 
+// The updates below return the rendition's new status and whether, if it is
+// now ready, its listeners' phones are told. A voice note's are, when it is
+// ready to hear. A text message's are when its words are ready, and not again
+// when its voice, asked for later, is: by then they have read it.
+
 func (s *Store) saveTranslation(ctx context.Context, messageID, lang, text string) error {
 	return s.updateRendition(ctx, messageID, lang, `
 		UPDATE renditions SET status = 'speaking', text = $3, updated_at = now()
 		WHERE message_id = $1 AND lang = $2
-		RETURNING status`, text)
+		RETURNING status, false`, text)
+}
+
+// wordsReady makes a text message's translation ready to read, with no voice.
+func (s *Store) wordsReady(ctx context.Context, messageID, lang, text string) error {
+	return s.updateRendition(ctx, messageID, lang, `
+		UPDATE renditions SET status = 'ready', text = $3, updated_at = now()
+		WHERE message_id = $1 AND lang = $2
+		RETURNING status, true`, text)
 }
 
 func (s *Store) ready(ctx context.Context, messageID, lang, voice, audioKey string) error {
 	return s.updateRendition(ctx, messageID, lang, `
-		UPDATE renditions SET status = 'ready', voice = $3, audio_key = NULLIF($4, ''), updated_at = now()
-		WHERE message_id = $1 AND lang = $2
-		RETURNING status`, voice, audioKey)
+		UPDATE renditions r SET status = 'ready', voice = $3, audio_key = NULLIF($4, ''), updated_at = now()
+		FROM messages m
+		WHERE r.message_id = $1 AND r.lang = $2 AND m.id = r.message_id
+		RETURNING r.status, m.kind = 'voice'`, voice, audioKey)
 }
 
 func (s *Store) failDelivery(ctx context.Context, messageID, lang string) error {
 	return s.updateRendition(ctx, messageID, lang, `
-		UPDATE renditions SET
-			status = CASE WHEN text IS NULL THEN 'failed' ELSE 'ready' END,
-			voice  = CASE WHEN text IS NULL THEN NULL ELSE 'phone' END,
+		UPDATE renditions r SET
+			status = CASE WHEN r.text IS NULL THEN 'failed' ELSE 'ready' END,
+			voice  = CASE WHEN r.text IS NULL THEN NULL ELSE 'phone' END,
 			updated_at = now()
-		WHERE message_id = $1 AND lang = $2 AND status <> 'ready'
-		RETURNING status`)
+		FROM messages m
+		WHERE r.message_id = $1 AND r.lang = $2 AND r.status <> 'ready' AND m.id = r.message_id
+		RETURNING r.status, m.kind = 'voice'`)
 }
 
 // updateRendition runs update, whose first two parameters are the message
-// and the language and which returns the rendition's new status, and
-// announces the change, together. A rendition now ready is also pushed to
-// its listeners' phones.
+// and the language and which returns the rendition's new status and whether
+// to push it, and announces the change, together. A rendition now ready is
+// also pushed to its listeners' phones, if the update says so.
 func (s *Store) updateRendition(ctx context.Context, messageID, lang, update string, extra ...any) error {
 	args := append([]any{messageID, lang}, extra...)
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		var status string
-		err := tx.QueryRow(ctx, update, args...).Scan(&status)
+		var push bool
+		err := tx.QueryRow(ctx, update, args...).Scan(&status, &push)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil // nothing changed
 		}
 		if err != nil {
 			return err
 		}
-		if status == StatusReady {
+		if status == StatusReady && push {
 			if err := s.jobs.EnqueuePushes(ctx, tx, messageID, []string{lang}); err != nil {
 				return err
 			}

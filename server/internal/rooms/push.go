@@ -39,9 +39,14 @@ func (d *Deliverer) Push(ctx context.Context, messageID, lang string) error {
 		return err
 	}
 
+	// What was sent, never the words: the push services would see them.
+	body := "Sent a voice note · " + clock(work.durationMS)
+	if work.kind == KindText {
+		body = "Sent a message"
+	}
 	n := push.Notification{
 		Title:      work.sender,
-		Body:       "Sent a voice note · " + clock(work.durationMS),
+		Body:       body,
 		Thread:     work.roomID,
 		CollapseID: messageID,
 		Data:       map[string]string{"room_id": work.roomID, "message_id": messageID},
@@ -82,6 +87,7 @@ func clock(ms int) string {
 type pushWork struct {
 	roomID     string
 	sender     string // their name, or @handle if they have none
+	kind       string
 	durationMS int
 	phones     []push.Device
 }
@@ -89,10 +95,10 @@ type pushWork struct {
 func (s *Store) pushWork(ctx context.Context, messageID, lang string) (pushWork, error) {
 	var w pushWork
 	err := s.db.QueryRow(ctx, `
-		SELECT m.room_id, coalesce(nullif(u.display_name, ''), '@' || u.handle, 'Someone'), m.duration_ms
+		SELECT m.room_id, coalesce(nullif(u.display_name, ''), '@' || u.handle, 'Someone'), m.kind, m.duration_ms
 		FROM messages m JOIN users u ON u.id = m.sender_id
 		WHERE m.id = $1`, messageID,
-	).Scan(&w.roomID, &w.sender, &w.durationMS)
+	).Scan(&w.roomID, &w.sender, &w.kind, &w.durationMS)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return pushWork{}, ErrNoMessage
 	}

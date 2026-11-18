@@ -1,6 +1,7 @@
-// Package rooms keeps rooms, their members and their voice messages, and
-// delivers each message to the people in the room: translated into the
-// language each speaks, then spoken in the sender's voice.
+// Package rooms keeps rooms, their members and their messages, and delivers
+// each message to the people in the room: translated into the language each
+// speaks, and spoken in the sender's voice. A voice note is spoken at once; a
+// text message when someone asks to hear it.
 package rooms
 
 import (
@@ -24,6 +25,17 @@ var (
 	// ErrRoomClosed means everyone else has left the room, by deleting their
 	// account, so a message would reach no one.
 	ErrRoomClosed = errors.New("rooms: no one else is in the room")
+	// ErrNotText means a message is a voice note, which is spoken anyway.
+	ErrNotText = errors.New("rooms: not a text message")
+	// ErrNotReady means a message's words are not ready in that language:
+	// still being translated, or the translation failed.
+	ErrNotReady = errors.New("rooms: not ready in that language")
+)
+
+// What a message is, as stored in messages.kind.
+const (
+	KindVoice = "voice" // a recording, with the words the phone heard in it
+	KindText  = "text"  // typed words, with no recording
 )
 
 // Where a rendition is, as stored in renditions.status.
@@ -58,16 +70,17 @@ type Room struct {
 	CreatedAt time.Time
 }
 
-// Message is a voice message as it was said, with what it has become for the
+// Message is a message as it was sent, with what it has become for the
 // listeners of each language.
 type Message struct {
 	ID         string
 	RoomID     string
 	SenderID   string
+	Kind       string
 	Lang       string
-	Transcript string
-	AudioKey   string
-	DurationMS int
+	Transcript string // what was said, or for a text message, typed
+	AudioKey   string // the recording; empty for a text message
+	DurationMS int    // 0 for a text message
 	CreatedAt  time.Time
 	Renditions []Rendition
 }
@@ -77,14 +90,16 @@ type Rendition struct {
 	Lang     string
 	Status   string
 	Text     string // the translation; empty until made
-	Voice    string // once ready
+	Voice    string // once ready; for a text message, empty until asked for
 	AudioKey string // for VoiceOwn
 }
 
-// NewMessage is a message to add to a room.
+// NewMessage is a message to add to a room: a voice note, with its
+// recording, or typed text, with none.
 type NewMessage struct {
 	RoomID         string
 	SenderID       string
+	Kind           string // KindVoice when empty
 	Lang           string
 	Transcript     string
 	AudioKey       string
@@ -296,6 +311,9 @@ func (s *Store) Message(ctx context.Context, userID, messageID string) (Message,
 // an idempotency key already used by this sender is not added again: the
 // earlier one is returned, and created is false.
 func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, created bool, err error) {
+	if m.Kind == "" {
+		m.Kind = KindVoice
+	}
 	var id string
 	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		var member bool
@@ -324,11 +342,11 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 		}
 
 		err = tx.QueryRow(ctx, `
-			INSERT INTO messages (room_id, sender_id, lang, transcript, audio_key, duration_ms, idempotency_key)
-			VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''))
+			INSERT INTO messages (room_id, sender_id, kind, lang, transcript, audio_key, duration_ms, idempotency_key)
+			VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, NULLIF($8, ''))
 			ON CONFLICT (sender_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
 			RETURNING id`,
-			m.RoomID, m.SenderID, m.Lang, m.Transcript, m.AudioKey, m.DurationMS, m.IdempotencyKey,
+			m.RoomID, m.SenderID, m.Kind, m.Lang, m.Transcript, m.AudioKey, m.DurationMS, m.IdempotencyKey,
 		).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Sent before. As in OpenPair, a statement of its own sees it.
@@ -342,14 +360,19 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 		created = true
 
 		// Listeners of the language it was said in hear the sender's own
-		// recording, at once; the others wait for a translation.
+		// recording, at once, or read their words; the others wait for a
+		// translation.
+		var voice *string // a text message has no voice until someone asks for one
+		if m.Kind == KindVoice {
+			voice = ptr(VoiceOriginal)
+		}
 		var toTranslate, ready []string
 		for _, lang := range langs {
 			if lang == m.Lang {
 				ready = append(ready, lang)
 				_, err = tx.Exec(ctx, `
 					INSERT INTO renditions (message_id, lang, status, text, voice)
-					VALUES ($1, $2, 'ready', $3, 'original')`, id, lang, m.Transcript)
+					VALUES ($1, $2, 'ready', $3, $4)`, id, lang, m.Transcript, voice)
 			} else {
 				toTranslate = append(toTranslate, lang)
 				_, err = tx.Exec(ctx,
@@ -415,6 +438,58 @@ func (s *Store) Retry(ctx context.Context, userID, messageID string) (Message, e
 	return s.Message(ctx, userID, messageID)
 }
 
+// RequestSpeech asks for a text message to be spoken in its sender's voice,
+// for the listeners of lang, and returns it as userID now sees it. The voice
+// is made once per language, by the delivery job, and then kept; asking again
+// while it is made, or after, changes nothing. When the sender keeps no
+// voice, the job makes the rendition one for the listener's phone to read.
+//
+// The caller has checked that userID may see the rendition in lang.
+func (s *Store) RequestSpeech(ctx context.Context, userID, messageID, lang string) (Message, error) {
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var kind, status string
+		var voice *string
+		// FOR UPDATE holds the rendition until this commits, so two people
+		// asking at once start one job, not two.
+		err := tx.QueryRow(ctx, `
+			SELECT m.kind, r.status, r.voice
+			FROM messages m
+			JOIN renditions r ON r.message_id = m.id AND r.lang = $3
+			WHERE m.id = $1
+			  AND EXISTS (SELECT 1 FROM room_members WHERE room_id = m.room_id AND user_id = $2)
+			FOR UPDATE OF r`, messageID, userID, lang,
+		).Scan(&kind, &status, &voice)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ErrNoMessage
+		case err != nil:
+			return err
+		case kind != KindText:
+			return ErrNotText
+		case status == StatusSpeaking || voice != nil:
+			return nil // asked for already
+		case status != StatusReady:
+			return ErrNotReady
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE renditions SET status = 'speaking', updated_at = now()
+			WHERE message_id = $1 AND lang = $2`, messageID, lang); err != nil {
+			return err
+		}
+		if err := s.jobs.EnqueueDeliveries(ctx, tx, messageID, []string{lang}); err != nil {
+			return err
+		}
+		return notifyMessage(ctx, tx, messageID)
+	})
+	if errors.Is(err, ErrNoMessage) || errors.Is(err, ErrNotText) || errors.Is(err, ErrNotReady) {
+		return Message{}, err
+	}
+	if err != nil {
+		return Message{}, fmt.Errorf("asking for speech: %w", err)
+	}
+	return s.Message(ctx, userID, messageID)
+}
+
 // MarkRead notes that userID has seen everything in the room so far.
 func (s *Store) MarkRead(ctx context.Context, userID, roomID string) error {
 	tag, err := s.db.Exec(ctx,
@@ -437,7 +512,7 @@ func (s *Store) ForgetSender(ctx context.Context, userID string) ([]string, erro
 		// Read first, delete second: the renditions go with their messages,
 		// and one statement could not both delete them and report them.
 		rows, err := tx.Query(ctx, `
-			SELECT audio_key FROM messages WHERE sender_id = $1
+			SELECT audio_key FROM messages WHERE sender_id = $1 AND audio_key IS NOT NULL
 			UNION ALL
 			SELECT r.audio_key FROM renditions r JOIN messages m ON m.id = r.message_id
 			WHERE m.sender_id = $1 AND r.audio_key IS NOT NULL`, userID)
@@ -474,14 +549,14 @@ func (s *Store) checkMember(ctx context.Context, userID, roomID string) error {
 // and LIMIT, with their renditions.
 func (s *Store) messagesWhere(ctx context.Context, where string, args ...any) ([]Message, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT m.id, m.room_id, m.sender_id, m.lang, m.transcript, m.audio_key, m.duration_ms, m.created_at
+		SELECT m.id, m.room_id, m.sender_id, m.kind, m.lang, m.transcript, coalesce(m.audio_key, ''), m.duration_ms, m.created_at
 		FROM messages m WHERE `+where, args...)
 	if err != nil {
 		return nil, fmt.Errorf("reading messages: %w", err)
 	}
 	found, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Message, error) {
 		var m Message
-		err := row.Scan(&m.ID, &m.RoomID, &m.SenderID, &m.Lang, &m.Transcript, &m.AudioKey, &m.DurationMS, &m.CreatedAt)
+		err := row.Scan(&m.ID, &m.RoomID, &m.SenderID, &m.Kind, &m.Lang, &m.Transcript, &m.AudioKey, &m.DurationMS, &m.CreatedAt)
 		return m, err
 	})
 	if err != nil {
@@ -515,6 +590,8 @@ func (s *Store) messagesWhere(ctx context.Context, where string, args ...any) ([
 	}
 	return found, rows.Err()
 }
+
+func ptr[T any](v T) *T { return &v }
 
 // changesChannel is the Postgres NOTIFY channel on which every change to a
 // room is announced, for the Hub to pass on to the phones of its members.

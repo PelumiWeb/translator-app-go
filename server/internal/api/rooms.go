@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +27,7 @@ type RoomStore interface {
 	Message(ctx context.Context, userID, messageID string) (rooms.Message, error)
 	AddMessage(ctx context.Context, m rooms.NewMessage) (message rooms.Message, created bool, err error)
 	Retry(ctx context.Context, userID, messageID string) (rooms.Message, error)
+	RequestSpeech(ctx context.Context, userID, messageID, lang string) (rooms.Message, error)
 	MarkRead(ctx context.Context, userID, roomID string) error
 	ForgetSender(ctx context.Context, userID string) (audioKeys []string, err error)
 }
@@ -39,7 +42,8 @@ const (
 	// rounding on the phones.
 	maxMessageMS = 31_000
 	// Thirty seconds of speech is about 80 words. The limit keeps what the
-	// translation and voice services are paid to process in check.
+	// translation and voice services are paid to process in check, and is the
+	// same for a typed message.
 	maxTranscriptChars = 1000
 
 	defaultPage = 50
@@ -59,6 +63,7 @@ type messageResponse struct {
 	RoomID     string              `json:"room_id"`
 	SenderID   string              `json:"sender_id"`
 	Mine       bool                `json:"mine"`
+	Kind       string              `json:"kind"` // "voice" or "text"
 	Lang       string              `json:"lang"`
 	Transcript string              `json:"transcript"`
 	DurationMS int                 `json:"duration_ms"`
@@ -91,7 +96,7 @@ func roomJSON(r rooms.Room, viewer accounts.User) roomResponse {
 func messageJSON(m rooms.Message, viewer accounts.User) messageResponse {
 	response := messageResponse{
 		ID: m.ID, RoomID: m.RoomID, SenderID: m.SenderID, Mine: m.SenderID == viewer.ID,
-		Lang: m.Lang, Transcript: m.Transcript, DurationMS: m.DurationMS, CreatedAt: m.CreatedAt,
+		Kind: m.Kind, Lang: m.Lang, Transcript: m.Transcript, DurationMS: m.DurationMS, CreatedAt: m.CreatedAt,
 		Renditions: []renditionResponse{},
 	}
 	for _, r := range m.Renditions {
@@ -212,12 +217,13 @@ func (a *API) handleListMessages(w http.ResponseWriter, r *http.Request, user ac
 	writeJSON(w, http.StatusOK, response)
 }
 
-// handleSendMessage adds a voice message to a room and starts delivering it.
+// handleSendMessage adds a message to a room and starts delivering it.
 //
-// It accepts multipart/form-data with the "audio" (a WAV recording of up to
-// 30 seconds), its "transcript", made on the phone, and "duration_ms";
-// optionally the "lang" it was said in, which defaults to the sender's. An
-// Idempotency-Key header, as for jobs, makes a resend safe.
+// A voice note is multipart/form-data with the "audio" (a WAV recording of up
+// to 30 seconds), its "transcript", made on the phone, and "duration_ms". A
+// text message is JSON with the "text". Either may give the "lang" it is in,
+// which defaults to the sender's. An Idempotency-Key header, as for jobs,
+// makes a resend safe.
 func (a *API) handleSendMessage(w http.ResponseWriter, r *http.Request, user accounts.User, _ string) {
 	roomID, ok := pathID(w, r, "room_not_found", "no such room")
 	if !ok {
@@ -229,60 +235,23 @@ func (a *API) handleSendMessage(w http.ResponseWriter, r *http.Request, user acc
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUploadBytes)
-	if err := r.ParseMultipartForm(formMemory); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			writeError(w, http.StatusRequestEntityTooLarge, "audio_too_large", "the upload exceeds the size limit")
-			return
-		}
-		writeError(w, http.StatusBadRequest, "invalid_form", "expected multipart/form-data")
+	// One endpoint for both kinds, told apart by the body's type: a message
+	// is a message, whatever it carries, and the phones page through one list.
+	var m rooms.NewMessage
+	if mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mediaType == "application/json" {
+		m, ok = a.readTextMessage(w, r, user)
+	} else {
+		m, ok = a.readVoiceMessage(w, r, user)
+	}
+	if !ok {
 		return
 	}
-	defer r.MultipartForm.RemoveAll()
+	m.RoomID, m.SenderID, m.IdempotencyKey = roomID, user.ID, idempotencyKey
 
-	transcript := strings.TrimSpace(r.FormValue("transcript"))
-	if transcript == "" || utf8.RuneCountInString(transcript) > maxTranscriptChars {
-		writeError(w, http.StatusBadRequest, "invalid_transcript", fmt.Sprintf("the transcript is 1 to %d characters", maxTranscriptChars))
-		return
-	}
-	durationMS, err := strconv.Atoi(r.FormValue("duration_ms"))
-	if err != nil || durationMS < 1 || durationMS > maxMessageMS {
-		writeError(w, http.StatusBadRequest, "invalid_duration", "a voice message is at most 30 seconds")
-		return
-	}
-	lang := r.FormValue("lang")
-	if lang == "" {
-		lang = user.Language
-	}
-	if !languageTag.MatchString(lang) {
-		writeError(w, http.StatusBadRequest, "invalid_lang", `lang must be a language tag such as "es"`)
-		return
-	}
-	file, _, err := r.FormFile("audio")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "missing_audio", `the "audio" file is required`)
-		return
-	}
-	defer file.Close()
-	if !isWAV(file) {
-		writeError(w, http.StatusBadRequest, "unsupported_audio", "the audio must be a WAV file")
-		return
-	}
-
-	key := rand.Text() + ".wav"
-	if err := a.Messages.Put(key, file); err != nil {
-		a.Logger.Error("storing a message", "user_id", user.ID, "error", err)
-		writeError(w, http.StatusInternalServerError, "internal", "could not store the message")
-		return
-	}
-	message, created, err := a.Rooms.AddMessage(r.Context(), rooms.NewMessage{
-		RoomID: roomID, SenderID: user.ID, Lang: lang, Transcript: transcript,
-		AudioKey: key, DurationMS: durationMS, IdempotencyKey: idempotencyKey,
-	})
-	if err != nil || !created {
+	message, created, err := a.Rooms.AddMessage(r.Context(), m)
+	if (err != nil || !created) && m.AudioKey != "" {
 		// Not kept, or the same message was kept before, with its own copy.
-		a.deleteMessageFile(key)
+		a.deleteMessageFile(m.AudioKey)
 	}
 	switch {
 	case errors.Is(err, rooms.ErrNoRoom):
@@ -302,6 +271,90 @@ func (a *API) handleSendMessage(w http.ResponseWriter, r *http.Request, user acc
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, messageJSON(message, user))
+}
+
+// readVoiceMessage reads a voice note's form and stores its recording, or
+// answers the request itself and returns false.
+func (a *API) readVoiceMessage(w http.ResponseWriter, r *http.Request, user accounts.User) (rooms.NewMessage, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUploadBytes)
+	if err := r.ParseMultipartForm(formMemory); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "audio_too_large", "the upload exceeds the size limit")
+			return rooms.NewMessage{}, false
+		}
+		writeError(w, http.StatusBadRequest, "invalid_form", "expected multipart/form-data, or JSON for a text message")
+		return rooms.NewMessage{}, false
+	}
+	defer r.MultipartForm.RemoveAll()
+
+	transcript := strings.TrimSpace(r.FormValue("transcript"))
+	if transcript == "" || utf8.RuneCountInString(transcript) > maxTranscriptChars {
+		writeError(w, http.StatusBadRequest, "invalid_transcript", fmt.Sprintf("the transcript is 1 to %d characters", maxTranscriptChars))
+		return rooms.NewMessage{}, false
+	}
+	durationMS, err := strconv.Atoi(r.FormValue("duration_ms"))
+	if err != nil || durationMS < 1 || durationMS > maxMessageMS {
+		writeError(w, http.StatusBadRequest, "invalid_duration", "a voice message is at most 30 seconds")
+		return rooms.NewMessage{}, false
+	}
+	lang, ok := messageLang(w, r.FormValue("lang"), user)
+	if !ok {
+		return rooms.NewMessage{}, false
+	}
+	file, _, err := r.FormFile("audio")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "missing_audio", `the "audio" file is required`)
+		return rooms.NewMessage{}, false
+	}
+	defer file.Close()
+	if !isWAV(file) {
+		writeError(w, http.StatusBadRequest, "unsupported_audio", "the audio must be a WAV file")
+		return rooms.NewMessage{}, false
+	}
+
+	key := rand.Text() + ".wav"
+	if err := a.Messages.Put(key, file); err != nil {
+		a.Logger.Error("storing a message", "user_id", user.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal", "could not store the message")
+		return rooms.NewMessage{}, false
+	}
+	return rooms.NewMessage{Kind: rooms.KindVoice, Lang: lang, Transcript: transcript, AudioKey: key, DurationMS: durationMS}, true
+}
+
+// readTextMessage reads a text message, or answers the request itself and
+// returns false.
+func (a *API) readTextMessage(w http.ResponseWriter, r *http.Request, user accounts.User) (rooms.NewMessage, bool) {
+	var body struct {
+		Text string `json:"text"`
+		Lang string `json:"lang"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return rooms.NewMessage{}, false
+	}
+	text := strings.TrimSpace(body.Text)
+	if text == "" || utf8.RuneCountInString(text) > maxTranscriptChars {
+		writeError(w, http.StatusBadRequest, "invalid_text", fmt.Sprintf("a message is 1 to %d characters", maxTranscriptChars))
+		return rooms.NewMessage{}, false
+	}
+	lang, ok := messageLang(w, body.Lang, user)
+	if !ok {
+		return rooms.NewMessage{}, false
+	}
+	return rooms.NewMessage{Kind: rooms.KindText, Lang: lang, Transcript: text}, true
+}
+
+// messageLang is the language a message is in: lang, or when it is not
+// given, the sender's.
+func messageLang(w http.ResponseWriter, lang string, user accounts.User) (string, bool) {
+	if lang == "" {
+		lang = user.Language
+	}
+	if !languageTag.MatchString(lang) {
+		writeError(w, http.StatusBadRequest, "invalid_lang", `lang must be a language tag such as "es"`)
+		return "", false
+	}
+	return lang, true
 }
 
 func (a *API) handleMarkRead(w http.ResponseWriter, r *http.Request, user accounts.User, _ string) {
@@ -336,6 +389,45 @@ func (a *API) handleRetryMessage(w http.ResponseWriter, r *http.Request, user ac
 	}
 	message, err := a.Rooms.Retry(r.Context(), user.ID, messageID)
 	if !a.messageFound(w, err, user) {
+		return
+	}
+	a.Wake()
+	writeJSON(w, http.StatusOK, messageJSON(message, user))
+}
+
+// handleRequestSpeech asks for a text message to be spoken in its sender's
+// voice, in one language (?lang=), and answers with the message: its
+// rendition "speaking" until the voice is made, which the room's stream
+// announces. A listener may ask for their own language; the sender, for any
+// of the room's. The voice is made once, then kept.
+func (a *API) handleRequestSpeech(w http.ResponseWriter, r *http.Request, user accounts.User, _ string) {
+	messageID, ok := pathID(w, r, "message_not_found", "no such message")
+	if !ok {
+		return
+	}
+	message, err := a.Rooms.Message(r.Context(), user.ID, messageID)
+	if !a.messageFound(w, err, user) {
+		return
+	}
+	lang := r.URL.Query().Get("lang")
+	// messageJSON shows exactly the renditions this user may see.
+	visible := slices.ContainsFunc(messageJSON(message, user).Renditions, func(r renditionResponse) bool { return r.Lang == lang })
+	if !visible {
+		writeError(w, http.StatusNotFound, "no_rendition", "this message has no version in that language for you")
+		return
+	}
+
+	message, err = a.Rooms.RequestSpeech(r.Context(), user.ID, messageID, lang)
+	switch {
+	case err == nil:
+	case errors.Is(err, rooms.ErrNotText):
+		writeError(w, http.StatusConflict, "not_text", "a voice note is spoken already")
+		return
+	case errors.Is(err, rooms.ErrNotReady):
+		writeError(w, http.StatusConflict, "not_ready", "the words are not ready in that language yet")
+		return
+	default:
+		a.messageFound(w, err, user) // deleted meanwhile, or the database failed
 		return
 	}
 	a.Wake()

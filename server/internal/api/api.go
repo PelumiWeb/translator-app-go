@@ -123,6 +123,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/rooms/{id}/read", a.signedIn(a.handleMarkRead))
 	mux.HandleFunc("GET /v1/messages/{id}", a.signedIn(a.handleGetMessage))
 	mux.HandleFunc("POST /v1/messages/{id}/retry", a.signedIn(a.handleRetryMessage))
+	mux.HandleFunc("POST /v1/messages/{id}/speech", a.signedIn(a.handleRequestSpeech))
 	mux.HandleFunc("GET /v1/messages/{id}/audio", a.signedIn(a.handleMessageAudio))
 	mux.HandleFunc("GET /v1/models/manifest", a.handleModelManifest)
 	mux.HandleFunc("GET /v1/models/{id}", a.handleModelDownload)
