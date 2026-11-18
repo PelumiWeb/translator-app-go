@@ -53,6 +53,8 @@ class TranslateViewModelTest {
         override fun start(): Recording {
             startError?.let { throw it }
             return object : Recording {
+                override fun pause() = Unit
+                override fun resume() = Unit
                 override suspend fun stop() = audio
                 override fun cancel() {
                     cancelled = true

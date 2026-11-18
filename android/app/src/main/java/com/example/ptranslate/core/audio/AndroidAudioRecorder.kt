@@ -60,16 +60,20 @@ private class ActiveRecording(
     private val samples = ShortArray(maxSamples)
     private var count = 0
 
-    @Volatile
-    private var running = true
+    private enum class State { RECORDING, PAUSED, ENDED }
+
+    // The capture thread waits on the lock while paused; pause, resume and the end change the state under it.
+    private val lock = Object()
+    private var state = State.RECORDING
 
     // AudioRecord.read blocks, so capture gets a thread of its own instead of
-    // occupying a coroutine dispatcher thread for up to 30 seconds.
+    // occupying a coroutine dispatcher thread for up to 30 seconds. It is the
+    // only thread that starts or stops the AudioRecord.
     private val captureThread = thread(name = "audio-capture") {
         val chunk = ShortArray(1024)
         try {
             record.startRecording()
-            while (running && count < samples.size) {
+            while (count < samples.size && awaitRecording()) {
                 val read = record.read(chunk, 0, minOf(chunk.size, samples.size - count))
                 if (read <= 0) break
                 chunk.copyInto(samples, destinationOffset = count, endIndex = read)
@@ -82,13 +86,46 @@ private class ActiveRecording(
         }
     }
 
+    /** Waits out a pause with the microphone stopped. False once the recording has ended. */
+    private fun awaitRecording(): Boolean {
+        synchronized(lock) {
+            when (state) {
+                State.RECORDING -> return true
+                State.ENDED -> return false
+                State.PAUSED -> Unit
+            }
+        }
+        runCatching { record.stop() }
+        synchronized(lock) {
+            while (state == State.PAUSED) lock.wait()
+            if (state == State.ENDED) return false
+        }
+        // Another app may hold the microphone now; the recording then ends with what it has.
+        return runCatching { record.startRecording() }.isSuccess &&
+            record.recordingState == AudioRecord.RECORDSTATE_RECORDING
+    }
+
+    override fun pause() = change(State.PAUSED)
+
+    override fun resume() = change(State.RECORDING)
+
     override suspend fun stop(): PcmAudio {
-        running = false
+        end()
         withContext(ioDispatcher) { captureThread.join() }
         return PcmAudio(samples.copyOf(count))
     }
 
-    override fun cancel() {
-        running = false
+    override fun cancel() = end()
+
+    private fun change(to: State) = synchronized(lock) {
+        if (state != State.ENDED) {
+            state = to
+            lock.notifyAll()
+        }
+    }
+
+    private fun end() = synchronized(lock) {
+        state = State.ENDED
+        lock.notifyAll()
     }
 }
