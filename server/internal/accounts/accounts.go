@@ -26,6 +26,7 @@ var (
 const (
 	ProviderApple  = "apple"
 	ProviderGoogle = "google"
+	ProviderEmail  = "email" // the address is the subject
 )
 
 // User is a person with an account.

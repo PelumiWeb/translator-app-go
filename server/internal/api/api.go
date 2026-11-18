@@ -63,6 +63,9 @@ type API struct {
 	// Google is nil when the server has no Google client ID; signing in
 	// with Google is then refused.
 	Google TokenVerifier
+	// TestAccounts is nil when the server has none; signing in with an
+	// email address is then refused.
+	TestAccounts CodeChecker
 	// Voices holds users' kept voice samples, apart from job audio (ADR 0016).
 	Voices AudioStore
 
@@ -99,6 +102,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/jobs/{id}/audio", a.handleJobAudio)
 	mux.HandleFunc("POST /v1/sessions/apple", a.handleSignIn(accounts.ProviderApple, a.Apple))
 	mux.HandleFunc("POST /v1/sessions/google", a.handleSignIn(accounts.ProviderGoogle, a.Google))
+	mux.HandleFunc("POST /v1/sessions/email", a.handleEmailSignIn)
 	mux.HandleFunc("DELETE /v1/sessions/current", a.signedIn(a.handleSignOut))
 	mux.HandleFunc("PUT /v1/sessions/current/push", a.signedIn(a.handlePutPush))
 	mux.HandleFunc("GET /v1/me", a.signedIn(a.handleGetMe))

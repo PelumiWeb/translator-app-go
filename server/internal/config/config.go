@@ -67,6 +67,10 @@ type Config struct {
 	// project, which Google writes into the tokens it issues for the Android
 	// app. Empty turns Sign in with Google off.
 	GoogleClientID string
+	// TestAccounts lists email addresses that sign in with a fixed code
+	// instead of one sent by mail, as "address:code" pairs separated by
+	// commas. Secret: server/.env. Empty for none.
+	TestAccounts string
 
 	// Push notifications to iPhones (ADR 0026): the path of the key file
 	// from the developer account (AuthKey_<id>.p8), its key ID, and the
@@ -116,6 +120,7 @@ func Load() Config {
 
 		AppleAudience:  env("APPLE_AUDIENCE", "com.pelumi.shinar"),
 		GoogleClientID: env("GOOGLE_CLIENT_ID", ""),
+		TestAccounts:   env("TEST_ACCOUNTS", ""),
 
 		APNsKeyFile:           env("APNS_KEY_FILE", ""),
 		APNsKeyID:             env("APNS_KEY_ID", ""),

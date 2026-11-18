@@ -243,6 +243,15 @@ func run(logger *slog.Logger) error {
 	if cfg.GoogleClientID != "" {
 		google = auth.NewGoogleVerifier(cfg.GoogleClientID)
 	}
+	// The same for test accounts. A mistake in them stops the server, rather
+	// than leaving the owner to find out on a phone that sign-in fails.
+	var testAccounts api.CodeChecker
+	if parsed, err := auth.ParseTestAccounts(cfg.TestAccounts); err != nil {
+		return fmt.Errorf("reading TEST_ACCOUNTS: %w", err)
+	} else if parsed != nil {
+		testAccounts = parsed
+		logger.Info("test accounts", "count", parsed.Len())
+	}
 	handlers := &api.API{
 		Logger:         logger,
 		DB:             pool,
@@ -258,6 +267,7 @@ func run(logger *slog.Logger) error {
 		Accounts:       accountStore,
 		Apple:          auth.NewAppleVerifier(cfg.AppleAudience),
 		Google:         google,
+		TestAccounts:   testAccounts,
 		Voices:         voices,
 		Rooms:          roomStore,
 		Changes:        hub,

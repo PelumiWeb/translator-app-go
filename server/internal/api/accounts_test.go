@@ -200,6 +200,11 @@ func accountsAPI() (*API, *fakeAccounts) {
 	a.Rooms, a.Messages = noRooms{}, &fakeAudio{}
 	a.Apple = fakeVerifier{subject: "apple-1"}
 	a.Google = fakeVerifier{subject: "google-1", name: "Ada from Google"}
+	testAccounts, err := auth.ParseTestAccounts("tester@shinar.test:abcdefghijkl")
+	if err != nil {
+		panic(err)
+	}
+	a.TestAccounts = testAccounts
 	return a, store
 }
 
@@ -255,6 +260,46 @@ func TestSignInWithGoogleOnAServerNotSetUpForIt(t *testing.T) {
 	a.Google = nil
 
 	rec := send(a, http.MethodPost, "/v1/sessions/google", "", `{"identity_token":"good","nonce":"n"}`)
+
+	if rec.Code != http.StatusNotImplemented || !strings.Contains(rec.Body.String(), `"sign_in_not_configured"`) {
+		t.Errorf("status %d, body %s; want 501 sign_in_not_configured", rec.Code, rec.Body)
+	}
+}
+
+func TestSignInWithATestAccount(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+		wantInBody string
+	}{
+		{"a first sign-in creates the account", `{"email":"Tester@shinar.test","code":"abcdefghijkl"}`, http.StatusCreated, `"new_user":true`},
+		{"a wrong code", `{"email":"tester@shinar.test","code":"abcdefghijkX"}`, http.StatusUnauthorized, `"code":"invalid_code"`},
+		// Refused the same way, so nobody can find out which addresses are test accounts.
+		{"an address that is not one", `{"email":"ada@example.com","code":"abcdefghijkl"}`, http.StatusUnauthorized, `"code":"invalid_code"`},
+		{"no code", `{"email":"tester@shinar.test"}`, http.StatusBadRequest, `"code":"invalid_request"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a, store := accountsAPI()
+
+			rec := send(a, http.MethodPost, "/v1/sessions/email", "", tt.body)
+
+			if rec.Code != tt.wantStatus || !strings.Contains(rec.Body.String(), tt.wantInBody) {
+				t.Errorf("status %d, body %s; want %d with %s", rec.Code, rec.Body, tt.wantStatus, tt.wantInBody)
+			}
+			if tt.wantStatus == http.StatusCreated && store.bySub["tester@shinar.test"] == "" {
+				t.Errorf("subjects = %v, want the address in lower case", store.bySub)
+			}
+		})
+	}
+}
+
+func TestSignInWithEmailOnAServerWithNoTestAccounts(t *testing.T) {
+	a, _ := accountsAPI()
+	a.TestAccounts = nil
+
+	rec := send(a, http.MethodPost, "/v1/sessions/email", "", `{"email":"tester@shinar.test","code":"abcdefghijkl"}`)
 
 	if rec.Code != http.StatusNotImplemented || !strings.Contains(rec.Body.String(), `"sign_in_not_configured"`) {
 		t.Errorf("status %d, body %s; want 501 sign_in_not_configured", rec.Code, rec.Body)

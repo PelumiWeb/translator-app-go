@@ -37,6 +37,11 @@ type TokenVerifier interface {
 	Verify(ctx context.Context, token, nonce string) (auth.Identity, error)
 }
 
+// CodeChecker checks an email address and the code given for it.
+type CodeChecker interface {
+	Check(email, code string) (auth.Identity, error)
+}
+
 const maxNameChars = 50
 
 type userResponse struct {
@@ -95,21 +100,58 @@ func (a *API) handleSignIn(provider string, verifier TokenVerifier) http.Handler
 			return
 		}
 
-		name := cmp.Or(cutName(body.Name), cutName(identity.Name))
-		token, user, created, err := a.Accounts.SignIn(r.Context(), provider, identity.Subject, identity.Email, name)
-		if err != nil {
-			a.Logger.Error("signing in", "provider", provider, "error", err)
-			writeError(w, http.StatusInternalServerError, "internal", "could not sign in")
-			return
-		}
-		// The user's ID only: names and emails stay out of the logs.
-		a.Logger.Info("signed in", "provider", provider, "user_id", user.ID, "new_user", created)
-		status := http.StatusOK
-		if created {
-			status = http.StatusCreated
-		}
-		writeJSON(w, status, signInResponse{Token: token, User: userJSON(user), NewUser: created})
+		a.openSession(w, r, provider, identity, cmp.Or(cutName(body.Name), cutName(identity.Name)))
 	}
+}
+
+// handleEmailSignIn signs in with an email address and a code, creating the
+// account on its first sign-in. For now only test accounts can: their codes
+// are fixed on the server (TEST_ACCOUNTS), while codes sent by mail wait for
+// a mail service. Any other address is refused like a wrong code, so the
+// answer does not say which addresses are test accounts.
+//
+// The body is JSON: the "email" address and the "code".
+func (a *API) handleEmailSignIn(w http.ResponseWriter, r *http.Request) {
+	if a.TestAccounts == nil {
+		writeError(w, http.StatusNotImplemented, "sign_in_not_configured", "this server is not set up for this way of signing in")
+		return
+	}
+	var body struct {
+		Email string `json:"email"`
+		Code  string `json:"code"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if strings.TrimSpace(body.Email) == "" || body.Code == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", `"email" and "code" are required`)
+		return
+	}
+	identity, err := a.TestAccounts.Check(body.Email, strings.TrimSpace(body.Code))
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid_code", "that email and code do not match")
+		return
+	}
+	a.openSession(w, r, accounts.ProviderEmail, identity, "")
+}
+
+// openSession signs in the person a provider vouched for, creating their
+// account on its first sign-in, and answers with a session token for the
+// phone to keep.
+func (a *API) openSession(w http.ResponseWriter, r *http.Request, provider string, identity auth.Identity, name string) {
+	token, user, created, err := a.Accounts.SignIn(r.Context(), provider, identity.Subject, identity.Email, name)
+	if err != nil {
+		a.Logger.Error("signing in", "provider", provider, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal", "could not sign in")
+		return
+	}
+	// The user's ID only: names and emails stay out of the logs.
+	a.Logger.Info("signed in", "provider", provider, "user_id", user.ID, "new_user", created)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, signInResponse{Token: token, User: userJSON(user), NewUser: created})
 }
 
 func (a *API) handleSignOut(w http.ResponseWriter, r *http.Request, _ accounts.User, token string) {
