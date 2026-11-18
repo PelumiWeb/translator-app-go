@@ -57,7 +57,16 @@ final class Account {
     /// Apple tells the app the person's name only the first time, so it is passed on when there is one. A new
     /// account starts signing up from its name; one already set up on another phone goes straight in.
     func signInWithApple(identityToken: String, nonce: String, name: String?) async throws {
-        let signIn = try await client.signInWithApple(identityToken: identityToken, nonce: nonce, name: name)
+        signedIn(try await client.signInWithApple(identityToken: identityToken, nonce: nonce, name: name))
+    }
+
+    /// Signs in to a test account, with the code the server holds for its address. Otherwise as with Apple.
+    func signInWithEmail(_ email: String, code: String) async throws {
+        let trimmed = { (s: String) in s.trimmingCharacters(in: .whitespacesAndNewlines) }
+        signedIn(try await client.signInWithEmail(trimmed(email), code: trimmed(code)))
+    }
+
+    private func signedIn(_ signIn: SignIn) {
         keep(Session(token: signIn.token, profile: signIn.profile))
         move(to: signIn.newUser || !signIn.profile.isComplete ? .name : .done)
     }

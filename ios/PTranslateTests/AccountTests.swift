@@ -62,6 +62,29 @@ struct AccountTests {
         #expect(account.step == .name)
     }
 
+    @Test func aTestAccountSignsInWithItsAddressAndCode() async throws {
+        server.enqueue(.json(status: 201, body: #"{"token":"t3","user":{"id":"u3","display_name":"","handle":"","language":""},"new_user":true}"#))
+        let account = testAccount(server: server)
+
+        try await account.signInWithEmail(" test1@shinar.test ", code: " code-1234567 ")
+
+        let request = try #require(server.requests.first)
+        #expect(request.path == "/v1/sessions/email")
+        let body = try JSONSerialization.jsonObject(with: request.body) as? [String: String]
+        #expect(body == ["email": "test1@shinar.test", "code": "code-1234567"])
+        #expect(account.token == "t3")
+        #expect(account.step == .name)
+    }
+
+    @Test func aWrongCodeKeepsTheUserSignedOut() async throws {
+        server.enqueue(.json(status: 401, body: #"{"error":{"code":"invalid_code","message":"that email and code do not match"}}"#))
+        let account = testAccount(server: server)
+
+        await #expect(throws: BackendError.self) { try await account.signInWithEmail("test1@shinar.test", code: "wrong") }
+
+        #expect(account.token == nil)
+    }
+
     @Test func registeringForPushTellsTheServerTheServiceAndTheAddressForThisSession() async throws {
         server.enqueue(.status(204))
         let account = testAccount(server: server, store: MemorySessionStore(signedUp), progress: MemoryProgress(.done))

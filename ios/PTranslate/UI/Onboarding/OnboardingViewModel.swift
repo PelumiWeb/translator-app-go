@@ -59,11 +59,22 @@ final class OnboardingViewModel {
 
     /// Signs in with the identity token Apple gave the phone, for the nonce whose hash Apple was given.
     func signIn(identityToken: String, nonce: Nonce, name: String?) async {
+        await signIn { [account] in try await account.signInWithApple(identityToken: identityToken, nonce: nonce.raw, name: name) }
+    }
+
+    /// Signs in to a test account: an address and the code the server holds for it.
+    func signInToTestAccount(email: String, code: String) async {
+        guard !email.trimmingCharacters(in: .whitespaces).isEmpty, !code.isEmpty else { return }
+        await signIn { [account] in try await account.signInWithEmail(email, code: code) }
+    }
+
+    private func signIn(_ work: () async throws -> Void) async {
+        guard !signingIn else { return }
         signingIn = true
         signInProblem = nil
         defer { signingIn = false }
         do {
-            try await account.signInWithApple(identityToken: identityToken, nonce: nonce.raw, name: name)
+            try await work()
             let profile = account.profile
             self.name = profile?.displayName ?? ""
             if let handle = profile?.handle, !handle.isEmpty { handleChanged(handle) } else { handleChanged(Self.suggestedHandle(from: self.name)) }
@@ -72,6 +83,8 @@ final class OnboardingViewModel {
             signInProblem = switch true {
             case error.status == 0: "No connection. Check you're online, then try again."
             case error.code == "invalid_token": "That sign-in couldn't be checked. Please try again."
+            case error.code == "invalid_code": "That email and code don't match. Check them, then try again."
+            case error.status == 501: "That way of signing in isn't set up on the server yet."
             default: "Sign-in didn't work just now. Please try again."
             }
         } catch {

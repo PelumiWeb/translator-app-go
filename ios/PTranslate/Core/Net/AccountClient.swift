@@ -24,6 +24,13 @@ final class AccountClient: Sendable {
         return SignIn(token: response.token, profile: response.user, newUser: response.newUser ?? false)
     }
 
+    /// Signs in to a test account: an email address whose code is fixed on the server, as there is no mail service
+    /// yet. Throws with code "invalid_code" when the two do not match.
+    func signInWithEmail(_ email: String, code: String) async throws -> SignIn {
+        let response: SignInResponse = try await rest.send("POST", "/v1/sessions/email", json: EmailSignInRequest(email: email, code: code))
+        return SignIn(token: response.token, profile: response.user, newUser: response.newUser ?? false)
+    }
+
     func me() async throws -> Profile {
         try await rest.get("/v1/me")
     }
@@ -102,6 +109,11 @@ private struct SignInRequest: Encodable {
         case nonce, name
         case identityToken = "identity_token"
     }
+}
+
+private struct EmailSignInRequest: Encodable {
+    let email: String
+    let code: String
 }
 
 private struct SignInResponse: Decodable {

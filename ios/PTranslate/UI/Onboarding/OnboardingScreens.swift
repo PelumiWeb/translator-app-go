@@ -28,13 +28,17 @@ struct WelcomeScreen: View {
     }
 }
 
-/// Sign in with Apple, with Apple's own button and sheet.
+/// Sign in with Apple, with Apple's own button and sheet. Holding the line about email sign-in opens the sign-in for
+/// test accounts, which the server gives fixed codes until it can send codes by mail.
 struct SignInScreen: View {
     let viewModel: OnboardingViewModel
     let onBack: () -> Void
 
     /// Made fresh for each attempt: its hash goes to Apple, the raw value to the server.
     @State private var nonce = Nonce.random()
+    @State private var testAccount = false
+    @State private var testEmail = ""
+    @State private var testCode = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -67,6 +71,7 @@ struct SignInScreen: View {
             Text("Email sign-in is coming soon.")
                 .font(.pearlBody).foregroundStyle(Palette.fg3)
                 .frame(maxWidth: .infinity).padding(.top, 18)
+                .onLongPressGesture { testAccount = true }
             Text("By continuing you agree to the Terms and Privacy Policy.")
                 .font(.pearlSmall).foregroundStyle(Palette.fg2)
                 .multilineTextAlignment(.center)
@@ -74,6 +79,19 @@ struct SignInScreen: View {
         }
         .padding(.horizontal, 28).padding(.vertical, 16)
         .background(Palette.bg)
+        .alert("Test account", isPresented: $testAccount) {
+            TextField("Email", text: $testEmail)
+                .textContentType(.username).keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            SecureField("Code", text: $testCode)
+            Button("Sign in") {
+                let (email, code) = (testEmail, testCode)
+                Task { await viewModel.signInToTestAccount(email: email, code: code) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Sign in with the email and code of a test account.")
+        }
     }
 
     private func completed(_ result: Result<ASAuthorization, any Error>) {
