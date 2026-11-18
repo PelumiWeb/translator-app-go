@@ -90,3 +90,31 @@ library would add a dependency to hide them.
 - A person who signs in with Apple on the iPhone and with Google on Android
   has two accounts until linking exists. For trying a conversation that is
   useful: two accounts with no second Apple ID.
+
+## Addendum, 2026-11-18: test accounts
+
+The owner asked for a second account to test with. With Sign in with Apple
+on the iPhone and Google on Android, one person on one kind of phone has one
+account, and the simulator signs in with the same Apple ID as the phone.
+
+Test accounts are email identities (`provider = email`, the address as the
+subject) whose code is fixed on the server, in `TEST_ACCOUNTS`
+(`address:code` pairs), instead of sent by mail. `POST /v1/sessions/email`
+takes the `email` and `code` and opens a session as the other sign-ins do;
+the first sign-in makes the account, which then signs up like any other.
+Without `TEST_ACCOUNTS` the endpoint answers `501 sign_in_not_configured`; a
+wrong pair, or an address that is not a test account, `401 invalid_code`, so
+nothing says which addresses exist.
+
+- Codes are at least 12 letters, digits, `-` or `_`, compared in constant
+  time. The server has no limit on attempts, so the length is the defence; a
+  mistake in `TEST_ACCOUNTS` stops the server from starting. Use addresses at
+  `shinar.test`, a name reserved for testing, which no one can own.
+- On both phones the entry is hidden: holding "Email sign-in is coming soon."
+  on the sign-in screen opens a form for the address and code.
+- When codes by email come, the same endpoint serves everyone, with codes
+  sent by mail; test addresses keep their fixed codes. The hidden entry then
+  becomes the visible email sign-in.
+- Before the App Store (milestone 18): App Review may ask for a demo account.
+  A test account is one, and its hidden entry must be described in the review
+  notes, since Apple's guideline 2.3.1 asks for no undocumented features.

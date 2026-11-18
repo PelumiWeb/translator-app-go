@@ -30,6 +30,11 @@ Milestone 10 was done on 2026-10-29; checkpoint 9.4 and milestone 19 (the
 design) on 2026-10-31. Milestone 12 was dropped on 2026-10-31, then brought
 back the same day, after milestone 14.
 
+On 2026-11-18 the owner asked for four things at once, built ahead of
+milestone 12: text messages (milestone 15), recording with pause, stop and
+send (checkpoint 14.6), a call button that says calls are coming soon
+(milestone 17), and a second account to test with (checkpoint 13.5).
+
 A checkpoint with phone work is done on Android, then on iOS.
 
 ---
@@ -895,6 +900,25 @@ built 2026-11-01)
   the token in the Keychain
 - Verify: `make ios-test`; on the iPhone, `make ios-device`
 
+**Checkpoint 13.5: test accounts** (built, 2026-11-18, at the owner's request)
+- The owner needs a second account to test rooms with; on one kind of phone
+  there is one account per Apple or Google sign-in
+- Server: `POST /v1/sessions/email` with an address and a code. For now only
+  test accounts have codes, fixed in `TEST_ACCOUNTS` (`address:code`, codes of
+  at least 12 letters or digits); any other address is refused like a wrong
+  code. ADR 0018, addendum
+- Both phones: holding "Email sign-in is coming soon." on the sign-in screen
+  opens a form for the address and code; then sign-up goes on as usual
+- Two test accounts are in `server/.env` (`test1@shinar.test`,
+  `test2@shinar.test`), for the server on this Mac
+- Owner: for TestFlight builds, add the same `TEST_ACCOUNTS` line to
+  `/etc/shinar/env` on the Azure machine and restart the server, after
+  shipping this server
+- Before the App Store (milestone 18): describe the hidden entry in the
+  review notes, or replace it with the visible email sign-in
+- Verify: `make server-test`, `make android-test`, `make ios-test`; on a phone,
+  hold the line, sign in as `test1@shinar.test`
+
 Still to come: codes by email (a domain and a mail service); revoking Apple
 tokens when an account is deleted (milestone 18).
 
@@ -934,8 +958,10 @@ the room, each message appears as soon as it is ready.
   key is in `server/.env`; `make translate-check` gave good English to
   Yoruba, Hausa, Spanish and Chinese, and Yoruba to English
 - Owner, by about 2026-12-09: the Azure free account lasts 30 days. Upgrade
-  it to Pay as you go before then, or Azure switches it off and translation
-  stops. The Translator stays on the free F0 tier, so it still costs nothing
+  it to Pay as you go before then, or Azure disables the subscription, and
+  with it both the translator and the hosted server (ADR 0023), which share
+  it. Upgrading keeps the free amounts: the Translator stays on the free F0
+  tier, so it still costs nothing
 - The privacy page on both phones names the translator (Microsoft's Azure
   AI Translator since 2026-11-09); switching engines means changing it too
 - Verify: `make server-test`
@@ -982,12 +1008,63 @@ the room, each message appears as soon as it is ready.
   app in the background: a note from the other shows a notification, and
   tapping it opens the room
 
+**Checkpoint 14.6: recording with pause, stop and send** (built, 2026-11-18,
+at the owner's request: "record should have pause, stop and send; it
+currently just has stop, which also sends")
+- While recording: cancel, pause (the microphone is off; resume carries on),
+  stop, and send. Stop ends the recording without sending: the note can be
+  played back, then deleted or sent. Only time spent recording counts toward
+  the 30 seconds; at the limit the note stops and waits to be sent, where
+  before it was sent by itself
+- `Recording.pause()` and `resume()` on both phones (Android stops the
+  `AudioRecord` on its capture thread; iOS pauses the `AVAudioEngine`);
+  `NoteRecorder` holds the composer's note, with the same tests on both
+- Not designed: the handoff's composer is "tap to start, tap to send". The
+  controls are built from Pearl's parts (the outlined round buttons, the
+  send circle in its halo, the dots); a design pass can follow
+- The "too short" hint now reads "Tap the mic, say something, then send.",
+  since tapping again no longer sends
+- Verify: `make android-test`, `make ios-test`; in a room, record, pause,
+  resume, stop, listen, then send
+
 ---
 
-## [ ] Milestone 15: Text messages
+## [~] Milestone 15: Text messages
 
 **Demo**: type in English; the other side reads it in Spanish, and can tap
 it to hear it in the sender's voice.
+
+Asked for by the owner on 2026-11-18, "for more comfort", ahead of milestone
+12.
+
+**Checkpoint 15.1: server** (done, 2026-11-18)
+- Migration 0008: `messages.kind` (`voice` or `text`); a text message has no
+  recording. Sent as JSON to the same endpoint, with the same idempotency key
+- The delivery job translates it and makes it ready with the words alone, and
+  the phones are told: "Sent a message", not the words. Its voice is made only
+  when someone asks, `POST /v1/messages/{id}/speech?lang=`, by a second job,
+  once per language, then kept; not pushed again. ADR 0027
+- Verify: `make server-test`
+
+**Checkpoint 15.2: both phones** (built, 2026-11-18)
+- The composer: a message field beside the mic; with words in it, the mic
+  becomes send. A text waits on its card ("Sending", failed with retry) like a
+  voice note
+- Their card: the translation as soon as it is made, the original a tap
+  away, and a listen button: the first tap asks for the sender's voice, the
+  button breathes while it is made, then it plays, the words lighting up. My
+  card: "Delivered", and "Hear it in Spanish"
+- The rooms list shows a text's translation, or "Message" until it is made;
+  an empty room says "Say something to Rosa, or write it"; the privacy page
+  covers typed messages and the new notification
+- Android: the room keeps the composer above the keyboard. The app's insets
+  are now consumed once, at the top, which also takes away a gap the height
+  of the navigation bar above the keyboard on the sign-up steps
+- Not designed: text messages are in the brief's "later" list. Built from
+  Pearl's voice note cards and field
+- Not checked yet: on two phones, against the server
+- Verify: `make android-test`, `make ios-test`; two phones, one English and
+  one Spanish: type, read, listen
 
 ---
 
@@ -1013,6 +1090,11 @@ ends; streamed at every stage, about 2 to 3. It will feel like talking
 through an interpreter, in turns, not like a WhatsApp call. About 4 to 5
 cents a minute of conversation. It also needs a server that relays live
 audio, the phones' call screens (CallKit, ConnectionService) and VoIP push.
+
+**A call button in each room** (built, 2026-11-18, at the owner's request):
+a phone icon at the top of the room says "Calls are coming soon", and to send
+a voice note or a message until then. No premium wording: billing is not
+built.
 
 **Before calls: a hands-free mode in rooms** (asked by the owner on
 2026-11-15). Hold to talk, release to send; the other phone plays the note
@@ -1108,6 +1190,30 @@ request, ahead of the rest of this milestone)
   new libraries, and any iPhone XS or XR
 - For the store listings (later in this milestone): ML Kit reports usage and
   diagnostics to Google, not linked to the user, on both phones
+
+**Checkpoint 18.4: the website** (built 2026-11-18, at the owner's request,
+ahead of the rest of this milestone)
+- The owner asked for a motion piece of a voice note's journey, from one
+  person to another, and the same idea on a website. The brief for both, for
+  Claude Design: `docs/design/brief-4-motion.md`
+- The owner chose Next.js. `web/`, exported as plain files into `web/out/`;
+  no server runs it. Dependencies: Next.js, React, and TypeScript for
+  development; no CSS framework or animation library. ADR 0028
+- The home page: the promise, and a loop of the core turn (her note in
+  Spanish, warm white, becomes his in English, mint, in her voice); the
+  journey in seven stages while scrolling, each drawn as the screen it
+  happens on with the app's own states and words; what is kept of your
+  voice, and why; "Coming to iPhone and Android". Pearl, dark only; built
+  from Pearl's parts, without a design of its own yet
+- Reduce Motion: every animation stops at its end state
+- "Hear Rosa say hello" appears when its two audio files are in
+  `web/public/sample/` (`web/README.md`); there is no real audio yet
+- `make web-dev`, `make web-build`, `make web-preview`
+- Owner: real audio for the sample, from someone who agrees; the domain and
+  the host; what the page asks visitors to do before the app is on the
+  stores. When Claude Design answers brief round 4, the page follows it
+- Verify: `make web-preview`, then open http://localhost:3100 at a phone's
+  width and a desktop's; scroll the journey down and back up
 
 Asked on 2026-11-02 and put off by the owner: telling people when a new
 version is out. Two ways were weighed: our server answering with the latest

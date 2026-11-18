@@ -62,6 +62,7 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 /android   Kotlin, Jetpack Compose, single Gradle module (:app)
 /ios       Swift, SwiftUI, one Xcode project (PTranslate), from milestone 10
 /server    Go service: HTTP API, job queue, workers
+/web       the website: Next.js, exported as plain files (ADR 0028)
 /docs      architecture.md, plan.md, adr/
 /third_party/whisper.cpp   git submodule, pinned to a release tag
 /deploy    the hosted server: one-time set-up, service and Caddy files, ship script (ADR 0023)
@@ -183,6 +184,15 @@ migrations/          plain SQL, embedded in the binary
 - Tests are table-driven where there are several cases, and use only the
   standard `testing` package.
 
+### Website
+
+- Next.js with TypeScript, exported as plain files: nothing on it needs a
+  server. CSS Modules and CSS keyframes; no CSS framework or animation
+  library.
+- Pearl, dark only, from the same tokens as the apps. The name lives only in
+  `web/lib/site.ts`.
+- It shows only what the app does today (brief round 4, section 8).
+
 ### API
 
 - JSON, snake_case field names, versioned under `/v1`.
@@ -235,6 +245,9 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make ios-test` | iOS tests on the simulator (`IOS_SIM="..."` picks another one); the Whisper test needs `make model-download` |
 | `make ios-device` | build, install and open the app on the connected iPhone, pointed at this Mac's server (start it first); `MAC_HOST=<ip>` if the `.local` name does not resolve |
 | `make ios-testflight` | build for the App Store and upload to TestFlight; GitHub Actions runs it on pushes to `main` that change `ios/` (ADR 0022 has the set-up) |
+| `make web-dev` | run the website on http://localhost:3100, reloading as files change |
+| `make web-build` | build the website into `web/out/`, checking its types |
+| `make web-preview` | build the website and serve `web/out/` on http://localhost:3100, as a host would |
 
 The Android app calls `http://localhost:8080`. `adb reverse` forwards that to
 this machine, on the emulator and on a phone over USB alike. The iOS

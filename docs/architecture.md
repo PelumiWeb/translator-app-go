@@ -489,6 +489,7 @@ with code `unauthenticated`.
 | --- | --- |
 | `POST /v1/sessions/apple` | JSON `identity_token`, `nonce`, optional `name`. Checks the token, creates the account on its first sign-in, answers `{ "token", "user", "new_user" }`: `201` for a new account, `200` otherwise. `401 invalid_token` for a token that fails a check; `503 sign_in_unavailable` when Apple's keys cannot be fetched |
 | `POST /v1/sessions/google` | the same, with a Google ID token; `501 sign_in_not_configured` when the server has no `GOOGLE_CLIENT_ID` |
+| `POST /v1/sessions/email` | JSON `email`, `code`: a test account, whose code is fixed in `TEST_ACCOUNTS` until codes are sent by mail (ADR 0018, addendum). Answers as the others; `401 invalid_code` for a wrong pair or an address that is not a test account; `501 sign_in_not_configured` with no test accounts |
 | `DELETE /v1/sessions/current` | signs out this session |
 | `PUT /v1/sessions/current/push` | JSON `service` (`apns`, `apns-sandbox` for builds run from Xcode, or `fcm`) and `token` (Apple's device token, or the app's Firebase installation ID): where this phone receives notifications (ADR 0026). `204`; `400` for a token not of that service's shape. Kept with the session, so signing out forgets it |
 | `GET /v1/me` | the profile: `{ "id", "display_name", "handle", "language" }` |
@@ -510,25 +511,31 @@ is answered as not found.
 | `GET /v1/rooms` | `{ "rooms": [ { "id", "people", "last_message", "unread", "created_at" } ] }`, most recent first; `people` is everyone but the user |
 | `GET /v1/rooms/{id}` | one room |
 | `GET /v1/rooms/{id}/messages` | `{ "messages": [...] }`, oldest first: the newest 50, or `?before=<message id>&limit=` for older ones |
-| `POST /v1/rooms/{id}/messages` | `multipart/form-data`: `audio` (WAV, up to 30 s), `transcript` (written on the phone, up to 1000 characters), `duration_ms`, optional `lang`; `Idempotency-Key` as for jobs. `201` with the message; `409 room_closed` when the other person has deleted their account |
+| `POST /v1/rooms/{id}/messages` | A voice note as `multipart/form-data`: `audio` (WAV, up to 30 s), `transcript` (written on the phone, up to 1000 characters), `duration_ms`, optional `lang`. A text message as JSON: `text` (up to 1000 characters), optional `lang` (ADR 0027). `Idempotency-Key` as for jobs. `201` with the message; `409 room_closed` when the other person has deleted their account |
 | `POST /v1/rooms/{id}/read` | the user has seen the room so far |
 | `GET /v1/messages/{id}` | one message |
 | `POST /v1/messages/{id}/retry` | the sender asks for a failed translation to be tried again |
+| `POST /v1/messages/{id}/speech?lang=` | asks for a text message to be spoken in its sender's voice in that language: a listener for their own, the sender for any of the room's. `200` with the message, its rendition `speaking` until the voice is made; once made it is kept. `404 no_rendition` for a language the user cannot see, `409 not_text` for a voice note, `409 not_ready` before the words are translated |
 | `GET /v1/messages/{id}/audio?lang=` | the audio in one language: the sender's recording for the language it was said in, or the spoken translation once ready; `404 no_audio` until then |
 | `GET /v1/me/events` | Server-Sent Events: `ready` once listening, then `room` with `{ "room_id", "message_id" }` whenever something in one of the user's rooms changes. Hints only, nothing replayed: the phone fetches on `ready` |
 
 A message as the user sees it: `{ "id", "room_id", "sender_id", "mine",
-"lang", "transcript", "duration_ms", "created_at", "renditions" }`. Each
+"kind", "lang", "transcript", "duration_ms", "created_at", "renditions" }`,
+with `kind` `voice` or `text`; a text message's `transcript` is what was
+typed, and its `duration_ms` is 0. Each
 rendition is `{ "lang", "status", "text", "voice", "audio_url" }`, with
 `status` one of `translating`, `speaking`, `ready`, `failed`, and `voice` one
 of `own` (the sender's voice), `original` (their recording) or `phone` (the
-listener's phone reads `text`). The sender sees a rendition per language the
-others speak; a listener sees their own.
+listener's phone reads `text`). A text message's rendition is `ready` with
+no `voice` as soon as it is translated; asking for speech makes it
+`speaking`, then `ready` with a voice (ADR 0027). The sender sees a
+rendition per language the others speak; a listener sees their own.
 
 When a rendition becomes ready, the same transaction adds a `push` job, and
 a worker tells the listeners' phones through APNs or FCM (ADR 0026): the
-sender's name and "Sent a voice note · 0:14", with the room and message IDs
-for the app. Not the words.
+sender's name and "Sent a voice note · 0:14", or "Sent a message" for a
+text, with the room and message IDs for the app. Not the words. A text
+message's voice, made later on request, is not pushed again.
 
 **`GET /v1/models/manifest`**
 
@@ -581,6 +588,8 @@ CREATE INDEX jobs_ready ON jobs (run_at) WHERE status = 'queued';
 -- Push notifications (14.5): push_tokens (session -> service and token, one
 -- per session, each token once), and jobs.kind gains 'push'. See migration
 -- 0007 and ADR 0026.
+-- Text messages (milestone 15): messages.kind ('voice' or 'text'); a text
+-- message has no audio_key. See migration 0008 and ADR 0027.
 
 CREATE TABLE job_events (
     job_id     uuid NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -724,7 +733,7 @@ voice, kept until the sender deletes their account (ADR 0020).
 Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 `WORKERS`, `AUDIO_DIR`, `VOICES_DIR`, `MODELS_DIR`, `JOB_LEASE`,
 `SWEEP_INTERVAL`, `VOICE_ENGINE`, `FISH_AUDIO_API_KEY`, `FISH_AUDIO_MODEL`,
-`APPLE_AUDIENCE` (default `com.pelumi.shinar`), `GOOGLE_CLIENT_ID`, `MESSAGES_DIR`, `TRANSLATE_ENGINE`,
+`APPLE_AUDIENCE` (default `com.pelumi.shinar`), `GOOGLE_CLIENT_ID`, `TEST_ACCOUNTS`, `MESSAGES_DIR`, `TRANSLATE_ENGINE`,
 `GOOGLE_TRANSLATE_KEY`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`,
 `TRANSCRIBE_ENGINE`, `GROQ_API_KEY`, `GROQ_MODEL`, `APNS_KEY_FILE`,
 `APNS_KEY_ID`, `APNS_TEAM_ID`, `FCM_SERVICE_ACCOUNT_FILE`). Secrets live in
@@ -838,6 +847,17 @@ with the Android one. The only Swift packages are the ones ML Kit needs.
 | Caddy, from Caddy's own apt repository | HTTPS in front of the server, with certificates it gets and renews itself |
 | GitHub's `actions/setup-go`, and the `postgres:18` image as a service | the server workflow: Go at the version in `go.mod`, and a database for the tests |
 
+**Website** (*added* 2026-11-18, ADR 0028)
+
+| Dependency | Why |
+| --- | --- |
+| Node.js 20.9 or later, with npm | builds the site; the dev machine has it through nvm |
+| `next` 16.4, `react` and `react-dom` 19.3 | Next.js, which the owner chose for the website, and the React it needs |
+| `typescript` 5.9, `@types/react`, `@types/react-dom`, `@types/node` (development only) | the site is written in TypeScript; `next build` checks the types |
+
+No CSS framework, no animation library, no linter, no test runner. IBM Plex
+Sans comes through `next/font`, part of Next.js.
+
 ## 7. Planned ADRs
 
 Written in the milestone where the decision is implemented.
@@ -871,6 +891,8 @@ Written in the milestone where the decision is implemented.
 | 0024 | ML Kit on iOS (written) | 18 |
 | 0025 | iOS 18 as the iPhone app's minimum (written) | 18 |
 | 0026 | Push notifications through APNs and FCM (written) | 14 |
+| 0027 | Text messages, spoken on request (written) | 15 |
+| 0028 | The website, in Next.js, exported as plain files (written) | 18 |
 
 ## 8. Known limits
 
@@ -942,3 +964,22 @@ What changes:
 Every voice note costs money: a translation and a synthesis per listener.
 The engine is chosen per request (section 4.5), so a cheaper engine for free
 users stays possible.
+
+## 10. The website
+
+Added 2026-11-18 (ADR 0028). Shinar's website is a Next.js project in
+`web/`, exported as plain files into `web/out/`: no server runs it. Its home
+page tells one voice note's journey, from Rosa in Madrid to her grandson in
+Lagos, with the app's real stages, timings and wording, drawn from Pearl's
+parts (`docs/design/brief-4-motion.md` is the brief for its design).
+
+```
+web/app          the page, its layout, the Pearl tokens (globals.css), the icon
+web/components   the logo, the note parts (dots, play button, bar, rings),
+                 the hero's loop, the journey and its stage frames, the sample
+web/lib/site.ts  the name (once, ADR 0021), the copy, the journey's stages
+web/public       files served as they are; sample/ holds the hero's audio
+```
+
+It shows only what the app does today, and stays dark, as the apps do. It is
+not hosted yet: the domain and the host are still to choose.
