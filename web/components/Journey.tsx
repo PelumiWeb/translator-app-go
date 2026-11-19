@@ -31,11 +31,11 @@ export function Journey() {
     <section className={s.journey} aria-labelledby="journey-title">
       <div className={s.intro}>
         <h2 id="journey-title" className="title-2">
-          How a voice note travels
+          How a voice note crosses the language barrier
         </h2>
         <p className="lede">
-          Rosa, in Madrid, speaks Spanish. Her grandson, in Lagos, speaks English. This is what happens between them,
-          in a few seconds.
+          Rosa, in Madrid, speaks Spanish. Her grandson, in Lagos, speaks English. They don&apos;t share a language.
+          This is what happens between them, in a few seconds.
         </p>
       </div>
       <div className={s.layout}>

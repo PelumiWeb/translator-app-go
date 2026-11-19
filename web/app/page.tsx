@@ -1,12 +1,14 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { HeroLoop } from "@/components/HeroLoop";
+import { Faq } from "@/components/Faq";
 import { Journey } from "@/components/Journey";
 import { Lockup } from "@/components/Lockup";
 import { SamplePlayer } from "@/components/SamplePlayer";
+import { SiteFooter } from "@/components/SiteFooter";
 import { TwoVoices } from "@/components/TwoVoices";
 import { Waitlist } from "@/components/Waitlist";
-import { APP_NAME, NAME_STORY, PROMISE, PROMISE_LINE, SAMPLE, WAITLIST } from "@/lib/site";
+import { APP_NAME, PROMISE, PROMISE_LINE, SAMPLE, WAITLIST } from "@/lib/site";
 import s from "./page.module.css";
 
 // The page is rendered once, at build time, so this looks at the files then.
@@ -74,6 +76,13 @@ export default function Home() {
           </p>
         </section>
 
+        <section id="faq" className={s.faq} aria-labelledby="faq-title">
+          <h2 id="faq-title" className="title-2">
+            Questions
+          </h2>
+          <Faq />
+        </section>
+
         <section id="join" className={s.closing} aria-labelledby="closing-title">
           <TwoVoices />
           <h2 id="closing-title" className={`title-2 ${s.closingTitle}`}>
@@ -84,10 +93,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className={s.footer}>
-        <Lockup size="small" />
-        <p className={s.story}>{NAME_STORY}</p>
-      </footer>
+      <SiteFooter />
     </>
   );
 }

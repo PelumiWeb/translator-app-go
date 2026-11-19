@@ -14,10 +14,11 @@ struct WelcomeScreen: View {
             Spacer()
             TwoVoices().frame(maxWidth: .infinity)
             Spacer()
-            Text("Talk to anyone. Be heard in your own voice.")
+            // The promise of the app, the website and the marketing alike (ADR 0033).
+            Text("Break the language barrier. Be heard in your own voice.")
                 .font(.pearlHero).foregroundStyle(Palette.fg)
                 .accessibilityAddTraits(.isHeader)
-            Text("You speak your language. They hear theirs, in your voice.")
+            Text("Talk to anyone. You speak your language. They hear theirs, in your voice.")
                 .font(.pearlLead).foregroundStyle(Palette.fg2)
                 .padding(.top, 12).padding(.bottom, 28)
             Button("Get started", action: onGetStarted).buttonStyle(PrimaryButtonStyle())

@@ -107,6 +107,33 @@
   }
 }
 
+/* Questions: the title, then the list, beside it on a wide screen. */
+
+.faq {
+  max-width: var(--max);
+  margin-inline: auto;
+  padding: 64px var(--gutter);
+}
+
+@media (min-width: 900px) {
+  .faq {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    align-items: start;
+    gap: 64px;
+    padding-block: 96px;
+  }
+
+  .faq > :global(.title-2) {
+    position: sticky;
+    top: 32px;
+  }
+
+  .faq > ul {
+    margin-top: 0;
+  }
+}
+
 /* Closing: the two voices, and the promise again. */
 
 .closing {
@@ -142,17 +169,3 @@
   text-decoration: none;
 }
 
-.footer {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: var(--max);
-  margin-inline: auto;
-  padding: 32px var(--gutter) 48px;
-  border-top: 1px solid var(--line);
-}
-
-.story {
-  font-size: 13px;
-  color: var(--fg2);
-}

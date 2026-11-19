@@ -1,0 +1,35 @@
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: var(--max);
+  margin-inline: auto;
+  padding: 32px var(--gutter) 48px;
+  border-top: 1px solid var(--line);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+/* Links at 44 points tall, so a thumb finds them. */
+.links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 15px;
+  color: var(--fg2);
+  text-decoration: none;
+}
+
+.links a:hover {
+  color: var(--fg);
+  text-decoration: underline;
+}
+
+.story {
+  font-size: 13px;
+  color: var(--fg2);
+}

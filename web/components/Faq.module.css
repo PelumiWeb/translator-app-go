@@ -1,0 +1,54 @@
+.list {
+  margin-top: 32px;
+  border-top: 1px solid var(--line);
+}
+
+.item {
+  border-bottom: 1px solid var(--line);
+}
+
+/* The question is the whole row; a plus on the right becomes a minus open. */
+.question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding-block: 16px;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.35;
+  list-style: none;
+  cursor: pointer;
+}
+
+.question::-webkit-details-marker {
+  display: none;
+}
+
+.question::after {
+  content: "+";
+  flex: none;
+  width: 24px;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+  text-align: center;
+  color: var(--fg2);
+}
+
+details[open] > .question::after {
+  content: "\2212";
+}
+
+.answer {
+  max-width: 40em;
+  padding-bottom: 20px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--fg2);
+}
+
+.answer a {
+  color: var(--fg);
+}

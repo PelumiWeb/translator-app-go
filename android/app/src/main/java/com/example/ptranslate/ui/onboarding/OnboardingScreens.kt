@@ -83,14 +83,15 @@ fun WelcomeScreen(onGetStarted: () -> Unit, modifier: Modifier = Modifier) {
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             TwoVoices()
         }
+        // The promise of the app, the website and the marketing alike (ADR 0033).
         Text(
-            "Talk to anyone. Be heard in your own voice.",
+            "Break the language barrier. Be heard in your own voice.",
             style = PearlType.hero,
             color = colors.fg,
             modifier = Modifier.semantics { heading() },
         )
         Text(
-            "You speak your language. They hear theirs, in your voice.",
+            "Talk to anyone. You speak your language. They hear theirs, in your voice.",
             style = PearlType.message.copy(fontSize = 17.sp),
             color = colors.fg2,
             modifier = Modifier.padding(top = 12.dp, bottom = 28.dp),

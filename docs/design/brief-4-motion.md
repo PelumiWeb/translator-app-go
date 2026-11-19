@@ -23,11 +23,17 @@ Each person signs up with their name and a 20-second recording of their
 voice. Today they talk in voice notes, in a **room** of two people. There is
 also a face-to-face interpreter on one phone.
 
-The promise: **"Talk to anyone. Be heard in your own voice."** The voice is
-the hero, not the text.
+**The theme is breaking the language barrier** (the owner, 2026-11-19, ADR
+0033). Two people who share no language talk anyway, each in their own; the
+piece and the page should leave no doubt that this is what Shinar is for.
+
+The promise: **"Break the language barrier. Be heard in your own voice."**
+(It was "Talk to anyone. Be heard in your own voice." until 2026-11-19.) The
+barrier is the reason; the voice is the hero, not the text.
 
 The name: Genesis 11:2. Shinar is the plain where everyone still shared one
-language, before Babel scattered them. The app reverses the scattering. The
+language, before Babel scattered them: the story of how the language barrier
+began. The app reverses the scattering. The
 mark is two overlapping circles (two voices) over a horizon line (the
 plain).
 
@@ -180,7 +186,7 @@ A possible timeline for the main cut:
 | 11 to 17 s | Preparing her voice: the calm rings, then the dots take her voice's shape |
 | 17 to 20 s | Delivered: the note arrives on her grandson's phone; "Rosa · Sent a voice note · 0:14" |
 | 20 to 26 s | He plays it: English, in her voice; the mint dots fill; "Show original" brings back her Spanish |
-| 26 to 30 s | The two circles meet over the horizon; the lens; "shinar"; "Talk to anyone. Be heard in your own voice." |
+| 26 to 30 s | The two circles meet over the horizon; the lens; "shinar"; "Break the language barrier. Be heard in your own voice." |
 
 **The name is not final.** A trademark check is still to come. Keep the
 end card (mark, wordmark) a separate scene that can be replaced without
@@ -202,9 +208,10 @@ JavaScript; there is no animation library.
 
 **The home page.**
 
-1. **Hero**: the mark and wordmark, the promise line "Talk to anyone. Be
-   heard in your own voice.", the sub-line "You speak your language. They
-   hear theirs, in your voice.", and the 6-second loop beside or behind it.
+1. **Hero**: the mark and wordmark, the promise line "Break the language
+   barrier. Be heard in your own voice.", the sub-line "Talk to anyone. You
+   speak your language. They hear theirs, in your voice.", and the 6-second
+   loop beside or behind it.
 2. **Hear it**: a sample player, like the Welcome screen's card: "Hear Rosa
    say hello", her Spanish, then her voice in English. The best proof is
    the real sound.

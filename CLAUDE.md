@@ -4,8 +4,9 @@ Record speech on a phone, transcribe it, translate it into the listener's
 language, and speak it in the speaker's own voice. Native mobile apps (Android
 and iOS), on-device inference, and Go backend services.
 
-Since 2026-10-31 it is a product, not a portfolio piece: a social app where
-people talk to anyone in the world without sharing a language. Each person
+Since 2026-10-31 it is a product, not a portfolio piece: a social app that
+breaks the language barrier, where people talk to anyone in the world without
+sharing a language. Each person
 signs up with their name and their voice; what they say reaches the other side
 in the listener's language and the speaker's voice. Voice notes first, then
 text messages, later calls for premium users. `docs/plan.md` has the order
@@ -130,6 +131,16 @@ migrations/          plain SQL, embedded in the binary
 
 ## Conventions
 
+### What Shinar says, everywhere
+
+- The theme is breaking the language barrier (ADR 0033): the apps, the
+  website, the marketing and the store listings. New copy says it plainly,
+  then shows it concretely (Rosa speaks Spanish, her grandson English), never
+  in abstractions such as "at scale" or "seamless".
+- The promise, "Break the language barrier. Be heard in your own voice.",
+  and its sub-line are the same words on both Welcome screens and the
+  website's hero (`web/lib/site.ts`); change them together.
+
 ### Both phones
 
 - The two apps are built to one design (`docs/architecture.md`, sections 2
@@ -193,6 +204,9 @@ migrations/          plain SQL, embedded in the binary
 - Pearl, dark only, from the same tokens as the apps. The name lives only in
   `web/lib/site.ts`.
 - It shows only what the app does today (brief round 4, section 8).
+- The privacy page says only what the apps and the server do, and names the
+  services they use (ADR 0032). A change to what is kept, or to who helps,
+  changes it in the same milestone, with the apps' privacy pages.
 - Its one form, the waitlist, posts to `/v1/waitlist` on the name that served
   the page (ADR 0030); Vercel passes it on to the server (`web/vercel.json`,
   ADR 0031). No CORS, no server address in the page.

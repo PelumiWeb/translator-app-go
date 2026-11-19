@@ -7,6 +7,7 @@ Vercel). `make web-preview` runs it.
 
 import functools
 import http.server
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -18,8 +19,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/v1/"):
             self.pass_on()
-        else:
-            super().do_GET()
+            return
+        # /privacy is privacy.html, as Vercel's cleanUrls serves it.
+        path, query = (self.path.split("?", 1) + [""])[:2]
+        if "." not in os.path.basename(path) and os.path.isfile(os.path.join(OUT, path.strip("/") + ".html")):
+            self.path = path + ".html" + ("?" + query if query else "")
+        super().do_GET()
 
     def do_POST(self):
         if self.path.startswith("/v1/"):

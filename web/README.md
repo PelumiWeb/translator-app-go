@@ -14,9 +14,12 @@ Each installs the packages first when `package-lock.json` has changed. Node
 
 ## Where things are
 
-- `app/`: the page, its layout, the Pearl tokens (`globals.css`), the icon
+- `app/`: the home page, its layout, the Pearl tokens (`globals.css`), the
+  icon; `privacy/`, `terms/` and `support/`, the pages the stores ask for
+  (ADR 0032)
 - `components/`: the logo, the note parts, the hero's loop, the journey and
-  its stage frames, the sample player
+  its stage frames, the sample player, the waitlist, the questions, the
+  footer, and the layout of the text pages
 - `lib/site.ts`: the name, written only here until its trademark check is
   done (ADR 0021); the copy; the journey's stages
 

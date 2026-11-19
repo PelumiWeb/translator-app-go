@@ -18,10 +18,17 @@ Each person signs up with their name and a 20-second recording of their
 voice. Today people talk in voice notes and text messages, in a **room** of
 two people. There is also a face-to-face interpreter on one phone.
 
-- The promise: **"Talk to anyone. Be heard in your own voice."**
-- The sub-line: "You speak your language. They hear theirs, in your voice."
+**The theme is breaking the language barrier** (the owner, 2026-11-19, ADR
+0033). It is the whole point of the app, so every piece says it, in words or
+by its example: two people who share no language, talking anyway.
+
+- The promise: **"Break the language barrier. Be heard in your own voice."**
+  The same words open the app (its Welcome screen) and the website.
+- The sub-line: "Talk to anyone. You speak your language. They hear theirs,
+  in your voice."
 - The name: Genesis 11. Shinar is the plain where everyone still shared one
-  language, before Babel. The app undoes the scattering.
+  language, before Babel: the story of how the language barrier began. The
+  app undoes the scattering.
 
 **The name is not final.** A trademark check is still to come. Keep the name
 in one place in anything you make (a variable, one line, the end card), so
@@ -36,7 +43,7 @@ it can be replaced without rewriting.
 | Android | Built, but **not offered to testers yet**. Android sign-ups on the waitlist are kept for later. Do not give a date |
 | App Store, Google Play | Not yet. No store badges, no "download now" |
 | Price | Free while testing. Say nothing about later prices or plans |
-| Website | A home page telling a voice note's journey, with a waitlist form. Being put on Vercel; **its address is still to come** (see section 10) |
+| Website | https://web-nine-phi-84.vercel.app, until there is a domain: a voice note's journey, the questions (`/#faq`), the waitlist (`/#join`), and help, privacy and terms pages (`/support`, `/privacy`, `/terms`) |
 | How people join | They leave their email on the website's waitlist. The owner invites them in batches, and TestFlight emails each one an invitation |
 
 ## 3. Who the first users are
@@ -179,12 +186,19 @@ The app's own writing is the model:
 - Language names in their own language: Español, Yorùbá, Deutsch. No flags:
   a language is not a country.
 - "They" for anyone whose pronouns you don't know, including in examples.
-- Concrete, not abstract: a grandmother's note, a garden in August, not
-  "breaking down language barriers at scale".
+- Name the language barrier plainly, then show it: Rosa speaks Spanish, her
+  grandson speaks English, and a voice note crosses between them. "The
+  language barrier" is a phrase everyone knows; say it in those words, not
+  in abstractions such as "at scale", "seamless" or "frictionless".
+- Concrete, not abstract: a grandmother's note, a garden in August.
 - Honest about the wait, the limits and the test.
 
 The app's words to reuse: room, voice note, message, your ID, record your
-voice, "in your voice", "Show original", "the phone's voice", "Try it first".
+voice, "in your voice", "Show original", "the phone's voice", "Try it first",
+"break the language barrier".
+
+When the store listing is written (not yet, section 2), "Break the language
+barrier" fits the App Store's 30-character subtitle.
 
 ## 9. What we'd like from you
 
@@ -199,7 +213,7 @@ voice, "in your voice", "Show original", "the phone's voice", "Try it first".
 3. **A welcome note** for each batch, sent by the owner: how to install
    TestFlight and accept the invitation, how to sign up, and to invite the
    person they want to talk to.
-4. **A tester FAQ**, from sections 4 to 6: "Why does the other person need
+4. **A tester FAQ** (done, and now on the website's home page), from sections 4 to 6: "Why does the other person need
    it too?", "Why does a note take a few seconds?", "What happens to my
    voice?", "Why did I hear the phone's voice?", "I reached the limit",
    "How do I leave?".
@@ -227,11 +241,12 @@ feedback. It reaches the owner in App Store Connect, with the screenshot.
 
 Ask before relying on any of these:
 
-1. **The website's address.** The site and its waitlist are built and
-   going onto Vercel, at a `vercel.app` address until a domain is bought.
-   Don't publish a link before the owner gives one.
+1. **The website's address** is https://web-nine-phi-84.vercel.app until a
+   domain is bought. Keep it in one place in anything you make, as with the
+   name, so it can be replaced.
 2. **The contact address** for privacy questions and removal from the
-   waitlist. Not chosen yet.
+   waitlist is the one shown under the website's waitlist form. Use that
+   one, and ask the owner before giving any other.
 3. **The audience and the channels**: who first, and where (WhatsApp groups,
    Instagram, X, LinkedIn, family and friends).
 4. **The first batch's size.** On the shared free allowance (section 5) a
@@ -242,4 +257,5 @@ Ask before relying on any of these:
    for invitations before it has passed.
 6. **A real voice sample** for the website and any video: whose voice plays
    Rosa, from someone who agrees.
-7. **Age.** No minimum age has been decided. Leave age out until it is.
+7. **Age.** Shinar is for people 16 and over (decided 2026-11-19). Say so
+   where age comes up, and don't aim anything at younger people.

@@ -918,6 +918,8 @@ Written in the milestone where the decision is implemented.
 | 0029 | Daily limits on what each person sends (written) | 18 |
 | 0030 | The waitlist, on our own server (written) | 18 |
 | 0031 | The website on Vercel (written) | 18 |
+| 0032 | Help, privacy and terms pages, and a minimum age of 16 (written) | 18 |
+| 0033 | The language barrier as the theme (written) | 18 |
 
 ## 8. Known limits
 
@@ -950,7 +952,8 @@ and sections 1 to 4 are corrected as it lands.
 
 People sign up with their name and their voice, and can talk to anyone, each
 in their own language: what one says reaches the other in the listener's
-language and the speaker's voice. Voice notes first (milestone 14), then text
+language and the speaker's voice. Breaking that language barrier is the whole
+point, and the theme of everything the apps and the website say (ADR 0033). Voice notes first (milestone 14), then text
 messages (15), later live calls for premium users (17).
 
 What stays: the two native apps and their seams; transcription on the phone
@@ -1003,7 +1006,8 @@ Lagos, with the app's real stages, timings and wording, drawn from Pearl's
 parts (`docs/design/brief-4-motion.md` is the brief for its design).
 
 ```
-web/app          the page, its layout, the Pearl tokens (globals.css), the icon
+web/app          the home page, its layout, the Pearl tokens (globals.css), the
+                 icon; privacy/, terms/ and support/, the pages the stores ask for
 web/components   the logo, the note parts (dots, play button, bar, rings),
                  the hero's loop, the journey and its stage frames, the sample
 web/lib/site.ts  the name (once, ADR 0021), the copy, the journey's stages
@@ -1017,3 +1021,9 @@ from this repository with its Root Directory `web`, built on each push to
 `main`; `web/vercel.json` passes `/v1/waitlist` on to the server, so there is
 no CORS. `make web-preview` serves the built files with `/v1/` passed to the
 server on this Mac (`web/scripts/preview.py`).
+
+Beside the home page, with its questions (`#faq`), are the help, privacy and
+terms pages (ADR 0032), linked from every page's footer. The privacy page
+says only what the apps and the server do, and names the services the apps'
+privacy pages name; it changes when they change. Shinar is for people 16
+and over.

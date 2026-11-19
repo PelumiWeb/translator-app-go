@@ -28,7 +28,7 @@ export function Waitlist() {
           email: form.get("email"),
           name: form.get("name"),
           phone,
-          company: form.get("company"),
+          company: form.get("leave_empty"), // the server's name for the bot trap (ADR 0030)
         }),
       });
       if (response.ok) {
@@ -83,11 +83,14 @@ export function Waitlist() {
         <span className={s.label}>Your first name (optional)</span>
         <input className={s.input} type="text" name="name" autoComplete="given-name" maxLength={50} />
       </label>
-      {/* Hidden from people, and from screen readers: only a bot fills it in. */}
+      {/* Hidden from people and from screen readers: only a bot fills it in.
+          Its name and label match nothing a browser autofills (a "company"
+          field would be filled with the visitor's employer, and their sign-up
+          dropped), and anyone who reads the page's text is told to leave it. */}
       <div className={s.trap} aria-hidden="true">
         <label>
-          Company
-          <input type="text" name="company" tabIndex={-1} autoComplete="off" />
+          Leave this empty
+          <input type="text" name="leave_empty" tabIndex={-1} autoComplete="off" />
         </label>
       </div>
 

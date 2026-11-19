@@ -257,8 +257,8 @@ All frames are dark, iPhone, 360 pt wide. Screenshots are in `screenshots/v1/`.
 1. **Welcome** (screenshot `01-welcome`)
    - Horizontal lockup: the mark at 40 pt wide plus "shinar" at 20/500, -0.04em.
    - Two-voices animation: a warm-white ring set and a mint ring set, 180 pt each, 80 pt apart so they overlap. Each set has 3 pulsing rings (3 s loop, staggered 1 s, mint offset by 0.5 s) around a 52 pt core.
-   - Headline "Talk to anyone. Be heard in your own voice." at 34/500.
-   - Sub-line "You speak your language. They hear theirs, in your voice."
+   - Headline "Break the language barrier. Be heard in your own voice." at 34/500. (Changed from "Talk to anyone. Be heard in your own voice." on 2026-11-19, at the owner's request: breaking the language barrier is the theme of everything, ADR 0033. The screenshot shows the old words.)
+   - Sub-line "Talk to anyone. You speak your language. They hear theirs, in your voice."
    - Sample card (`bgRaised`): mint play button, "Hear Rosa say hello" / "Spanish, heard in English, in her voice".
    - Primary button: "Get started".
 2. **Sign in** (`02-sign-in`)

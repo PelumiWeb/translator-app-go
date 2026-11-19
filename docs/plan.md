@@ -1270,6 +1270,46 @@ before the soft launch)
 - Verify: `make server-test`; `make server-run` and `make web-preview`, then
   join the list at http://localhost:3100 and `-waitlist-count` shows it
 
+**Checkpoint 18.7: help, privacy and terms; questions on the home page**
+(built 2026-11-19, at the owner's request)
+- The tester FAQ from the marketing work, with who can try it and what it
+  costs, on the home page (`#faq`); `/support`, `/privacy` and `/terms`,
+  linked from every page's footer. ADR 0032
+- The owner decided: 16 and over; the pages name "Shinar" and the contact
+  address, no person or company for now
+- The waitlist's hidden field is renamed so no browser autofills it
+- Checked here: the build, and every page and link through `make web-preview`.
+  Not looked at in a browser
+- Owner, in App Store Connect: TestFlight, Test Information: the privacy
+  page as Privacy Policy URL, the home page as Marketing URL, a feedback
+  email; Beta App Review Information: a contact, and two test accounts
+  (ADR 0018, addendum) so the reviewer can send a note between them. For the
+  App Store later: the help page as Support URL, the privacy page, the age
+  rating (16+), the App Privacy answers
+- Still needed for the App Store: block and report in the app (milestone 16);
+  the governing law and who runs Shinar, in the terms; a way to delete an
+  account by ID on the server, for requests by email
+- Verify: `make web-preview`, then http://localhost:3100/#faq, `/support`,
+  `/privacy` and `/terms`
+
+**Checkpoint 18.8: the language barrier as the theme** (built 2026-11-19, at
+the owner's request)
+- The promise becomes "Break the language barrier. Be heard in your own
+  voice.", its sub-line "Talk to anyone. You speak your language. They hear
+  theirs, in your voice.": on the Welcome screen of both phones and the
+  website's hero and title. ADR 0033
+- The website: the journey "crosses the language barrier" between two people
+  who don't share a language; a first question, "What does Shinar do?"; the
+  waitlist asks people to join with someone they don't share a language
+  with; the footer's name story ends with Babel and the language barrier
+- The marketing brief, design brief round 4, Pearl's Welcome screen and
+  CLAUDE.md carry the theme and the new promise; the tone rule no longer
+  steers away from the phrase, only from abstractions around it
+- Checked here: the website's build; the Swift file parses. The phones were
+  not built or looked at (one string each)
+- Verify: `make web-preview`, then http://localhost:3100; `make ios-build`
+  and `make android-build`, and the Welcome screen on each
+
 Asked on 2026-11-02 and put off by the owner: telling people when a new
 version is out. Two ways were weighed: our server answering with the latest
 and minimum build for each phone (works on TestFlight and both phones, a
