@@ -90,4 +90,5 @@ few custom properties cover them.
 The site now has one form, the waitlist for TestFlight invitations
 (ADR 0030). It posts to `/v1/waitlist` on the name that served the page, so
 the site is still plain files, but it is no longer true that nothing is sent
-from it. It is served by the Azure machine's Caddy, beside the API.
+from it. It is hosted on Vercel, which passes the form on to the server
+(ADR 0031).

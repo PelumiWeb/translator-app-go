@@ -774,9 +774,8 @@ Database for PostgreSQL 18 (flexible server, B1ms) in the same region,
 reachable only from the machine. `deploy/setup.sh` prepares the machine
 once. GitHub Actions (`.github/workflows/server.yml`) tests every push to
 `main` that changes the server and ships it with `deploy/ship.sh`, which
-`make server-ship` also runs. The same Caddy serves the website (section 10)
-from `/opt/shinar/site`, for every path outside `/v1/` and `/healthz`;
-`make web-ship` builds it and copies it there (ADR 0030).
+`make server-ship` also runs. The website is not on the machine: it is on
+Vercel (section 10, ADR 0031), which passes only `/v1/waitlist` on to it.
 
 Release builds of both apps talk to it
 (`https://shinar-api.southafricanorth.cloudapp.azure.com`): the iOS Release
@@ -918,6 +917,7 @@ Written in the milestone where the decision is implemented.
 | 0028 | The website, in Next.js, exported as plain files (written) | 18 |
 | 0029 | Daily limits on what each person sends (written) | 18 |
 | 0030 | The waitlist, on our own server (written) | 18 |
+| 0031 | The website on Vercel (written) | 18 |
 
 ## 8. Known limits
 
@@ -1012,7 +1012,8 @@ web/public       files served as they are; sample/ holds the hero's audio
 
 It shows only what the app does today, and stays dark, as the apps do. Its
 one form is the waitlist (ADR 0030), which posts to `/v1/waitlist` on the
-name that served the page. The Azure machine's Caddy serves it beside the
-API (section 4.8), on the machine's name until there is a domain.
-`make web-preview` serves the built files with `/v1/` passed to the server
-on this Mac (`web/scripts/preview.py`).
+name that served the page. It is hosted on Vercel (ADR 0031), a project
+from this repository with its Root Directory `web`, built on each push to
+`main`; `web/vercel.json` passes `/v1/waitlist` on to the server, so there is
+no CORS. `make web-preview` serves the built files with `/v1/` passed to the
+server on this Mac (`web/scripts/preview.py`).

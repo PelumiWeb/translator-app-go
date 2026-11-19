@@ -5,10 +5,7 @@
 # model, and a "deploy" user that ships new builds (deploy/ship.sh). Run it
 # once, with sudo, from a copy of this folder on the machine:
 #
-#   sudo bash deploy/setup.sh <host name> "<deploy public key>" [<website domain>]
-#
-# The website is served on the host name too, beside the API; given a domain
-# whose DNS points at this machine, it is served there as well (ADR 0030).
+#   sudo bash deploy/setup.sh <host name> "<deploy public key>"
 #
 # Running it again is safe. The server's settings, /etc/shinar/env, are
 # copied on their own; ADR 0023 has the steps.
@@ -16,7 +13,6 @@ set -euo pipefail
 
 HOST=${1:?the host name, such as shinar-api.southafricanorth.cloudapp.azure.com}
 DEPLOY_KEY=${2:?the public key that ships new builds}
-SITE_HOST=${3:-}
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 # The model the phones download, checked against the copy the app was built with.
@@ -57,8 +53,6 @@ chown deploy:deploy /home/deploy/.ssh/authorized_keys
 chmod 600 /home/deploy/.ssh/authorized_keys
 # The deploy user may put a new program in place and restart it, nothing more.
 install -d -m 755 -o deploy -g deploy /opt/shinar
-# The website's files, which Caddy serves; deploy/ship-web.sh replaces them.
-install -d -m 755 -o deploy -g deploy /opt/shinar/site
 echo 'deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart shinar' > /etc/sudoers.d/shinar-deploy
 chmod 440 /etc/sudoers.d/shinar-deploy
 visudo -cf /etc/sudoers.d/shinar-deploy
@@ -82,9 +76,6 @@ fi
 echo "== Service and HTTPS"
 install -m 644 "$HERE/shinar.service" /etc/systemd/system/shinar.service
 sed "s/{{HOST}}/$HOST/" "$HERE/Caddyfile" > /etc/caddy/Caddyfile
-if [[ -n $SITE_HOST ]]; then
-    sed "s/{{SITE_HOST}}/$SITE_HOST/" "$HERE/Caddyfile.site" >> /etc/caddy/Caddyfile
-fi
 systemctl daemon-reload
 # Enabled now, started by the first deploy, once there is a program to run.
 systemctl enable shinar

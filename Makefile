@@ -264,10 +264,6 @@ web-dev: $(WEB_DEPS) ## Run the website on http://localhost:3100, reloading as f
 web-build: $(WEB_DEPS) ## Build the website into web/out/ (plain files), checking the types
 	cd web && NEXT_TELEMETRY_DISABLED=1 npm run build
 
-.PHONY: web-ship
-web-ship: ## Build the website and ship it to the host, beside the API (SERVER_HOST=..., SERVER_SSH_KEY_PATH=...)
-	deploy/ship-web.sh
-
 .PHONY: web-preview
 web-preview: web-build ## Build the website and serve web/out/ on http://localhost:3100, as a host would, with /v1/ passed to the server on this Mac
 	python3 -I web/scripts/preview.py web/out $(WEB_PORT) http://localhost:8080

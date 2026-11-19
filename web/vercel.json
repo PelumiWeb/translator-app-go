@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/v1/waitlist",
+      "destination": "https://shinar-api.southafricanorth.cloudapp.azure.com/v1/waitlist"
+    }
+  ]
+}

@@ -87,3 +87,11 @@ and the API key would have to live on the server.
   the new Caddy file and the site's folder), then `make web-ship`.
 - The machine's name, `shinar-api.southafricanorth.cloudapp.azure.com`, is a
   poor address to share. A domain is the owner's to buy.
+
+## Addendum, 2026-11-19: the website on Vercel
+
+Before it was used, the owner chose to host the site on Vercel (ADR 0031).
+The form still posts to `/v1/waitlist` on the name that served the page;
+`web/vercel.json` passes it on to the server. Caddy no longer serves the
+site: the paragraph above on "the same Caddy as the API", `make web-ship`,
+and the consequence about running `deploy/setup.sh` again no longer hold.

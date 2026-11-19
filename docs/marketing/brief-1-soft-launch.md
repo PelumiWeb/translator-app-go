@@ -36,7 +36,7 @@ it can be replaced without rewriting.
 | Android | Built, but **not offered to testers yet**. Android sign-ups on the waitlist are kept for later. Do not give a date |
 | App Store, Google Play | Not yet. No store badges, no "download now" |
 | Price | Free while testing. Say nothing about later prices or plans |
-| Website | A home page telling a voice note's journey, with a waitlist form. **Not online yet**; its address is still to come (see section 10) |
+| Website | A home page telling a voice note's journey, with a waitlist form. Being put on Vercel; **its address is still to come** (see section 10) |
 | How people join | They leave their email on the website's waitlist. The owner invites them in batches, and TestFlight emails each one an invitation |
 
 ## 3. Who the first users are
@@ -227,10 +227,9 @@ feedback. It reaches the owner in App Store Connect, with the screenshot.
 
 Ask before relying on any of these:
 
-1. **The website's address.** The site and its waitlist are built but not
-   online. Until a domain is bought, the only address is the server's
-   machine name, which is not one to share. Don't publish a link before the
-   owner gives one.
+1. **The website's address.** The site and its waitlist are built and
+   going onto Vercel, at a `vercel.app` address until a domain is bought.
+   Don't publish a link before the owner gives one.
 2. **The contact address** for privacy questions and removal from the
    waitlist. Not chosen yet.
 3. **The audience and the channels**: who first, and where (WhatsApp groups,

@@ -62,3 +62,6 @@ android/app/google-services.json
 
 # Waitlist sign-ups taken for TestFlight invitations (make waitlist-invite): email addresses.
 /invitations.csv
+
+# The Vercel CLI links a folder to its project here (ADR 0031), and may pull settings into it.
+.vercel

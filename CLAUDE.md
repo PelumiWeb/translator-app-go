@@ -62,10 +62,10 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 /android   Kotlin, Jetpack Compose, single Gradle module (:app)
 /ios       Swift, SwiftUI, one Xcode project (PTranslate), from milestone 10
 /server    Go service: HTTP API, job queue, workers
-/web       the website: Next.js, exported as plain files (ADR 0028)
+/web       the website: Next.js, exported as plain files (ADR 0028), hosted on Vercel (ADR 0031)
 /docs      architecture.md, plan.md, adr/, design/ (briefs for Claude Design), marketing/ (briefs for marketing)
 /third_party/whisper.cpp   git submodule, pinned to a release tag
-/deploy    the hosted server: one-time set-up, service and Caddy files, ship scripts for the server and the website, the waitlist commands (ADR 0023, 0030)
+/deploy    the hosted server: one-time set-up, service and Caddy files, the ship script, the waitlist commands (ADR 0023, 0030)
 Makefile   common commands for all three
 ```
 
@@ -194,7 +194,8 @@ migrations/          plain SQL, embedded in the binary
   `web/lib/site.ts`.
 - It shows only what the app does today (brief round 4, section 8).
 - Its one form, the waitlist, posts to `/v1/waitlist` on the name that served
-  the page (ADR 0030); no CORS, no server address in the page.
+  the page (ADR 0030); Vercel passes it on to the server (`web/vercel.json`,
+  ADR 0031). No CORS, no server address in the page.
 
 ### API
 
@@ -252,7 +253,6 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make web-dev` | run the website on http://localhost:3100, reloading as files change |
 | `make web-build` | build the website into `web/out/`, checking its types |
 | `make web-preview` | build the website and serve `web/out/` on http://localhost:3100, as a host would, with `/v1/` passed to the server on this Mac |
-| `make web-ship` | build the website and copy it to the Azure machine, where Caddy serves it beside the API (ADR 0030) |
 
 The Android app calls `http://localhost:8080`. `adb reverse` forwards that to
 this machine, on the emulator and on a phone over USB alike. The iOS

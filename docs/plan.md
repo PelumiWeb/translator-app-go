@@ -1255,16 +1255,17 @@ before the soft launch)
 - Website: "Try it first" in the hero leads to the form at the end of the
   page: iPhone or Android, email, first name, and what is done with the
   address. `make web-preview` passes `/v1/` to the server on this Mac
-- Hosting: Caddy serves the site from `/opt/shinar/site` beside the API;
-  `deploy/setup.sh` takes an optional domain for the site; `make web-ship`
+- Hosting: the site is on Vercel (ADR 0031), a project with its Root
+  Directory `web`; `web/vercel.json` passes `/v1/waitlist` on to the server.
+  Caddy on the machine serves only the API, as before
 - Checked here: the endpoint and the three commands against the server on
   this Mac, and a sign-up sent through the built site. The page was not
   looked at in a browser
 - Owner, before sharing the link: an address for removal requests
-  (`CONTACT_EMAIL` in `web/lib/site.ts`); run `deploy/setup.sh` again on the
-  machine, ship the server, then `make web-ship`; an external TestFlight
-  group, whose first build goes through Apple's beta review; and a domain,
-  when wanted
+  (`CONTACT_EMAIL` in `web/lib/site.ts`); ship the server; the Vercel
+  project (Root Directory `web`), then a sign-up through it; an external
+  TestFlight group, whose first build goes through Apple's beta review; and
+  a domain, when wanted
 - Verify: `make server-test`; `make server-run` and `make web-preview`, then
   join the list at http://localhost:3100 and `-waitlist-count` shows it
 

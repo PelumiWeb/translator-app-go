@@ -1,6 +1,6 @@
 """Serves the built site (web/out) as the host does: the files, and /v1/ passed
-to Shinar's server, here the one on this Mac (deploy/Caddyfile does the same on
-the Azure machine). `make web-preview` runs it.
+to Shinar's server, here the one on this Mac (web/vercel.json does the same on
+Vercel). `make web-preview` runs it.
 
     python3 -I web/scripts/preview.py <out dir> <port> <server URL>
 """

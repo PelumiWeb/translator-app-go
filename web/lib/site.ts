@@ -91,8 +91,8 @@ export const WAITLIST = {
   joinedIPhone: "You're on the list. Your invitation will come from TestFlight, by email.",
   joinedAndroid: `You're on the list. We'll write when ${APP_NAME} is ready for Android.`,
   privacy: `We use your email only to invite you to ${APP_NAME} and to tell you when it's out. To invite you on iPhone, we give it to Apple, whose TestFlight sends the invitation. We never give it to anyone else.`,
-  // The path is the same on every host that serves the site: the host passes
-  // it to Shinar's server (deploy/Caddyfile), so the page never needs to
-  // know the server's address.
+  // Posted to the name that served the page: Vercel passes it on to Shinar's
+  // server (web/vercel.json), so the page never needs to know the server's
+  // address.
   path: "/v1/waitlist",
 };

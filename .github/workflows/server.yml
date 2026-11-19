@@ -64,8 +64,12 @@ jobs:
         env:
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
           SERVER_HOST_KEY: ${{ secrets.SERVER_HOST_KEY }}
+          SERVER_HOST: ${{ vars.SERVER_HOST }}
         run: |
-          : "${SERVER_SSH_KEY:?add the secrets first, as ADR 0023 describes}"
+          # Each is checked by name, so a missing one says which, and where it goes.
+          : "${SERVER_SSH_KEY:?add the SERVER_SSH_KEY secret (Settings, Secrets and variables, Actions, Secrets), as ADR 0023 describes}"
+          : "${SERVER_HOST_KEY:?add the SERVER_HOST_KEY secret (Settings, Secrets and variables, Actions, Secrets), as ADR 0023 describes}"
+          : "${SERVER_HOST:?add the SERVER_HOST variable (Settings, Secrets and variables, Actions, Variables; a variable, not a secret), as ADR 0023 describes}"
           install -d -m 700 ~/.ssh
           printf '%s\n' "$SERVER_SSH_KEY" > ~/.ssh/shinar_deploy
           chmod 600 ~/.ssh/shinar_deploy

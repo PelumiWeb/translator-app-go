@@ -34,6 +34,8 @@ site. Never imitate a known person's voice.
 
 ## Hosting
 
-Not hosted yet. `web/out/` is all a host needs: any web server that serves
-files, such as the Caddy on the Azure machine (ADR 0023), once there is a
-domain.
+On Vercel (ADR 0031), as a project made from this repository with its Root
+Directory set to `web`; Vercel finds Next.js and builds it on each push to
+`main`. `vercel.json` passes `/v1/waitlist` on to Shinar's server, so the
+waitlist form posts to the name that served the page and needs no CORS. It
+is the only path passed on: the site needs nothing else from the server.

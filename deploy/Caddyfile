@@ -1,17 +1,6 @@
-# Caddy gets and renews the HTTPS certificate for this name by itself. The
-# API is passed to the server, which listens only on this machine; event
-# streams are passed through as they come. Everything else is the website,
-# plain files shipped by deploy/ship-web.sh (ADR 0030).
+# Caddy gets and renews the HTTPS certificate for this name by itself, and
+# passes every request to the server, which listens only on this machine.
+# Event streams are passed through as they come.
 {{HOST}} {
-	handle /v1/* {
-		reverse_proxy 127.0.0.1:8080
-	}
-	handle /healthz {
-		reverse_proxy 127.0.0.1:8080
-	}
-	handle {
-		root * /opt/shinar/site
-		try_files {path} {path}.html {path}/index.html
-		file_server
-	}
+	reverse_proxy 127.0.0.1:8080
 }
