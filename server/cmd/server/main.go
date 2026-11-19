@@ -73,6 +73,7 @@ func run(logger *slog.Logger) error {
 	flag.IntVar(&wl.invite, "waitlist-invite", 0, "instead of serving: mark the next `n` people waiting with an iPhone invited, and print them as CSV for TestFlight")
 	flag.StringVar(&wl.remove, "waitlist-remove", "", "instead of serving: take this `email` off the waitlist")
 	flag.BoolVar(&wl.count, "waitlist-count", false, "instead of serving: print how many are waiting")
+	flag.BoolVar(&wl.list, "waitlist-list", false, "instead of serving: print everyone on the waitlist, invited or not, without inviting anyone")
 	flag.Parse()
 	role := role(*roleFlag)
 	if !role.runsAPI() && !role.runsWorkers() {

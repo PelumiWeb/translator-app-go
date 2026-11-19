@@ -1249,9 +1249,10 @@ before the soft launch)
 - Server: `POST /v1/waitlist` (email, phone, optional first name), open to
   anyone, the same answer for a new or a known address, a hidden field for
   bots. Migration 0010. `-waitlist-invite N`, `-waitlist-count`,
-  `-waitlist-remove`, run on the machine by `make waitlist-invite N=20`
-  (writes `invitations.csv` for App Store Connect), `make waitlist-count`
-  and `make waitlist-remove EMAIL=...`
+  `-waitlist-list`, `-waitlist-remove`, run on the machine by
+  `make waitlist-invite N=20` (writes `invitations.csv` for App Store
+  Connect), `make waitlist-count`, `make waitlist-list` (everyone, invites
+  nobody) and `make waitlist-remove EMAIL=...`
 - Website: "Try it first" in the hero leads to the form at the end of the
   page: iPhone or Android, email, first name, and what is done with the
   address. `make web-preview` passes `/v1/` to the server on this Mac

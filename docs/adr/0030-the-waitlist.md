@@ -37,11 +37,11 @@ invited, and writes `invitations.csv`: `first name,,email` lines with no
 header, the layout App Store Connect imports testers from. The owner imports
 it into the external TestFlight group, and TestFlight sends the invitations.
 The owner sets the pace of the soft launch, which on the free tiers
-(ADR 0029) must stay small. `make waitlist-count` and
+(ADR 0029) must stay small. `make waitlist-count`, `make waitlist-list` and
 `make waitlist-remove EMAIL=...` do the rest. They run the server's binary on
-the machine (`-waitlist-invite`, `-waitlist-count`, `-waitlist-remove`)
-through `systemd-run`, as the service's user with its settings, over SSH as
-the machine's admin.
+the machine (`-waitlist-invite`, `-waitlist-count`, `-waitlist-list`,
+`-waitlist-remove`) through `systemd-run`, as the service's user with its
+settings, over SSH as the machine's admin.
 
 **The website is served by the same Caddy as the API.** Everything outside
 `/v1/` and `/healthz` is the site's files, in `/opt/shinar/site`, shipped by

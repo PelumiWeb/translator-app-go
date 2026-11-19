@@ -145,3 +145,42 @@ func TestRemoveForgetsSomeone(t *testing.T) {
 		t.Errorf("invited after removal: %v", emails(invited))
 	}
 }
+
+func TestListShowsEveryoneAndChangesNothing(t *testing.T) {
+	s := NewStore(testdb.New(t))
+	ctx := context.Background()
+	for _, e := range []Entry{
+		{Email: "ada@example.com", Name: "Ada", Phone: PhoneIPhone},
+		{Email: "kenji@example.com", Phone: PhoneAndroid},
+		{Email: "rosa@example.com", Phone: PhoneIPhone},
+	} {
+		if err := s.Join(ctx, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.Invite(ctx, PhoneIPhone, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	listed, err := s.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := emails(listed); !slices.Equal(got, []string{"ada@example.com", "kenji@example.com", "rosa@example.com"}) {
+		t.Fatalf("listed = %v, want everyone in the order they joined", got)
+	}
+	if listed[0].InvitedAt == nil || listed[1].InvitedAt != nil || listed[2].InvitedAt != nil {
+		t.Errorf("invited = %v, %v, %v; want only Ada", listed[0].InvitedAt, listed[1].InvitedAt, listed[2].InvitedAt)
+	}
+	if listed[0].Name != "Ada" || listed[1].Phone != PhoneAndroid {
+		t.Errorf("first two = %+v, %+v", listed[0], listed[1])
+	}
+
+	waiting, err := s.Waiting(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waiting[PhoneIPhone] != 1 || waiting[PhoneAndroid] != 1 {
+		t.Errorf("waiting after listing = %v, want one of each still waiting", waiting)
+	}
+}

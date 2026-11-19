@@ -109,6 +109,10 @@ server-ship: ## Build the server for the host and ship it (SERVER_HOST=..., SERV
 waitlist-count: ## How many are waiting on the hosted server's waitlist (ssh as azureuser with ~/.ssh/shinar_admin)
 	deploy/waitlist.sh -waitlist-count
 
+.PHONY: waitlist-list
+waitlist-list: ## Everyone on the hosted server's waitlist, invited or not; invites nobody
+	deploy/waitlist.sh -waitlist-list
+
 .PHONY: waitlist-invite
 waitlist-invite: ## Take the next N iPhone sign-ups (N=20) into invitations.csv, for TestFlight
 	@test -n "$(N)" || { echo "N is required, for example: make waitlist-invite N=20"; exit 2; }

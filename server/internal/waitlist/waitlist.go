@@ -25,6 +25,7 @@ type Entry struct {
 	Name      string // their first name, if they gave one
 	Phone     string
 	CreatedAt time.Time
+	InvitedAt *time.Time // nil while they are waiting
 }
 
 // Store keeps the list in Postgres.
@@ -62,7 +63,7 @@ func (s *Store) Invite(ctx context.Context, phone string, n int) ([]Entry, error
 			ORDER BY created_at LIMIT $2
 			FOR UPDATE SKIP LOCKED
 		)
-		RETURNING email, name, phone, created_at`,
+		RETURNING email, name, phone, created_at, invited_at`,
 		phone, n)
 	if err != nil {
 		return nil, fmt.Errorf("taking people from the waitlist: %w", err)
@@ -73,6 +74,20 @@ func (s *Store) Invite(ctx context.Context, phone string, n int) ([]Entry, error
 	}
 	// RETURNING gives no order of its own; first come, first listed.
 	slices.SortFunc(entries, func(a, b Entry) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	return entries, nil
+}
+
+// List returns everyone on the list, invited or not, those who joined first
+// first. It changes nothing.
+func (s *Store) List(ctx context.Context) ([]Entry, error) {
+	rows, err := s.db.Query(ctx, `SELECT email, name, phone, created_at, invited_at FROM waitlist ORDER BY created_at`)
+	if err != nil {
+		return nil, fmt.Errorf("listing the waitlist: %w", err)
+	}
+	entries, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Entry])
+	if err != nil {
+		return nil, fmt.Errorf("listing the waitlist: %w", err)
+	}
 	return entries, nil
 }
 

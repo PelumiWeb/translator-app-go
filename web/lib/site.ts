@@ -80,7 +80,7 @@ export const SAMPLE = {
 // with any other question about what is kept. The owner's to set before the
 // site goes live; until then the waitlist's note asks them to reply to the
 // invitation instead.
-export const CONTACT_EMAIL = "";
+export const CONTACT_EMAIL = "Pelumiogundipe905@gmail.com";
 
 // The waitlist (ADR 0030). Testing is on iPhone only, through TestFlight;
 // Android sign-ups are kept for when there is an Android test.

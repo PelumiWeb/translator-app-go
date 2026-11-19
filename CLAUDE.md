@@ -229,7 +229,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make server-test-race` | the same with the race detector, each test run 3 times |
 | `make server-lint` | `go vet` and `gofmt -l` |
 | `make server-ship` | build the server for the Azure machine and ship it over SSH; GitHub Actions runs the same on pushes to `main` that change `server/` (ADR 0023) |
-| `make waitlist-count` / `make waitlist-invite N=20` / `make waitlist-remove EMAIL=...` | the hosted server's waitlist: how many wait, the next N iPhone sign-ups into `invitations.csv` for TestFlight, or one address removed (ADR 0030) |
+| `make waitlist-count` / `make waitlist-list` / `make waitlist-invite N=20` / `make waitlist-remove EMAIL=...` | the hosted server's waitlist: how many wait, everyone on it (invites nobody), the next N iPhone sign-ups into `invitations.csv` for TestFlight, or one address removed (ADR 0030) |
 | `make sample-job` | upload a test clip to the running server and stream its events |
 | `make voice-check` | one real request to Fish Audio (key from `server/.env`), then plays what it made |
 | `make transcribe-check` | one real transcription from Groq (key from `server/.env`) of whisper.cpp's sample clip |
