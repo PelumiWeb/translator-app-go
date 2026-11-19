@@ -75,3 +75,24 @@ export const SAMPLE = {
   original: "/sample/original.mp3",
   translated: "/sample/translated.mp3",
 };
+
+// Where people write to have their email address taken off the waitlist, and
+// with any other question about what is kept. The owner's to set before the
+// site goes live; until then the waitlist's note asks them to reply to the
+// invitation instead.
+export const CONTACT_EMAIL = "";
+
+// The waitlist (ADR 0030). Testing is on iPhone only, through TestFlight;
+// Android sign-ups are kept for when there is an Android test.
+export const WAITLIST = {
+  title: "Try it first",
+  line: `${APP_NAME} is being tested on iPhone. Leave your email, and we'll send you an invitation through TestFlight, Apple's app for trying apps before they're out.`,
+  android: "On Android? Leave your email too, and we'll write when it's ready for Android.",
+  joinedIPhone: "You're on the list. Your invitation will come from TestFlight, by email.",
+  joinedAndroid: `You're on the list. We'll write when ${APP_NAME} is ready for Android.`,
+  privacy: `We use your email only to invite you to ${APP_NAME} and to tell you when it's out. To invite you on iPhone, we give it to Apple, whose TestFlight sends the invitation. We never give it to anyone else.`,
+  // The path is the same on every host that serves the site: the host passes
+  // it to Shinar's server (deploy/Caddyfile), so the page never needs to
+  // know the server's address.
+  path: "/v1/waitlist",
+};

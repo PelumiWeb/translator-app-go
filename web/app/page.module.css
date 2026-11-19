@@ -38,12 +38,6 @@
   color: var(--fg2);
 }
 
-.soon {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--fg2);
-}
-
 .heroVisual {
   display: flex;
   justify-content: center;
@@ -128,6 +122,24 @@
 
 .closingTitle {
   max-width: 14em;
+}
+
+.closingLine {
+  margin-top: 0;
+}
+
+/* The way down to the waitlist: Pearl's primary button. */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  height: 52px;
+  padding-inline: 28px;
+  border-radius: 999px;
+  background: var(--you);
+  color: var(--on-you);
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
 }
 
 .footer {

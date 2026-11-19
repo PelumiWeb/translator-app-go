@@ -87,6 +87,9 @@ type API struct {
 	// CanSpeak is false when the server has no voice engine. Requests to
 	// speak are then refused at once, instead of queuing work nobody can do.
 	CanSpeak bool
+
+	// Waitlist keeps the website's sign-ups for invitations (ADR 0030).
+	Waitlist WaitlistStore
 }
 
 // Handler builds the routes. Since Go 1.22 the standard ServeMux matches on
@@ -127,6 +130,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/messages/{id}/audio", a.signedIn(a.handleMessageAudio))
 	mux.HandleFunc("GET /v1/models/manifest", a.handleModelManifest)
 	mux.HandleFunc("GET /v1/models/{id}", a.handleModelDownload)
+	// From the website, by people who have no account yet.
+	mux.HandleFunc("POST /v1/waitlist", a.handleJoinWaitlist)
 	return mux
 }
 

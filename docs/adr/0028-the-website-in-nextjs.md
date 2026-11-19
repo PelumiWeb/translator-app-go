@@ -84,3 +84,10 @@ few custom properties cover them.
   design.
 - There are no automated tests. The page has no logic beyond showing which
   stage is in view, and a test runner would be another dependency.
+
+## Addendum, 2026-11-19: the waitlist
+
+The site now has one form, the waitlist for TestFlight invitations
+(ADR 0030). It posts to `/v1/waitlist` on the name that served the page, so
+the site is still plain files, but it is no longer true that nothing is sent
+from it. It is served by the Azure machine's Caddy, beside the API.

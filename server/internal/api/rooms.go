@@ -260,6 +260,13 @@ func (a *API) handleSendMessage(w http.ResponseWriter, r *http.Request, user acc
 	case errors.Is(err, rooms.ErrRoomClosed):
 		writeError(w, http.StatusConflict, "room_closed", "no one else is in this room any more")
 		return
+	// 429, which the phones do not retry: sending again soon would be refused too.
+	case errors.Is(err, rooms.ErrVoiceLimit):
+		writeError(w, http.StatusTooManyRequests, "voice_limit_reached", "you have sent as many voice notes as one day allows")
+		return
+	case errors.Is(err, rooms.ErrTextLimit):
+		writeError(w, http.StatusTooManyRequests, "text_limit_reached", "you have sent as many messages as one day allows")
+		return
 	case err != nil:
 		a.Logger.Error("adding a message", "user_id", user.ID, "room_id", roomID, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal", "could not send the message")

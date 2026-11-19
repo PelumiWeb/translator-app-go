@@ -83,6 +83,11 @@ type Config struct {
 	// account key, for notifications to Android phones. Empty turns them off.
 	// Both key files are secret, and kept outside the repository.
 	FCMServiceAccountFile string
+
+	// What one person may send in any 24 hours (ADR 0029): minutes of voice
+	// notes, and text messages.
+	DailyVoiceMinutes int
+	DailyTexts        int
 }
 
 // Load is called once from main. Nothing else in the server reads the
@@ -126,6 +131,9 @@ func Load() Config {
 		APNsKeyID:             env("APNS_KEY_ID", ""),
 		APNsTeamID:            env("APNS_TEAM_ID", "4USZRKF452"),
 		FCMServiceAccountFile: env("FCM_SERVICE_ACCOUNT_FILE", ""),
+
+		DailyVoiceMinutes: envInt("DAILY_VOICE_MINUTES", 10),
+		DailyTexts:        envInt("DAILY_TEXT_MESSAGES", 100),
 	}
 }
 

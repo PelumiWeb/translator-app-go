@@ -511,7 +511,7 @@ is answered as not found.
 | `GET /v1/rooms` | `{ "rooms": [ { "id", "people", "last_message", "unread", "created_at" } ] }`, most recent first; `people` is everyone but the user |
 | `GET /v1/rooms/{id}` | one room |
 | `GET /v1/rooms/{id}/messages` | `{ "messages": [...] }`, oldest first: the newest 50, or `?before=<message id>&limit=` for older ones |
-| `POST /v1/rooms/{id}/messages` | A voice note as `multipart/form-data`: `audio` (WAV, up to 30 s), `transcript` (written on the phone, up to 1000 characters), `duration_ms`, optional `lang`. A text message as JSON: `text` (up to 1000 characters), optional `lang` (ADR 0027). `Idempotency-Key` as for jobs. `201` with the message; `409 room_closed` when the other person has deleted their account |
+| `POST /v1/rooms/{id}/messages` | A voice note as `multipart/form-data`: `audio` (WAV, up to 30 s), `transcript` (written on the phone, up to 1000 characters), `duration_ms`, optional `lang`. A text message as JSON: `text` (up to 1000 characters), optional `lang` (ADR 0027). `Idempotency-Key` as for jobs. `201` with the message; `409 room_closed` when the other person has deleted their account; `429 voice_limit_reached` or `429 text_limit_reached` past what one person may send in 24 hours (ADR 0029) |
 | `POST /v1/rooms/{id}/read` | the user has seen the room so far |
 | `GET /v1/messages/{id}` | one message |
 | `POST /v1/messages/{id}/retry` | the sender asks for a failed translation to be tried again |
@@ -536,6 +536,22 @@ a worker tells the listeners' phones through APNs or FCM (ADR 0026): the
 sender's name and "Sent a voice note · 0:14", or "Sent a message" for a
 text, with the room and message IDs for the app. Not the words. A text
 message's voice, made later on request, is not pushed again.
+
+**Daily limits** (ADR 0029). Each person may send 10 minutes of voice notes
+and 100 text messages in any 24 hours (`DAILY_VOICE_MINUTES`,
+`DAILY_TEXT_MESSAGES`). They are counted from the person's own messages, in
+the transaction that adds the next one, with the person's `users` row locked
+so that two sent at once take turns. A message past the limit is not kept.
+The interpreter's work on the server (`/v1/jobs`, `/v1/speech`) is not
+limited yet.
+
+**`POST /v1/waitlist`** (ADR 0030): JSON `email`, `phone` (`iphone` or
+`android`) and an optional first `name`, from the website's form, with no
+sign-in. `200 {"status":"joined"}` whether the address is new or already on
+the list; `400 invalid_email` or `invalid_phone`. A hidden `company` field
+that is filled in marks a bot: answered, not kept. The owner takes people
+for TestFlight invitations with the binary's `-waitlist-invite N`
+(`make waitlist-invite N=20`).
 
 **`GET /v1/models/manifest`**
 
@@ -590,6 +606,10 @@ CREATE INDEX jobs_ready ON jobs (run_at) WHERE status = 'queued';
 -- 0007 and ADR 0026.
 -- Text messages (milestone 15): messages.kind ('voice' or 'text'); a text
 -- message has no audio_key. See migration 0008 and ADR 0027.
+-- Daily limits (18.5): an index on messages (sender_id, created_at), for
+-- adding up what someone sent in the last 24 hours. Migration 0009, ADR 0029.
+-- The waitlist (18.6): waitlist (email, unique whatever its capitals; name;
+-- phone; invited_at). Migration 0010, ADR 0030.
 
 CREATE TABLE job_events (
     job_id     uuid NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -736,7 +756,8 @@ Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 `APPLE_AUDIENCE` (default `com.pelumi.shinar`), `GOOGLE_CLIENT_ID`, `TEST_ACCOUNTS`, `MESSAGES_DIR`, `TRANSLATE_ENGINE`,
 `GOOGLE_TRANSLATE_KEY`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`,
 `TRANSCRIBE_ENGINE`, `GROQ_API_KEY`, `GROQ_MODEL`, `APNS_KEY_FILE`,
-`APNS_KEY_ID`, `APNS_TEAM_ID`, `FCM_SERVICE_ACCOUNT_FILE`). Secrets live in
+`APNS_KEY_ID`, `APNS_TEAM_ID`, `FCM_SERVICE_ACCOUNT_FILE`, `DAILY_VOICE_MINUTES`,
+`DAILY_TEXT_MESSAGES`). Secrets live in
 `server/.env`, which git ignores and the Makefile's server targets load; the
 push notification keys are files outside the repository, which the settings
 name (ADR 0026).
@@ -753,7 +774,9 @@ Database for PostgreSQL 18 (flexible server, B1ms) in the same region,
 reachable only from the machine. `deploy/setup.sh` prepares the machine
 once. GitHub Actions (`.github/workflows/server.yml`) tests every push to
 `main` that changes the server and ships it with `deploy/ship.sh`, which
-`make server-ship` also runs.
+`make server-ship` also runs. The same Caddy serves the website (section 10)
+from `/opt/shinar/site`, for every path outside `/v1/` and `/healthz`;
+`make web-ship` builds it and copies it there (ADR 0030).
 
 Release builds of both apps talk to it
 (`https://shinar-api.southafricanorth.cloudapp.azure.com`): the iOS Release
@@ -893,6 +916,8 @@ Written in the milestone where the decision is implemented.
 | 0026 | Push notifications through APNs and FCM (written) | 14 |
 | 0027 | Text messages, spoken on request (written) | 15 |
 | 0028 | The website, in Next.js, exported as plain files (written) | 18 |
+| 0029 | Daily limits on what each person sends (written) | 18 |
+| 0030 | The waitlist, on our own server (written) | 18 |
 
 ## 8. Known limits
 
@@ -910,6 +935,10 @@ Written in the milestone where the decision is implemented.
 - On the iPhone XS and XR, speech is always turned into text on the server:
   the Whisper build needs the A13's instructions.
 - Recordings are limited to 30 seconds.
+- Each person may send 10 minutes of voice notes and 100 text messages in
+  any 24 hours (ADR 0029). The engines' free tiers are shared by everyone:
+  Azure's 2 million characters a month is about 5,000 translated 30-second
+  notes, after which translation stops until the next month.
 - The low-confidence fallback makes the user wait twice: once for the device,
   then for the cloud.
 
@@ -981,5 +1010,9 @@ web/lib/site.ts  the name (once, ADR 0021), the copy, the journey's stages
 web/public       files served as they are; sample/ holds the hero's audio
 ```
 
-It shows only what the app does today, and stays dark, as the apps do. It is
-not hosted yet: the domain and the host are still to choose.
+It shows only what the app does today, and stays dark, as the apps do. Its
+one form is the waitlist (ADR 0030), which posts to `/v1/waitlist` on the
+name that served the page. The Azure machine's Caddy serves it beside the
+API (section 4.8), on the machine's name until there is a domain.
+`make web-preview` serves the built files with `/v1/` passed to the server
+on this Mac (`web/scripts/preview.py`).

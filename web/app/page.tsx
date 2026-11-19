@@ -5,7 +5,8 @@ import { Journey } from "@/components/Journey";
 import { Lockup } from "@/components/Lockup";
 import { SamplePlayer } from "@/components/SamplePlayer";
 import { TwoVoices } from "@/components/TwoVoices";
-import { APP_NAME, NAME_STORY, PROMISE, PROMISE_LINE, SAMPLE } from "@/lib/site";
+import { Waitlist } from "@/components/Waitlist";
+import { APP_NAME, NAME_STORY, PROMISE, PROMISE_LINE, SAMPLE, WAITLIST } from "@/lib/site";
 import s from "./page.module.css";
 
 // The page is rendered once, at build time, so this looks at the files then.
@@ -41,7 +42,9 @@ export default function Home() {
             <h1 className={s.promise}>{PROMISE}</h1>
             <p className={s.promiseLine}>{PROMISE_LINE}</p>
             {hasSample() && <SamplePlayer original={SAMPLE.original} translated={SAMPLE.translated} />}
-            <p className={s.soon}>Coming to iPhone and Android</p>
+            <a className={s.cta} href="#join">
+              Try it first
+            </a>
           </div>
           <div className={s.heroVisual}>
             <HeroLoop />
@@ -71,12 +74,13 @@ export default function Home() {
           </p>
         </section>
 
-        <section className={s.closing} aria-labelledby="closing-title">
+        <section id="join" className={s.closing} aria-labelledby="closing-title">
           <TwoVoices />
           <h2 id="closing-title" className={`title-2 ${s.closingTitle}`}>
-            {PROMISE}
+            {WAITLIST.title}
           </h2>
-          <p className={s.soon}>Coming to iPhone and Android</p>
+          <p className={`lede ${s.closingLine}`}>{WAITLIST.line}</p>
+          <Waitlist />
         </section>
       </main>
 

@@ -373,8 +373,8 @@ final class RoomViewModel {
 
     private func notSent(_ id: String, _ error: any Error) {
         updatePending(id) { $0.stage = .failed }
-        if (error as? BackendError)?.code == "room_closed" {
-            problem = "This person has left, so the message can't reach them."
+        if let refusal = Self.refusal((error as? BackendError)?.code) {
+            problem = refusal
         }
     }
 
@@ -434,6 +434,17 @@ final class RoomViewModel {
         pending.removeAll { $0.id == id }
         self.hint = hint
         sending[id] = nil
+    }
+
+    /// What to tell the sender when the server refused their message, or nil when the failed card says enough.
+    /// The daily limits count the last 24 hours, so more can be sent later, not at midnight.
+    nonisolated static func refusal(_ code: String?) -> String? {
+        switch code {
+        case "room_closed": "This person has left, so the message can't reach them."
+        case "voice_limit_reached": "You've sent as many voice notes as one day allows. You can send more later, or write a message."
+        case "text_limit_reached": "You've sent as many messages as one day allows. You can send more later, or send a voice note."
+        default: nil
+        }
     }
 
     /// Newer versions replace older ones; the list stays in the order the notes were sent.

@@ -31,11 +31,16 @@ type roomsWorld struct {
 // the ID "<name>.id". An empty language leaves the profile unfinished.
 func newRoomsWorld(t *testing.T, people map[string]string) roomsWorld {
 	t.Helper()
+	return newRoomsWorldWithLimits(t, people, rooms.Limits{})
+}
+
+func newRoomsWorldWithLimits(t *testing.T, people map[string]string, limits rooms.Limits) roomsWorld {
+	t.Helper()
 	db := testdb.New(t)
 	store := accounts.NewStore(db)
 	a := newTestAPI()
 	a.Accounts, a.Voices, a.Messages = store, &fakeAudio{}, &fakeAudio{}
-	a.Rooms = rooms.NewStore(db, queue.NewStore(db))
+	a.Rooms = rooms.NewStore(db, queue.NewStore(db), limits)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -349,5 +354,36 @@ func TestRoomChangesStreamToTheMembers(t *testing.T) {
 	}
 	if got := next(); got != `data: {"room_id":"`+room+`"}` {
 		t.Errorf("data = %q", got)
+	}
+}
+
+func TestSendingPastTheDailyLimitIsRefused(t *testing.T) {
+	// One voice note of 2.4 s fits in 3 s; a second does not. One text fits.
+	w := newRoomsWorldWithLimits(t, map[string]string{"ada": "en", "rosa": "es"}, rooms.Limits{VoiceMS: 3000, Texts: 1})
+	room := w.open(t, "ada", "rosa")
+	path := "/v1/rooms/" + room + "/messages"
+	w.sendMessage(t, room, "ada", "first note")
+	w.sendText(t, room, "ada", "first text")
+
+	tests := []struct {
+		name     string
+		req      *http.Request
+		wantCode string
+	}{
+		{"a voice note", messageRequest(t, path, w.tokens["ada"], "second note", "2400", wavBytes(200)), "voice_limit_reached"},
+		{"a text message", jsonRequest(http.MethodPost, path, w.tokens["ada"], `{"text":"second text"}`), "text_limit_reached"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := serve(w.api, tc.req)
+			var body errorBody
+			if rec.Code != http.StatusTooManyRequests || json.Unmarshal(rec.Body.Bytes(), &body) != nil || body.Error.Code != tc.wantCode {
+				t.Errorf("status %d, body %s; want 429 %s", rec.Code, rec.Body, tc.wantCode)
+			}
+		})
+	}
+	// The refused note's recording is not left behind.
+	if n := len(w.api.Messages.(*fakeAudio).keys()); n != 1 {
+		t.Errorf("%d recordings stored, want the first note's only", n)
 	}
 }

@@ -26,6 +26,21 @@ class RoomFormatTest {
     }
 
     @Test
+    fun `a refused message says why when the server gives a reason the sender can act on`() {
+        assertEquals("This person has left, so the message can't reach them.", RoomViewModel.refusal("room_closed"))
+        assertEquals(
+            "You've sent as many voice notes as one day allows. You can send more later, or write a message.",
+            RoomViewModel.refusal("voice_limit_reached"),
+        )
+        assertEquals(
+            "You've sent as many messages as one day allows. You can send more later, or send a voice note.",
+            RoomViewModel.refusal("text_limit_reached"),
+        )
+        assertNull(RoomViewModel.refusal("internal"))
+        assertNull(RoomViewModel.refusal(null))
+    }
+
+    @Test
     fun `the room list shows a translation when it is ready, and the length until then`() {
         val ready = message("a", "x", renditions = listOf(Rendition("en", RenditionStatus.READY, "hello")))
         val waiting = message("b", "x", renditions = listOf(Rendition("en", RenditionStatus.SPEAKING, "hello")))

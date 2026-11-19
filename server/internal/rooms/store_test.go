@@ -27,7 +27,7 @@ type world struct {
 func newWorld(t *testing.T) world {
 	t.Helper()
 	db := testdb.New(t)
-	return world{db: db, accounts: accounts.NewStore(db), rooms: NewStore(db, queue.NewStore(db))}
+	return world{db: db, accounts: accounts.NewStore(db), rooms: NewStore(db, queue.NewStore(db), Limits{})}
 }
 
 // user signs up someone who speaks lang and returns their ID.

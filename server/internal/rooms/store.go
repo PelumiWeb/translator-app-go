@@ -30,7 +30,19 @@ var (
 	// ErrNotReady means a message's words are not ready in that language:
 	// still being translated, or the translation failed.
 	ErrNotReady = errors.New("rooms: not ready in that language")
+	// ErrVoiceLimit and ErrTextLimit mean the sender has sent as much as
+	// Limits allows in the last 24 hours.
+	ErrVoiceLimit = errors.New("rooms: voice note limit reached")
+	ErrTextLimit  = errors.New("rooms: text message limit reached")
 )
+
+// Limits caps what one person may send in any 24 hours, so that a few people
+// cannot use up, for everyone, the translation and voice services' allowances
+// (ADR 0029). A zero field means no limit of that kind.
+type Limits struct {
+	VoiceMS int // the total length of their voice notes
+	Texts   int // the number of their text messages
+}
 
 // What a message is, as stored in messages.kind.
 const (
@@ -117,12 +129,13 @@ type Enqueuer interface {
 
 // Store keeps rooms in Postgres.
 type Store struct {
-	db   *pgxpool.Pool
-	jobs Enqueuer
+	db     *pgxpool.Pool
+	jobs   Enqueuer
+	limits Limits
 }
 
-func NewStore(db *pgxpool.Pool, jobs Enqueuer) *Store {
-	return &Store{db: db, jobs: jobs}
+func NewStore(db *pgxpool.Pool, jobs Enqueuer, limits Limits) *Store {
+	return &Store{db: db, jobs: jobs, limits: limits}
 }
 
 // OpenPair returns the room of two for userID and otherID, opening it if
@@ -340,6 +353,11 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 		if len(langs) == 0 {
 			return ErrRoomClosed
 		}
+		// Holding the sender's row makes their sends take turns, so two sent
+		// at once cannot both slip under the limit.
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, m.SenderID); err != nil {
+			return err
+		}
 
 		err = tx.QueryRow(ctx, `
 			INSERT INTO messages (room_id, sender_id, kind, lang, transcript, audio_key, duration_ms, idempotency_key)
@@ -358,6 +376,11 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 			return err
 		}
 		created = true
+		// Counted with the new message, after it is in: a resend of one
+		// already kept is never refused.
+		if err := s.withinLimits(ctx, tx, m.SenderID, m.Kind); err != nil {
+			return err
+		}
 
 		// Listeners of the language it was said in hear the sender's own
 		// recording, at once, or read their words; the others wait for a
@@ -390,7 +413,7 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 		}
 		return notifyMessage(ctx, tx, id)
 	})
-	if errors.Is(err, ErrNoRoom) || errors.Is(err, ErrRoomClosed) {
+	if errors.Is(err, ErrNoRoom) || errors.Is(err, ErrRoomClosed) || errors.Is(err, ErrVoiceLimit) || errors.Is(err, ErrTextLimit) {
 		return Message{}, false, err
 	}
 	if err != nil {
@@ -398,6 +421,32 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 	}
 	message, err = s.Message(ctx, m.SenderID, id)
 	return message, created, err
+}
+
+// withinLimits checks what the sender has sent in the last 24 hours,
+// counting the message just added. A rolling day, not a calendar one, so the
+// limit means the same in every time zone.
+func (s *Store) withinLimits(ctx context.Context, tx pgx.Tx, senderID, kind string) error {
+	limit, sum, refusal := s.limits.VoiceMS, "coalesce(sum(duration_ms), 0)", ErrVoiceLimit
+	if kind == KindText {
+		limit, sum, refusal = s.limits.Texts, "count(*)", ErrTextLimit
+	}
+	if limit == 0 {
+		return nil
+	}
+	var used int
+	// now() is when this transaction began, which is the new message's created_at too.
+	if err := tx.QueryRow(ctx, `
+		SELECT `+sum+` FROM messages
+		WHERE sender_id = $1 AND kind = $2 AND created_at > now() - interval '24 hours'`,
+		senderID, kind,
+	).Scan(&used); err != nil {
+		return err
+	}
+	if used > limit {
+		return refusal
+	}
+	return nil
 }
 
 // Retry tries again to deliver the renditions of a message that failed. Only

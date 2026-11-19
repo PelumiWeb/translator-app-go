@@ -1,0 +1,120 @@
+/* The waitlist form, from Pearl's parts: capsule choices, text inputs and the
+   primary button (docs/design/pearl/README.md, components). */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  text-align: left;
+}
+
+.phones {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.phone {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding-inline: 20px;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--fg);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.phone[data-selected="true"] {
+  background: var(--you);
+  color: var(--on-you);
+}
+
+.phone:has(input:focus-visible) {
+  outline: 2px solid var(--fg);
+  outline-offset: 3px;
+}
+
+.note {
+  font-size: 15px;
+  color: var(--fg2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg2);
+}
+
+.input {
+  height: 56px;
+  padding-inline: 16px;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  background: var(--bg-raised);
+  color: var(--fg);
+  font: inherit;
+  font-size: 18px;
+}
+
+.input:focus {
+  border-color: var(--fg);
+  outline: none;
+}
+
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.button {
+  height: 52px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--you);
+  color: var(--on-you);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.failed {
+  font-size: 15px;
+  color: var(--fg);
+}
+
+.privacy {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg3);
+}
+
+.privacy a {
+  color: var(--fg2);
+}
+
+.joined {
+  max-width: 420px;
+  font-size: 17px;
+  color: var(--fg);
+}

@@ -33,6 +33,7 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
 	"github.com/PelumiWeb/translator-app-go/server/internal/rooms"
 	"github.com/PelumiWeb/translator-app-go/server/internal/storage"
+	"github.com/PelumiWeb/translator-app-go/server/internal/waitlist"
 	"github.com/PelumiWeb/translator-app-go/server/migrations"
 )
 
@@ -68,6 +69,10 @@ func (r role) runsWorkers() bool { return r == roleAll || r == roleWorker }
 
 func run(logger *slog.Logger) error {
 	roleFlag := flag.String("role", string(roleAll), "what to run: all, api or worker")
+	var wl waitlistCommand
+	flag.IntVar(&wl.invite, "waitlist-invite", 0, "instead of serving: mark the next `n` people waiting with an iPhone invited, and print them as CSV for TestFlight")
+	flag.StringVar(&wl.remove, "waitlist-remove", "", "instead of serving: take this `email` off the waitlist")
+	flag.BoolVar(&wl.count, "waitlist-count", false, "instead of serving: print how many are waiting")
 	flag.Parse()
 	role := role(*roleFlag)
 	if !role.runsAPI() && !role.runsWorkers() {
@@ -95,6 +100,9 @@ func run(logger *slog.Logger) error {
 	}
 	if err := migrations.Apply(ctx, pool); err != nil {
 		return err
+	}
+	if wl.set() {
+		return wl.run(ctx, waitlist.NewStore(pool), os.Stdout)
 	}
 
 	audio, err := storage.NewLocal(cfg.AudioDir)
@@ -159,10 +167,14 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	logger.Info("translation", "engine", translatorName)
+	logger.Info("daily limits", "voice_minutes", cfg.DailyVoiceMinutes, "text_messages", cfg.DailyTexts)
 
 	store := queue.NewStore(pool)
 	accountStore := accounts.NewStore(pool)
-	roomStore := rooms.NewStore(pool, store)
+	roomStore := rooms.NewStore(pool, store, rooms.Limits{
+		VoiceMS: cfg.DailyVoiceMinutes * 60_000,
+		Texts:   cfg.DailyTexts,
+	})
 
 	// Everything started below runs until ctx is cancelled. On any way out
 	// of this function, cancel it and wait for all of it to finish.
@@ -272,6 +284,7 @@ func run(logger *slog.Logger) error {
 		Rooms:          roomStore,
 		Changes:        hub,
 		Messages:       messages,
+		Waitlist:       waitlist.NewStore(pool),
 	}
 
 	srv := &http.Server{

@@ -59,3 +59,6 @@ xcuserdata/
 # Firebase settings for the Android app (push notifications). Not a
 # secret, but it names the owner's project, and this repository is public.
 android/app/google-services.json
+
+# Waitlist sign-ups taken for TestFlight invitations (make waitlist-invite): email addresses.
+/invitations.csv

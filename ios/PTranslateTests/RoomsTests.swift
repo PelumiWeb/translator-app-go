@@ -113,6 +113,16 @@ struct RoomsTests {
         #expect(merged[1].renditions.first?.text == "hello")
     }
 
+    @Test func aRefusedMessageSaysWhyWhenTheServerGivesAReasonTheSenderCanActOn() {
+        #expect(RoomViewModel.refusal("room_closed") == "This person has left, so the message can't reach them.")
+        #expect(RoomViewModel.refusal("voice_limit_reached")
+            == "You've sent as many voice notes as one day allows. You can send more later, or write a message.")
+        #expect(RoomViewModel.refusal("text_limit_reached")
+            == "You've sent as many messages as one day allows. You can send more later, or send a voice note.")
+        #expect(RoomViewModel.refusal("internal") == nil)
+        #expect(RoomViewModel.refusal(nil) == nil)
+    }
+
     @Test func theRoomListShowsATranslationWhenReadyAndTheLengthUntilThen() {
         let ready = message("a", at: 0, renditions: [Rendition(lang: "en", status: .ready, text: "hello")])
         let waiting = message("b", at: 0, renditions: [Rendition(lang: "en", status: .speaking, text: "hello")])

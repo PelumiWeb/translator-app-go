@@ -35,6 +35,11 @@ milestone 12: text messages (milestone 15), recording with pause, stop and
 send (checkpoint 14.6), a call button that says calls are coming soon
 (milestone 17), and a second account to test with (checkpoint 13.5).
 
+On 2026-11-19 the owner began a soft launch: outside testers on TestFlight,
+invited from a waitlist on the website, with marketing handed to Claude
+(`docs/marketing/brief-1-soft-launch.md`). Built for it, ahead of the rest of
+milestone 18: daily limits (checkpoint 18.5) and the waitlist (18.6).
+
 A checkpoint with phone work is done on Android, then on iOS.
 
 ---
@@ -1215,6 +1220,54 @@ ahead of the rest of this milestone)
 - Verify: `make web-preview`, then open http://localhost:3100 at a phone's
   width and a desktop's; scroll the journey down and back up
 
+**Checkpoint 18.5: daily limits** (built 2026-11-19, at the owner's request,
+before the soft launch)
+- The owner chose 10 minutes of voice notes and 100 text messages a day for
+  each person, and to stay on the engines' free tiers. ADR 0029
+- Server: a message past the limit is refused with `429`
+  (`voice_limit_reached`, `text_limit_reached`) and nothing of it is kept.
+  Counted from the person's messages of the last 24 hours, in the
+  transaction that adds the new one, with their row locked so two at once
+  take turns; a resend with its key is never refused. Migration 0009 (an
+  index). `DAILY_VOICE_MINUTES`, `DAILY_TEXT_MESSAGES`
+- Both phones: the room says why ("You've sent as many voice notes as one
+  day allows. You can send more later, or write a message."), and the note
+  stays failed on its card, to send later. The rule is
+  `RoomViewModel.refusal`, with the same cases on both phones
+- Not yet: the interpreter's server work (Groq, `POST /v1/speech`), which
+  jobs cannot tie to a person; showing what is left (not designed); a
+  monthly budget for the whole server, needed before any paid tier
+- Tests: the store (each limit, a note that would pass it, the other kind and
+  the other person still allowed, resends, the rolling day, eight at once
+  under the race detector) and the API's answers; one case on each phone
+- Verify: `make server-test`; or `DAILY_TEXT_MESSAGES=2 make server-run`,
+  and on a phone send three messages: the third says why it was not sent
+
+**Checkpoint 18.6: the waitlist** (built 2026-11-19, at the owner's request)
+- The owner chose a waitlist on our server, for TestFlight invitations, iPhone
+  only for now; Android sign-ups are kept. ADR 0030
+- Server: `POST /v1/waitlist` (email, phone, optional first name), open to
+  anyone, the same answer for a new or a known address, a hidden field for
+  bots. Migration 0010. `-waitlist-invite N`, `-waitlist-count`,
+  `-waitlist-remove`, run on the machine by `make waitlist-invite N=20`
+  (writes `invitations.csv` for App Store Connect), `make waitlist-count`
+  and `make waitlist-remove EMAIL=...`
+- Website: "Try it first" in the hero leads to the form at the end of the
+  page: iPhone or Android, email, first name, and what is done with the
+  address. `make web-preview` passes `/v1/` to the server on this Mac
+- Hosting: Caddy serves the site from `/opt/shinar/site` beside the API;
+  `deploy/setup.sh` takes an optional domain for the site; `make web-ship`
+- Checked here: the endpoint and the three commands against the server on
+  this Mac, and a sign-up sent through the built site. The page was not
+  looked at in a browser
+- Owner, before sharing the link: an address for removal requests
+  (`CONTACT_EMAIL` in `web/lib/site.ts`); run `deploy/setup.sh` again on the
+  machine, ship the server, then `make web-ship`; an external TestFlight
+  group, whose first build goes through Apple's beta review; and a domain,
+  when wanted
+- Verify: `make server-test`; `make server-run` and `make web-preview`, then
+  join the list at http://localhost:3100 and `-waitlist-count` shows it
+
 Asked on 2026-11-02 and put off by the owner: telling people when a new
 version is out. Two ways were weighed: our server answering with the latest
 and minimum build for each phone (works on TestFlight and both phones, a
@@ -1225,8 +1278,9 @@ Asked on 2026-11-15, to come before the app is opened to the public: usage
 limits, so the paid engines (Fish Audio, Azure AI Translator, Groq) cannot
 run up a bill. The owner's examples: a voice note of at most a minute, and
 an hour of conversation a day. Also: people would pay for access, with
-limits. Not built yet; the owner put Groq first. To settle when it is
-designed:
+limits. Built in part on 2026-11-19, as checkpoint 18.5: 10 minutes of voice
+notes and 100 messages a day, on the free tiers (ADR 0029). What was
+weighed then:
 - The limits must be kept by the server, not only shown by the phones: a
   signed-in user can call the API without the app. The phones show what is
   left and stop recording at the limit; the server refuses past it.

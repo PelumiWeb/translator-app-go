@@ -366,7 +366,7 @@ class RoomViewModel(
 
     private fun notSent(id: String, e: BackendException) {
         updatePending(id) { it.copy(stage = PendingStage.FAILED) }
-        if (e.code == "room_closed") _state.update { it.copy(problem = "This person has left, so the message can't reach them.") }
+        refusal(e.code)?.let { problem -> _state.update { it.copy(problem = problem) } }
     }
 
     private suspend fun load(firstTime: Boolean) {
@@ -457,6 +457,17 @@ class RoomViewModel(
 
         /** From here on, the composer counts down the seconds left. */
         const val COUNTDOWN_FROM_MS = 25_000L
+
+        /**
+         * What to tell the sender when the server refused their message, or null when the failed card says
+         * enough. The daily limits count the last 24 hours, so more can be sent later, not at midnight.
+         */
+        fun refusal(code: String?): String? = when (code) {
+            "room_closed" -> "This person has left, so the message can't reach them."
+            "voice_limit_reached" -> "You've sent as many voice notes as one day allows. You can send more later, or write a message."
+            "text_limit_reached" -> "You've sent as many messages as one day allows. You can send more later, or send a voice note."
+            else -> null
+        }
 
         /** Newer versions replace older ones; the list stays in the order the notes were sent. */
         fun merge(current: List<Message>, incoming: List<Message>): List<Message> =

@@ -63,9 +63,9 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 /ios       Swift, SwiftUI, one Xcode project (PTranslate), from milestone 10
 /server    Go service: HTTP API, job queue, workers
 /web       the website: Next.js, exported as plain files (ADR 0028)
-/docs      architecture.md, plan.md, adr/
+/docs      architecture.md, plan.md, adr/, design/ (briefs for Claude Design), marketing/ (briefs for marketing)
 /third_party/whisper.cpp   git submodule, pinned to a release tag
-/deploy    the hosted server: one-time set-up, service and Caddy files, ship script (ADR 0023)
+/deploy    the hosted server: one-time set-up, service and Caddy files, ship scripts for the server and the website, the waitlist commands (ADR 0023, 0030)
 Makefile   common commands for all three
 ```
 
@@ -124,6 +124,7 @@ internal/rooms       rooms, messages, renditions; the deliverer, its push notifi
 internal/push        sending notifications through APNs and FCM
 internal/models      manifest and model file serving
 internal/storage     audio blob storage
+internal/waitlist    the website's waitlist for TestFlight invitations
 migrations/          plain SQL, embedded in the binary
 ```
 
@@ -192,6 +193,8 @@ migrations/          plain SQL, embedded in the binary
 - Pearl, dark only, from the same tokens as the apps. The name lives only in
   `web/lib/site.ts`.
 - It shows only what the app does today (brief round 4, section 8).
+- Its one form, the waitlist, posts to `/v1/waitlist` on the name that served
+  the page (ADR 0030); no CORS, no server address in the page.
 
 ### API
 
@@ -225,6 +228,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make server-test-race` | the same with the race detector, each test run 3 times |
 | `make server-lint` | `go vet` and `gofmt -l` |
 | `make server-ship` | build the server for the Azure machine and ship it over SSH; GitHub Actions runs the same on pushes to `main` that change `server/` (ADR 0023) |
+| `make waitlist-count` / `make waitlist-invite N=20` / `make waitlist-remove EMAIL=...` | the hosted server's waitlist: how many wait, the next N iPhone sign-ups into `invitations.csv` for TestFlight, or one address removed (ADR 0030) |
 | `make sample-job` | upload a test clip to the running server and stream its events |
 | `make voice-check` | one real request to Fish Audio (key from `server/.env`), then plays what it made |
 | `make transcribe-check` | one real transcription from Groq (key from `server/.env`) of whisper.cpp's sample clip |
@@ -247,7 +251,8 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make ios-testflight` | build for the App Store and upload to TestFlight; GitHub Actions runs it on pushes to `main` that change `ios/` (ADR 0022 has the set-up) |
 | `make web-dev` | run the website on http://localhost:3100, reloading as files change |
 | `make web-build` | build the website into `web/out/`, checking its types |
-| `make web-preview` | build the website and serve `web/out/` on http://localhost:3100, as a host would |
+| `make web-preview` | build the website and serve `web/out/` on http://localhost:3100, as a host would, with `/v1/` passed to the server on this Mac |
+| `make web-ship` | build the website and copy it to the Azure machine, where Caddy serves it beside the API (ADR 0030) |
 
 The Android app calls `http://localhost:8080`. `adb reverse` forwards that to
 this machine, on the emulator and on a phone over USB alike. The iOS

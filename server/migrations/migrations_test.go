@@ -2,6 +2,7 @@ package migrations_test
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/PelumiWeb/translator-app-go/server/internal/testdb"
@@ -37,7 +38,12 @@ func TestApplyIsIdempotent(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("counting applied migrations: %v", err)
 	}
-	if count != 8 {
-		t.Errorf("schema_migrations has %d rows, want 8", count)
+	// One row per file, however many there are: tests run in this folder.
+	files, err := filepath.Glob("*.sql")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("listing the migration files: %v", err)
+	}
+	if count != len(files) {
+		t.Errorf("schema_migrations has %d rows, want %d, one per file", count, len(files))
 	}
 }

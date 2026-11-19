@@ -105,6 +105,21 @@ translate-check: ## Ask Azure AI Translator for a few translations (key from ser
 server-ship: ## Build the server for the host and ship it (SERVER_HOST=..., SERVER_SSH_KEY_PATH=...)
 	deploy/ship.sh
 
+.PHONY: waitlist-count
+waitlist-count: ## How many are waiting on the hosted server's waitlist (ssh as azureuser with ~/.ssh/shinar_admin)
+	deploy/waitlist.sh -waitlist-count
+
+.PHONY: waitlist-invite
+waitlist-invite: ## Take the next N iPhone sign-ups (N=20) into invitations.csv, for TestFlight
+	@test -n "$(N)" || { echo "N is required, for example: make waitlist-invite N=20"; exit 2; }
+	deploy/waitlist.sh -waitlist-invite $(N) > invitations.csv
+	@echo "Written to invitations.csv (git-ignored). Import it in App Store Connect, TestFlight, your external group."
+
+.PHONY: waitlist-remove
+waitlist-remove: ## Take EMAIL=... off the hosted server's waitlist
+	@test -n "$(EMAIL)" || { echo "EMAIL is required"; exit 2; }
+	deploy/waitlist.sh -waitlist-remove '$(EMAIL)'
+
 .PHONY: server-test
 server-test: ## Run the Go tests (needs `make db-up`)
 	cd server && go test ./...
@@ -249,9 +264,13 @@ web-dev: $(WEB_DEPS) ## Run the website on http://localhost:3100, reloading as f
 web-build: $(WEB_DEPS) ## Build the website into web/out/ (plain files), checking the types
 	cd web && NEXT_TELEMETRY_DISABLED=1 npm run build
 
+.PHONY: web-ship
+web-ship: ## Build the website and ship it to the host, beside the API (SERVER_HOST=..., SERVER_SSH_KEY_PATH=...)
+	deploy/ship-web.sh
+
 .PHONY: web-preview
-web-preview: web-build ## Build the website and serve web/out/ on http://localhost:3100, as a host would
-	python3 -m http.server $(WEB_PORT) --bind 127.0.0.1 --directory web/out
+web-preview: web-build ## Build the website and serve web/out/ on http://localhost:3100, as a host would, with /v1/ passed to the server on this Mac
+	python3 -I web/scripts/preview.py web/out $(WEB_PORT) http://localhost:8080
 
 # --- Whisper model ----------------------------------------------------------
 
