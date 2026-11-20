@@ -1,15 +1,3 @@
-.header {
-  max-width: var(--max);
-  margin-inline: auto;
-  padding: 24px var(--gutter);
-}
-
-.home {
-  display: inline-flex;
-  color: inherit;
-  text-decoration: none;
-}
-
 /* A reading column: about 66 characters a line. */
 .main {
   max-width: calc(40em + 2 * var(--gutter));

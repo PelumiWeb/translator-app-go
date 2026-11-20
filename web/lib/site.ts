@@ -10,6 +10,59 @@ export const NAME_STORY = `${APP_NAME} is named for the plain in Genesis 11 wher
 export const PROMISE = "Break the language barrier. Be heard in your own voice.";
 export const PROMISE_LINE = "Talk to anyone. You speak your language. They hear theirs, in your voice.";
 
+// Under the hero's buttons: what trying it costs and takes, before anyone
+// scrolls to the form.
+export const HERO_NOTE = "Free while we test. On iPhone, by invitation.";
+
+// The site's address until there is a domain (the marketing brief keeps it in
+// one place too). Link previews need it: they fetch the preview image by its
+// full address.
+export const SITE_URL = "https://web-nine-phi-84.vercel.app";
+
+export type Example = { lead: string; rest: string };
+
+// Who it's for: people a language apart who already know each other. Only
+// Rosa's pair names languages, since only Spanish and English have been heard
+// in her voice (design brief round 4, section 4).
+export const WHO = {
+  title: "Made for people a language apart",
+  examples: [
+    {
+      lead: "A grandmother and her grandson.",
+      rest: "She speaks Spanish; he grew up speaking English. Her notes reach him in his language, in her voice.",
+    },
+    {
+      lead: "Your partner's family.",
+      rest: "Say what you mean in your language. They hear it in theirs, in your voice.",
+    },
+    {
+      lead: "The friend who moved home.",
+      rest: "Keep talking, each in your own language. A voice note waits until they're free.",
+    },
+  ] satisfies Example[],
+  line: "You add people by their ID or their code, and nobody can find you without one.",
+};
+
+export type Way = { title: string; text: string };
+
+// What a tester can do today (marketing brief, section 4).
+export const WAYS = {
+  title: "Three ways to talk",
+  line: "In a room of two, wherever each of you is, or face to face.",
+  voice: {
+    title: "Voice notes",
+    text: "Speak for up to 30 seconds. They hear it in their language, in your voice, whenever they're free.",
+  },
+  text: {
+    title: "Text messages",
+    text: "When you'd rather type. They read it in their language, and can tap to hear it in your voice.",
+  },
+  interpreter: {
+    title: "The interpreter",
+    text: "Face to face, on one phone. Each of you speaks your own language, and the phone says it in the other's.",
+  },
+} satisfies Record<string, Way | string>;
+
 // The words of the example, from the design (docs/design/pearl, conversation
 // and voice-note states): Rosa in Madrid, and her grandson in Lagos.
 export const ROSA = {
@@ -92,6 +145,13 @@ export const WAITLIST = {
   android: "On Android? Leave your email too, and we'll write when it's ready for Android.",
   joinedIPhone: "You're on the list. Your invitation will come from TestFlight, by email.",
   joinedAndroid: `You're on the list. We'll write when ${APP_NAME} is ready for Android.`,
+  // How joining goes, above the form: the pair comes first, since a room
+  // needs both people.
+  steps: [
+    "Join the list with the person you want to talk to.",
+    `Your invitation comes by email, from TestFlight. Install ${APP_NAME} from it.`,
+    "Record your voice, add them by their ID, and send your first note.",
+  ],
   privacy: `We use your email only to invite you to ${APP_NAME} and to tell you when it's out. To invite you on iPhone, we give it to Apple, whose TestFlight sends the invitation. We never give it to anyone else.`,
   // Posted to the name that served the page: Vercel passes it on to Shinar's
   // server (web/vercel.json), so the page never needs to know the server's

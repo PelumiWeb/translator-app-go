@@ -1,14 +1,18 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { CSSProperties } from "react";
 import { HeroLoop } from "@/components/HeroLoop";
 import { Faq } from "@/components/Faq";
 import { Journey } from "@/components/Journey";
-import { Lockup } from "@/components/Lockup";
+import { Reveals } from "@/components/Reveals";
 import { SamplePlayer } from "@/components/SamplePlayer";
 import { SiteFooter } from "@/components/SiteFooter";
+import { SiteHeader } from "@/components/SiteHeader";
 import { TwoVoices } from "@/components/TwoVoices";
 import { Waitlist } from "@/components/Waitlist";
-import { APP_NAME, PROMISE, PROMISE_LINE, SAMPLE, WAITLIST } from "@/lib/site";
+import { Ways } from "@/components/Ways";
+import { Who } from "@/components/Who";
+import { APP_NAME, HERO_NOTE, PROMISE, PROMISE_LINE, SAMPLE, WAITLIST } from "@/lib/site";
 import s from "./page.module.css";
 
 // The page is rendered once, at build time, so this looks at the files then.
@@ -34,9 +38,7 @@ const VOICE_BLOCKS = [
 export default function Home() {
   return (
     <>
-      <header className={s.header}>
-        <Lockup />
-      </header>
+      <SiteHeader intro />
 
       <main>
         <section className={s.hero}>
@@ -44,40 +46,54 @@ export default function Home() {
             <h1 className={s.promise}>{PROMISE}</h1>
             <p className={s.promiseLine}>{PROMISE_LINE}</p>
             {hasSample() && <SamplePlayer original={SAMPLE.original} translated={SAMPLE.translated} />}
-            <a className={s.cta} href="#join">
-              Try it first
-            </a>
+            <div className={s.actions}>
+              <a className={s.cta} href="#join">
+                Try it first
+              </a>
+              <a className={s.secondary} href="#how">
+                See how it works
+              </a>
+            </div>
+            <p className={s.heroNote}>{HERO_NOTE}</p>
           </div>
           <div className={s.heroVisual}>
+            {/* The Welcome screen's two voices, large and behind the loop. */}
+            <div className={s.halo}>
+              <TwoVoices cores={false} />
+            </div>
             <HeroLoop />
           </div>
         </section>
 
+        <Who />
+
         <Journey />
 
+        <Ways />
+
         <section className={s.voice} aria-labelledby="voice-title">
-          <h2 id="voice-title" className="title-2">
+          <h2 id="voice-title" className="title-2" data-reveal>
             Your voice stays yours.
           </h2>
-          <p className="lede">
+          <p className="lede" data-reveal>
             To speak your words in your voice, {APP_NAME} keeps a recording of it, only with your agreement. This is
             exactly what that means.
           </p>
           <ul className={s.blocks}>
-            {VOICE_BLOCKS.map((block) => (
-              <li key={block.title} className={s.block}>
+            {VOICE_BLOCKS.map((block, i) => (
+              <li key={block.title} className={s.block} data-reveal style={{ "--i": i } as CSSProperties}>
                 <h3 className={s.blockTitle}>{block.title}</h3>
                 <p className={s.blockText}>{block.text}</p>
               </li>
             ))}
           </ul>
-          <p className={s.noVoice}>
+          <p className={s.noVoice} data-reveal>
             Rather not record your voice? You can still talk: people hear your messages in their phone&apos;s voice.
           </p>
         </section>
 
         <section id="faq" className={s.faq} aria-labelledby="faq-title">
-          <h2 id="faq-title" className="title-2">
+          <h2 id="faq-title" className="title-2" data-reveal>
             Questions
           </h2>
           <Faq />
@@ -89,11 +105,20 @@ export default function Home() {
             {WAITLIST.title}
           </h2>
           <p className={`lede ${s.closingLine}`}>{WAITLIST.line}</p>
+          <ol className={s.steps}>
+            {WAITLIST.steps.map((step, i) => (
+              <li key={step} className={s.stepItem} data-reveal style={{ "--i": i } as CSSProperties}>
+                <span className={s.stepNumber}>{i + 1}</span>
+                {step}
+              </li>
+            ))}
+          </ol>
           <Waitlist />
         </section>
       </main>
 
       <SiteFooter />
+      <Reveals />
     </>
   );
 }

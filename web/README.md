@@ -16,12 +16,16 @@ Each installs the packages first when `package-lock.json` has changed. Node
 
 - `app/`: the home page, its layout, the Pearl tokens (`globals.css`), the
   icon; `privacy/`, `terms/` and `support/`, the pages the stores ask for
-  (ADR 0032)
-- `components/`: the logo, the note parts, the hero's loop, the journey and
-  its stage frames, the sample player, the waitlist, the questions, the
-  footer, and the layout of the text pages
+  (ADR 0032); `og.png/`, the picture a link to the site shows, drawn while
+  building (it fetches IBM Plex Sans from Google Fonts then, as `next/font`
+  does)
+- `components/`: the logo and its intro, the note parts, the hero's loop,
+  the journey and its stage frames, the sample player, who it's for, the
+  ways to talk, the waitlist, the questions, the header and footer, the
+  layout of the text pages, and `Reveals`, which lets each part marked
+  `data-reveal` rise into view
 - `lib/site.ts`: the name, written only here until its trademark check is
-  done (ADR 0021); the copy; the journey's stages
+  done (ADR 0021); the site's address; the copy; the journey's stages
 
 ## The sample in the hero
 

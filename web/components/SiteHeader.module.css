@@ -1,0 +1,81 @@
+/* Solid petrol, not see-through: Pearl tells layers apart by colour. */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.3s var(--ease);
+}
+
+.header[data-scrolled="true"] {
+  border-bottom-color: var(--line);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: var(--max);
+  height: var(--header);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.home {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Only on a wide screen: on a phone the button is enough, and the footer
+   has the rest. */
+.links {
+  display: none;
+}
+
+.links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 12px;
+  color: var(--fg2);
+  font-size: 15px;
+  text-decoration: none;
+  transition: color 0.2s var(--ease);
+}
+
+.links a:hover {
+  color: var(--fg);
+}
+
+/* Pearl's primary button, shorter to fit the bar, still 44 to tap. */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding-inline: 20px;
+  border-radius: 999px;
+  background: var(--you);
+  color: var(--on-you);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+@media (min-width: 720px) {
+  .links {
+    display: flex;
+    gap: 4px;
+    margin-right: 8px;
+  }
+}

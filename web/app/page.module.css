@@ -1,9 +1,3 @@
-.header {
-  max-width: var(--max);
-  margin-inline: auto;
-  padding: 24px var(--gutter);
-}
-
 /* Hero: the promise at the welcome screen's 34/500 on a phone, larger on a
    wide screen; the loop below it, or beside it. */
 
@@ -38,9 +32,67 @@
   color: var(--fg2);
 }
 
+/* The hero's words arrive one after another, each rising 8 as it fades in:
+   the wordmark's entrance, as the page opens. */
+.heroText > * {
+  animation: rise 0.7s var(--ease) both;
+}
+
+.heroText > :nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+.heroText > :nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+.heroText > :nth-child(n + 4) {
+  animation-delay: 0.24s;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.heroNote {
+  font-size: 14px;
+  color: var(--fg2);
+}
+
 .heroVisual {
+  position: relative;
   display: flex;
   justify-content: center;
+  padding-block: 24px;
+}
+
+/* Behind the loop, larger than on the Welcome screen, and quieter. */
+.halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1.5);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.heroVisual > :last-child {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroText > * {
+    animation: none;
+  }
 }
 
 @media (min-width: 900px) {
@@ -55,6 +107,10 @@
 
   .promiseLine {
     font-size: 20px;
+  }
+
+  .halo {
+    transform: translate(-50%, -50%) scale(2.1);
   }
 }
 
@@ -126,7 +182,7 @@
 
   .faq > :global(.title-2) {
     position: sticky;
-    top: 32px;
+    top: calc(var(--header) + 32px);
   }
 
   .faq > ul {
@@ -134,17 +190,66 @@
   }
 }
 
-/* Closing: the two voices, and the promise again. */
+/* Closing: the two voices, how joining goes, and the form, on the deepest
+   layer so the page ends somewhere. */
 
 .closing {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 24px;
-  max-width: var(--max);
-  margin-inline: auto;
   padding: 64px var(--gutter) 96px;
+  background: var(--bg-deep);
   text-align: center;
+}
+
+.steps {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 480px);
+  margin-top: 8px;
+  text-align: left;
+}
+
+.stepItem {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Each step's number in a small raised circle, tabular like every number
+   in Pearl. */
+.stepNumber {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-raised);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  transform: translateY(-1px);
+}
+
+@media (min-width: 900px) {
+  .closing {
+    padding-block: 96px 120px;
+  }
+
+  .steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    width: min(100%, 880px);
+  }
+
+  .stepItem {
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 
 .closingTitle {
@@ -167,5 +272,24 @@
   font-size: 16px;
   font-weight: 500;
   text-decoration: none;
+}
+
+/* Pearl's secondary button: the same size, a 1 px outline. */
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  height: 52px;
+  padding-inline: 24px;
+  border: 1px solid var(--outline);
+  border-radius: 999px;
+  color: var(--fg);
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: border-color 0.2s var(--ease);
+}
+
+.secondary:hover {
+  border-color: var(--fg2);
 }
 

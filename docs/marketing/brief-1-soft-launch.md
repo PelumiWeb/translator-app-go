@@ -2,8 +2,9 @@
 
 For Claude, taking over Shinar's marketing, or anyone writing to its first
 users. Written 2026-11-19 from the code and the project's records, so every
-fact here is what the app does today. When something here and a draft
-disagree, this wins; when this is out of date, ask the owner.
+fact here is what the app does today; section 11, on the apps around Shinar,
+added 2026-11-20. When something here and a draft disagree, this wins; when
+this is out of date, ask the owner.
 
 Read with it: `docs/design/brief-4-motion.md` (the story of a voice note,
 the visual language, and what not to show), and `docs/design/pearl/README.md`
@@ -43,7 +44,7 @@ it can be replaced without rewriting.
 | Android | Built, but **not offered to testers yet**. Android sign-ups on the waitlist are kept for later. Do not give a date |
 | App Store, Google Play | Not yet. No store badges, no "download now" |
 | Price | Free while testing. Say nothing about later prices or plans |
-| Website | https://web-nine-phi-84.vercel.app, until there is a domain: a voice note's journey, the questions (`/#faq`), the waitlist (`/#join`), and help, privacy and terms pages (`/support`, `/privacy`, `/terms`) |
+| Website | https://web-nine-phi-84.vercel.app, until there is a domain. The home page: the promise; who it's for; a voice note's journey (`/#how`); three ways to talk; what is kept of your voice; the questions (`/#faq`); how joining goes, and the waitlist (`/#join`). Then help, privacy and terms pages (`/support`, `/privacy`, `/terms`). A link to it shows a preview picture: the promise and Rosa's note, Spanish to English |
 | How people join | They leave their email on the website's waitlist. The owner invites them in batches, and TestFlight emails each one an invitation |
 
 ## 3. Who the first users are
@@ -59,6 +60,16 @@ around, and the example it uses everywhere:
 
 A soft launch works only in **pairs**: both people need Shinar to talk to
 each other. Ask people to join with the person they want to talk to.
+
+The website says it the same way, under "Made for people a language apart":
+a grandmother and her grandson, your partner's family, the friend who moved
+home. Only Rosa's pair names languages, since only Spanish and English have
+been heard in her voice; do the same until other pairs have been heard.
+
+A go-to-market report on the website exists (explee.com, made 2026-11-20).
+It sits behind a browser check, so it is not in this brief yet. When the
+owner shares its text, its audiences and channels belong here and in
+section 10.
 
 ## 4. What a tester can do today
 
@@ -200,6 +211,15 @@ voice, "in your voice", "Show original", "the phone's voice", "Try it first",
 When the store listing is written (not yet, section 2), "Break the language
 barrier" fits the App Store's 30-character subtitle.
 
+Lines that set Shinar apart from the apps around it (section 11), without
+naming them:
+
+- "For the people you love who speak another language." Not travel phrases,
+  not customer service.
+- "You don't have to be awake at the same time. Send a note; they hear it in
+  their language, in your voice, when they're free."
+- "Translated, and still in your voice."
+
 ## 9. What we'd like from you
 
 1. **The waitlist announcement**: a short post for each channel the owner
@@ -220,6 +240,12 @@ barrier" fits the App Store's 30-character subtitle.
 5. **A feedback ask** for after the first week: three or four questions the
    owner can send, about whether people kept talking, which languages, what
    broke, and whether they would want calls.
+
+**Link previews.** A link to the website shows a picture (1200 by 630): the
+promise, and Rosa's note going from Spanish to English. It is drawn from the
+site's own words, so it changes when they do. Before a post goes out, paste
+the link in a chat to yourself and look at the preview; WhatsApp and X keep
+an old preview for a while after a change.
 
 **How testers send feedback:** in the TestFlight app, open Shinar and choose
 "Send Beta Feedback", or take a screenshot in Shinar and share it as beta
@@ -259,3 +285,53 @@ Ask before relying on any of these:
    Rosa, from someone who agrees.
 7. **Age.** Shinar is for people 16 and over (decided 2026-11-19). Say so
    where age comes up, and don't aim anything at younger people.
+
+## 11. The apps around Shinar
+
+Looked at on 2026-11-20, from their websites (https://voicelink.tech,
+https://www.1voice.ai). Shinar is not the only app that speaks across
+languages. Know what the others say, so that Shinar says something else.
+Never name them in public posts.
+
+| | Voicelink | 1Voice | Shinar |
+| --- | --- | --- | --- |
+| Who it is for | Travel, family and friends, work | Businesses: customer service, sales, bookings | People who already know each other and don't share a language |
+| How people talk | Live, face to face: "manual" (record, then hear it) or "autopilot" (it listens and translates as you go) | Phone calls, with an AI voice answering | Voice notes and text messages between two people anywhere; an interpreter face to face |
+| Whose voice the listener hears | The site doesn't say; the app "plays the sentence" in the other language | "Human-like" AI voices | **The speaker's own**, made from a recording they agreed to keep |
+| What its site claims | "Speak. Listen. Understand.", real time, a list of languages | 60+ languages, under 50 ms, 99.9% accuracy, 1M+ users, compliance badges, customer logos | Only what the app does today (section 7) |
+| Price | 10 free minutes a day, ads for more, an unlimited plan; on the App Store and Google Play | A free trial, then sales | Free while testing; iPhone, by invitation |
+
+**What Shinar has that neither site says:**
+
+1. **Your own voice, with your agreement.** Neither promises that the
+   listener hears the speaker's voice. That is Shinar's whole promise; lead
+   with it, and keep the consent in the story.
+2. **Two people anywhere, not at the same time.** They sell "instant" and
+   "real time"; Shinar can't, and shouldn't pretend to. A voice note waits
+   until the other person is free, so a grandmother and a grandson in
+   different time zones can still talk. Say the wait plainly (a few seconds),
+   and say why notes suit families.
+3. **For people you know.** Not phrases for a holiday, not a call centre.
+   You add someone by their ID; nobody can find you without it.
+4. **Plain and honest.** Their pages are full of numbers and badges.
+   Shinar's has a real example, real limits, and a privacy page that names
+   who helps. That difference is worth keeping.
+
+**Borrowed for the website, 2026-11-20** (all within section 7):
+
+- A start in three steps, as Voicelink has ("download, choose two languages,
+  start speaking"): the waitlist now says how joining goes, with the pair
+  first.
+- Who it's for, by relationship (Voicelink's travel, family, work): only the
+  people part.
+- The ways to talk, as Voicelink shows its two modes: voice notes, text
+  messages and the interpreter.
+- One short line under the button on what trying it takes, as both have
+  ("Free minutes every day", "No credit card required"): "Free while we
+  test. On iPhone, by invitation."
+- A preview picture for links (section 9).
+
+**Not borrowed, and not to be** (section 7 still holds): "real time",
+"instant", a time in milliseconds; a number of languages, users or
+countries; accuracy figures; "trusted by" logos and compliance badges; store
+badges; plans, ads for minutes, "unlimited"; calls.

@@ -1,0 +1,159 @@
+.ways {
+  max-width: var(--max);
+  margin-inline: auto;
+  padding: 64px var(--gutter);
+}
+
+.cards {
+  display: grid;
+  gap: 40px;
+  margin-top: 40px;
+}
+
+/* The glimpse: the deepest layer, like the phone frames' bezel, so their
+   raised cards stand out on it as they do in the app. */
+.glimpse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 24px 20px;
+  border-radius: 20px;
+  background: var(--bg-deep);
+}
+
+.title {
+  margin-top: 20px;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.text {
+  max-width: 30em;
+  margin-top: 6px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--fg2);
+}
+
+/* Their card: bgRaised, radius 12, as the voice note states draw it. */
+.note {
+  width: min(100%, 300px);
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--bg-raised);
+}
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* Part way through playing. */
+.half {
+  clip-path: inset(0 58% 0 0);
+}
+
+.duration {
+  font-size: 12px;
+  color: var(--fg2);
+  font-variant-numeric: tabular-nums;
+}
+
+.words {
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.meta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--fg2);
+}
+
+.link {
+  color: var(--them);
+}
+
+.listen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+/* The listen button of their text card: mint, as everything of theirs. */
+.listenButton {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--them-ring);
+  color: var(--them);
+}
+
+/* The interpreter: the speaker's language in warm white, the listener's in
+   mint on raised petrol, and the translation in mint, as in the app. */
+.interpreter {
+  width: min(100%, 300px);
+}
+
+.chips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--fg);
+}
+
+.chipYou,
+.chipThem {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.chipYou {
+  background: var(--you);
+  color: var(--on-you);
+}
+
+.chipThem {
+  background: var(--bg-raised);
+  color: var(--them);
+}
+
+.said {
+  margin-top: 20px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--fg2);
+}
+
+.heard {
+  margin-top: 6px;
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--them);
+}
+
+@media (min-width: 900px) {
+  .ways {
+    padding-block: 96px;
+  }
+
+  .cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .glimpse {
+    min-height: 220px;
+  }
+}

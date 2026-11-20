@@ -1,0 +1,50 @@
+.who {
+  max-width: var(--max);
+  margin-inline: auto;
+  padding: 64px var(--gutter);
+}
+
+/* Each example a sentence in large type: who, in the text colour, then the
+   rest of the sentence quieter. */
+.examples {
+  display: grid;
+  gap: 28px;
+  margin-top: 32px;
+}
+
+.example {
+  max-width: 34em;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 20px;
+  line-height: 1.45;
+  color: var(--fg2);
+}
+
+.lead {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.line {
+  max-width: 36em;
+  margin-top: 32px;
+  font-size: 16px;
+  color: var(--fg2);
+}
+
+@media (min-width: 900px) {
+  .who {
+    padding-block: 96px;
+  }
+
+  .examples {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 32px;
+    margin-top: 40px;
+  }
+
+  .example {
+    font-size: 22px;
+  }
+}

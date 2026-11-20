@@ -1310,6 +1310,39 @@ the owner's request)
 - Verify: `make web-preview`, then http://localhost:3100; `make ios-build`
   and `make android-build`, and the Welcome screen on each
 
+**Checkpoint 18.9: the website after looking at two others** (built
+2026-11-20, at the owner's request)
+- The owner pointed at two apps that translate speech (voicelink.tech,
+  1voice.ai) and a go-to-market report on the site (explee.com), to improve
+  the website, its motion and the marketing brief. The report sits behind a
+  browser check and was not read; the brief says where it goes
+- The home page gains: a header that stays at the top, with "How it works",
+  "Questions" and "Try it first", on every page; under the hero's buttons,
+  "See how it works" and "Free while we test. On iPhone, by invitation."; the
+  Welcome screen's two voices, large, behind the loop; "Made for people a
+  language apart" (three relationships, only Rosa's naming languages); "Three
+  ways to talk" (voice notes, text messages, the interpreter, each drawn from
+  the app's parts); how joining goes, in three steps, above the form, on the
+  deepest layer
+- Motion, from Pearl's own vocabulary: the mark's splash intro plays once in
+  the home page's header; the hero's words rise as the page opens, and the
+  sections rise 8 and fade in as they come into view (the wordmark's
+  entrance). Reduce Motion: nothing moves or hides; nothing is hidden without
+  JavaScript either
+- The journey works out its step from where the steps are, so a jump down
+  the page and back lands on the right one
+- A link preview picture, `/og.png`, drawn at build time from the page's
+  words; the site's address is `SITE_URL` in `web/lib/site.ts`
+- The marketing brief: section 11, the apps around Shinar, what sets it
+  apart and what not to borrow; lines for posts; the site's new parts
+- Text messages are on the page, as in the brief, though checkpoint 15.2 has
+  not yet been checked on two phones; if that check fails, the card comes off
+- Checked here: the build; the page at a phone's width and a desktop's, under
+  Reduce Motion, and the privacy page, in headless Chrome screenshots; the
+  picture. Not looked at in a real browser
+- Verify: `make web-preview`, then http://localhost:3100 at a phone's width
+  and a desktop's; scroll down and back up; open http://localhost:3100/og.png
+
 Asked on 2026-11-02 and put off by the owner: telling people when a new
 version is out. Two ways were weighed: our server answering with the latest
 and minimum build for each phone (works on TestFlight and both phones, a

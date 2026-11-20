@@ -22,3 +22,163 @@
 .small .word {
   font-size: 16px;
 }
+
+/* The splash's intro, 1.5 s on one clock (Pearl, "Splash"):
+     0-13%    hold (200 ms)
+     13-33%   the circles part by 9 each and the lens fades out (300 ms)
+     33-60%   one ripple per circle, scale 1 to 1.6, opacity 0.6 to 0 (400 ms)
+     60-80%   the circles return and the lens fades in (300 ms)
+     80-100%  the wordmark fades in, rising 8 (300 ms)
+   Reduce Motion: only the wordmark fades in. */
+
+.intro {
+  overflow: visible;
+}
+
+.intro .left,
+.intro .right,
+.intro .lens,
+.ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: 1.5s var(--ease) both;
+}
+
+.intro .left {
+  animation-name: partLeft;
+}
+
+.intro .right {
+  animation-name: partRight;
+}
+
+.intro .lens {
+  animation-name: lens;
+}
+
+/* A ripple starts where its circle has moved to, so it moves with it. */
+.ripple.left {
+  animation-name: rippleLeft;
+}
+
+.ripple.right {
+  animation-name: rippleRight;
+}
+
+.wordIntro {
+  animation: word 1.5s var(--ease) both;
+}
+
+@keyframes partLeft {
+  0%,
+  13% {
+    transform: translateX(0);
+  }
+  33%,
+  60% {
+    transform: translateX(-9px);
+  }
+  80%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes partRight {
+  0%,
+  13% {
+    transform: translateX(0);
+  }
+  33%,
+  60% {
+    transform: translateX(9px);
+  }
+  80%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes lens {
+  0%,
+  13% {
+    opacity: 1;
+  }
+  33%,
+  60% {
+    opacity: 0;
+  }
+  80%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes rippleLeft {
+  0%,
+  33% {
+    opacity: 0;
+    transform: translateX(-9px) scale(1);
+  }
+  33.1% {
+    opacity: 0.6;
+    transform: translateX(-9px) scale(1);
+  }
+  60%,
+  100% {
+    opacity: 0;
+    transform: translateX(-9px) scale(1.6);
+  }
+}
+
+@keyframes rippleRight {
+  0%,
+  33% {
+    opacity: 0;
+    transform: translateX(9px) scale(1);
+  }
+  33.1% {
+    opacity: 0.6;
+    transform: translateX(9px) scale(1);
+  }
+  60%,
+  100% {
+    opacity: 0;
+    transform: translateX(9px) scale(1.6);
+  }
+}
+
+@keyframes word {
+  0%,
+  80% {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro .left,
+  .intro .right,
+  .intro .lens,
+  .ripple {
+    animation: none;
+  }
+
+  .ripple {
+    opacity: 0;
+  }
+
+  .wordIntro {
+    animation: fade 0.3s var(--ease) both;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}

@@ -1007,9 +1007,11 @@ parts (`docs/design/brief-4-motion.md` is the brief for its design).
 
 ```
 web/app          the home page, its layout, the Pearl tokens (globals.css), the
-                 icon; privacy/, terms/ and support/, the pages the stores ask for
+                 icon; privacy/, terms/ and support/, the pages the stores ask for;
+                 og.png/, the link preview picture, drawn at build time
 web/components   the logo, the note parts (dots, play button, bar, rings),
-                 the hero's loop, the journey and its stage frames, the sample
+                 the hero's loop, the journey and its stage frames, the sample,
+                 the header and footer, who it's for, the ways to talk
 web/lib/site.ts  the name (once, ADR 0021), the copy, the journey's stages
 web/public       files served as they are; sample/ holds the hero's audio
 ```
@@ -1027,3 +1029,11 @@ terms pages (ADR 0032), linked from every page's footer. The privacy page
 says only what the apps and the server do, and names the services the apps'
 privacy pages name; it changes when they change. Shinar is for people 16
 and over.
+
+The home page, in order: the promise, with the loop over the Welcome
+screen's two voices; who it's for; the journey (`#how`); the three ways to
+talk; what is kept of your voice; the questions; how joining goes and the
+waitlist (`#join`). Its motion is Pearl's own: the mark's intro in the
+header, and the wordmark's rise-and-fade as each part comes into view; under
+Reduce Motion, nothing moves. A link to the site shows `/og.png`, so the
+site's address is set once, as `SITE_URL` in `web/lib/site.ts`.

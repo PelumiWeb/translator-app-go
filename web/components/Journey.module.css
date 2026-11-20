@@ -98,10 +98,11 @@
     display: block;
   }
 
-  /* The frame is about 540 high: keep it in the middle of the window. */
+  /* The frame is about 540 high: keep it in the middle of the window, below
+     the header. */
   .sticky {
     position: sticky;
-    top: max(24px, calc(50vh - 270px));
+    top: max(calc(var(--header) + 16px), calc(50vh - 270px));
   }
 
   .swap {

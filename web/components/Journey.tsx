@@ -5,31 +5,44 @@ import { STAGES } from "@/lib/site";
 import { StageFrame } from "./StageFrame";
 import s from "./Journey.module.css";
 
-// The journey, told while scrolling. The step in the middle of the window is
-// the active one: on a wide screen one frame stays beside the steps and
-// shows it; on a narrow one each step carries its own frame, which plays when
-// its step is active. Scrolling back goes back; the page scrolls as usual.
+// The journey, told while scrolling. The active step is the last one whose
+// top has passed the middle of the window: on a wide screen one frame stays
+// beside the steps and shows it; on a narrow one each step carries its own
+// frame, which plays when its step is active. Scrolling back goes back; the
+// page scrolls as usual. Worked out from where the steps are, not from which
+// one crossed the middle, so a jump (a link to #join, then back up) lands on
+// the right step too.
 export function Journey() {
   const [active, setActive] = useState(0);
   const steps = useRef<(HTMLLIElement | null)[]>([]);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) setActive(Number((entry.target as HTMLElement).dataset.index));
-        }
-      },
-      // A thin band across the middle of the window.
-      { rootMargin: "-45% 0px -45% 0px" },
-    );
-    for (const step of steps.current) if (step) observer.observe(step);
-    return () => observer.disconnect();
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const middle = window.innerHeight / 2;
+      let current = 0;
+      steps.current.forEach((step, i) => {
+        if (step && step.getBoundingClientRect().top < middle) current = i;
+      });
+      setActive(current);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
   }, []);
 
   return (
-    <section className={s.journey} aria-labelledby="journey-title">
-      <div className={s.intro}>
+    <section id="how" className={s.journey} aria-labelledby="journey-title">
+      <div className={s.intro} data-reveal>
         <h2 id="journey-title" className="title-2">
           How a voice note crosses the language barrier
         </h2>

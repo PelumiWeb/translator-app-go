@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { APP_NAME, CONTACT_EMAIL, PAGES_UPDATED } from "@/lib/site";
-import { Lockup } from "./Lockup";
+import { CONTACT_EMAIL, PAGES_UPDATED } from "@/lib/site";
 import { SiteFooter } from "./SiteFooter";
+import { SiteHeader } from "./SiteHeader";
 import s from "./TextPage.module.css";
 
 // A page of plain reading: help, privacy and terms. Each gives the contact
@@ -13,11 +13,7 @@ export function TextPage({ title, children }: { title: string; children: ReactNo
   }
   return (
     <>
-      <header className={s.header}>
-        <a href="/" aria-label={`${APP_NAME}, home`} className={s.home}>
-          <Lockup />
-        </a>
-      </header>
+      <SiteHeader />
       <main className={s.main}>
         <h1 className={s.title}>{title}</h1>
         <p className={s.updated}>Updated {PAGES_UPDATED}</p>
