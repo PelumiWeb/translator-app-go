@@ -1132,8 +1132,8 @@ the help page already (ADR 0032).
   the account's sessions and stops it signing in or sending) and
   `make account-delete HANDLE=...` (deletion asked for by email, which 18.7
   left to do)
-- Filtering, proposed and to confirm with the owner: translations are made
-  with the translator's own profanity option, which masks offensive words
+- Filtering (agreed by the owner, 2026-11-21): translations are made with
+  the translator's own profanity option, which masks offensive words
   in the translation, and so in the voice made from it (Azure's
   `profanityAction`)
 - ADR 0035
@@ -1476,8 +1476,9 @@ of milestone 16 and milestone 21. iPhone only.
   developer account)
 - The call button goes, on both phones, since milestone 17 is dropped for
   now. A few lines each, so Android does not wait for milestone 22
-- The terms: who runs Shinar and the governing law (the owner decides), and
-  the subscription: the price, the trial, renewal, and cancelling and refunds
+- The terms: Shinar is run by the owner, as an individual in Nigeria, under
+  Nigerian law (the owner's choice, 2026-11-21), named as the App Store names
+  the seller; and the subscription: the price, the trial, renewal, and cancelling and refunds
   through Apple. The privacy pages: what Apple tells us of a purchase (the
   product and its dates, never card details)
 - The two test accounts stay behind the hidden entry (13.5); the review
@@ -1501,9 +1502,19 @@ of milestone 16 and milestone 21. iPhone only.
 **Checkpoint 18.13: audio off the machine's disk**
 - Recordings, kept voices and the speech made from them are on the machine's
   disk, with no backup (ADR 0023). Before paying people trust it with their
-  voices, they move to object storage (Cloudflare R2 or Azure Blob Storage,
-  to decide). A command moves the files already kept, and the phones
-  download through short-lived signed links
+  voices, they move to Cloudflare R2 (the owner's choice, 2026-11-21). Its
+  S3 API is called with `net/http`, the requests signed with the standard
+  library: no Go module. One bucket in Western Europe, between Lagos and
+  Madrid. A command moves the files already kept, and the phones download
+  straight from R2 through short-lived signed links, so downloads cost
+  nothing and do not pass through the machine
+- What it costs, at 30 minutes of voice notes a month per sender,
+  compressed: nothing within the free 10 GB; after a year, about $2.50 a
+  month for 1,000 senders, $30 for 10,000 and $320 for 100,000 ($0.015 per
+  GB a month, downloads free). Under a cent a month per subscriber
+- The owner: a Cloudflare account, R2 switched on (it asks for a payment
+  method), the bucket, and an API token for that bucket alone, into
+  `/etc/shinar/env`
 - Audio is kept compressed (AAC), about 8 times smaller than WAV. The iPhone
   encodes with its own encoder before uploading, and Fish Audio is asked for
   compressed audio. The server accepts both, for Android's builds until
@@ -1626,7 +1637,7 @@ covers group rooms as well as rooms of two.
 ## [ ] Milestone 21: Paying for Shinar, after a free trial
 
 Added on 2026-11-21. On the App Store nobody uses Shinar free: a new person
-tries it free for a few days, within a cap, then subscribes to keep sending.
+tries it free for 7 days, within a cap, then subscribes to keep sending.
 iPhone only, through Apple's In-App Purchase, every purchase checked by our
 own server. Android's turn is milestone 22. No calls: what is sold is what
 the app does today.
@@ -1636,23 +1647,28 @@ anything used inside the app (Guideline 3.1.1), so Apple Pay, which is for
 physical goods, does not apply. Under the Small Business Program, Apple keeps
 15%.
 
-**The trial** (proposed, to confirm): Apple's own free trial on the
-subscription, an introductory offer. On the paywall the person chooses
-monthly or yearly and confirms with their Apple account; nothing is charged
-during the trial, and it becomes the paid plan unless they cancel. Apple
-gives each Apple account one trial per subscription group, so a new Shinar
-account does not bring a second one. Apple's signed record says when a
-period is a free trial, so the server applies the trial's cap then. The
-other way, a trial our server runs without asking for payment, would let
-anyone start again with a new account.
+**Decided by the owner on 2026-11-21:**
 
-**Still to decide:** the price, monthly and yearly; the trial's length (Apple
-offers 3 days, a week, 2 weeks, a month, and longer); its cap; the limits
-for subscribers; and who has to subscribe. The cap and the limits are
-settings. Proposed for who: sending (voice notes, messages, the
-interpreter's work on the server) needs a trial or a subscription; reading
-and hearing what you receive does not, since the sender's subscription paid
-for it.
+- **One subscription, $4.99 a month.** Apple sets the price in other
+  countries from it, and each can be changed. No yearly plan for now.
+- **Apple's own free trial, 7 days,** as the subscription's introductory
+  offer. The person confirms with their Apple account on the paywall;
+  nothing is charged during the 7 days, and the trial becomes the monthly
+  plan unless they cancel. Apple gives each Apple account one trial, so a
+  new Shinar account does not bring a second one. Apple's signed record says
+  when a period is the free trial, so the server applies the trial's cap
+  then. A trial run by our server, without payment details, would let anyone
+  start again with a new account.
+- **Only senders pay.** Sending a voice note or a message, and using the
+  interpreter, needs the trial or the subscription. Reading and hearing what
+  you are sent does not, and neither does asking for a text message's voice:
+  the sender's subscription paid for it. Rosa can sign up and hear her
+  grandson without paying, and subscribes when she wants to answer.
+
+**The trial's cap** (proposed, to confirm; settings): 10 minutes of voice
+notes and 50 messages over the 7 days, at most about 25 cents of engines per
+trial. Subscribers keep ADR 0029's daily limits, 10 minutes and 100
+messages.
 
 **What a minute costs** (2026-11-21, at the engines' paid rates): about 2
 cents a minute of voice note between two languages. Fish Audio is about 1.2
@@ -1671,10 +1687,10 @@ code does not wait for it)
 - Business, Compliance: the EU trader status (Digital Services Act). Spain
   is in the EU. A trader's address, phone and email are shown on the EU
   store
-- The subscriptions: one group, "Shinar", with a monthly and a yearly
-  subscription (product IDs such as `com.pelumi.shinar.monthly`; an ID can
-  never be used again, even after it is deleted), each with its price, name
-  and description, the free trial as its introductory offer, and a
+- The subscription: one group, "Shinar", holding one subscription with the
+  product ID `com.pelumi.shinar.monthly` (an ID can never be used again,
+  even after it is deleted), 1 month, $4.99; its name and description; a
+  free trial of 1 week as its introductory offer, in every country; and a
   screenshot of the paywall for review. Billing Grace Period on, so a failed
   card does not cut someone off at once. The first subscription is reviewed
   with an app version
@@ -1714,10 +1730,11 @@ code does not wait for it)
   (`POST /v1/jobs`, `POST /v1/speech`), which is now tied to a person and
   counted, closing the gap ADR 0029 left. Refused with `402` and
   `subscription_required`, or `429` and `trial_limit_reached`. Nothing of a
-  refused message is kept, as with the daily limits
-- Limits by access: the trial's `TRIAL_VOICE_MINUTES` and
-  `TRIAL_TEXT_MESSAGES`, counted over the whole trial; for subscribers, the
-  daily ones (ADR 0029)
+  refused message is kept, as with the daily limits. Reading, the audio, and
+  `POST /v1/messages/{id}/speech` for a message you were sent need no access
+- Limits by access: the trial's `TRIAL_VOICE_MINUTES` (10) and
+  `TRIAL_TEXT_MESSAGES` (50), counted over the whole trial; for subscribers,
+  the daily ones (ADR 0029)
 - One subscription, one account: a subscription tied to another account that
   still exists is refused, and the phone says why; one whose account was
   deleted moves to the account that restores it
@@ -1740,10 +1757,12 @@ code does not wait for it)
   `Transaction.updates`, listened to for as long as the app runs and owned
   by the container; each verified transaction sent to the server, and
   finished once the server has it; Restore (`AppStore.sync()`)
-- The paywall, after the voice step of sign-up and wherever sending is
-  refused: what Shinar does, the trial's length and cap, the price after it
-  and how often, that it renews until cancelled and how to cancel, links to
-  the Terms of Use and the privacy page, and Restore. Apple reviews this
+- The paywall, after the voice step of sign-up with "Not now" (you can still
+  read and hear what you are sent), and again whenever you try to send or
+  open the interpreter: what Shinar does, "7 days free, then $4.99 a month"
+  in the person's own currency, the trial's cap, that it renews every month
+  until cancelled and how to cancel, links to the Terms of Use and the
+  privacy page, and Restore. Apple reviews this
   screen closely (Guideline 3.1.2)
 - Profile: your plan (the trial ends on…, renews on…), Manage subscription
   (Apple's own sheet), Restore purchases. Deleting your account says first
@@ -1822,15 +1841,17 @@ Still open:
 6. Settled 2026-10-31: Google Cloud Translation translates messages on the
    server (ADR 0020). The owner also chose: two QR libraries on Android
    (ZXing core, Google's code scanner), and no city on profiles for now.
-7. Hosting, the domain, and storage for audio (milestone 18).
+7. Hosting, the domain, and storage for audio (milestone 18). Storage
+   settled 2026-11-21: Cloudflare R2 (checkpoint 18.13).
 8. Settled 2026-10-31: milestone 12 comes back, after milestone 14.
    Feasible: Android decodes WhatsApp's audio itself;
    on the iPhone, one test on a real phone settles whether iOS decodes it and
    whether WhatsApp's share menu offers the app. The reply reaches WhatsApp as
    an audio file, not a voice-note bubble.
-9. The price, the trial's length and cap, the subscribers' limits, and who
-   has to subscribe (milestone 21).
-10. Who runs Shinar, and the governing law, for the terms and Apple's Paid
-    Applications Agreement (checkpoint 18.11).
-11. How Guideline 1.2's filtering is met: the translator's profanity option,
-    or something else (checkpoint 16.1).
+9. Settled 2026-11-21: one subscription at $4.99 a month, Apple's 7-day free
+   trial, and only senders pay (milestone 21). The trial's cap is proposed,
+   still to confirm.
+10. Settled 2026-11-21: the owner runs Shinar as an individual in Nigeria,
+    under Nigerian law (checkpoint 18.11).
+11. Settled 2026-11-21: Guideline 1.2's filtering is the translator's
+    profanity option (checkpoint 16.1).

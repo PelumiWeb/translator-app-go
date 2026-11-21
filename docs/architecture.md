@@ -811,6 +811,8 @@ in the original spec; the owner approved them on 2026-10-04.
 | Azure AI Translator, free tier F0 (*added* 2026-11-09) | translates room messages while Google cannot be billed (ADR 0020, addendum). Called with `net/http`: no Go module. |
 | Groq, Whisper large-v3 (*added* 2026-11-11) | transcribes the recordings phones cannot (ADR 0009). Called with `net/http` and `mime/multipart`: no Go module. |
 | Apple Push Notification service and Firebase Cloud Messaging (*added* 2026-11-15) | notifications to iPhones and Android phones (ADR 0026). Called with `net/http`; the tokens are signed with `crypto/ecdsa` and `crypto/rsa`: no Go module. |
+| Apple's App Store Server API and App Store Server Notifications (*added* 2026-11-21) | subscriptions (milestone 21): checking purchases, and hearing of renewals, refunds and expiry. Called with `net/http`; Apple's signed records are checked with `crypto/x509` and `crypto/ecdsa`: no Go module. |
+| Cloudflare R2 (*added* 2026-11-21) | object storage for recordings, kept voices and the speech made from them (checkpoint 18.13), with free downloads. Its S3 API is called with `net/http`, the requests signed with `crypto/hmac`: no Go module. |
 
 No router (Go 1.22+ `ServeMux` covers method and path patterns, so chi is not
 needed), no migration tool (SQL files embedded with `embed`, applied by a small
@@ -844,6 +846,7 @@ No DI framework, no Retrofit, no Room.
 | AuthenticationServices, Security (Keychain) | part of the SDK; Sign in with Apple and keeping the session token (ADR 0018) |
 | Core Image, VisionKit | part of the SDK; drawing the user's QR code, and scanning someone's |
 | UserNotifications, and the Push Notifications capability | part of the SDK; notifications through APNs, with no Firebase (ADR 0026) |
+| StoreKit 2, and the In-App Purchase capability (*added* 2026-11-21) | part of the SDK; the subscription and its free trial (milestone 21) |
 | whisper.cpp (the same submodule) | the same engine as on Android |
 | CMake and Ninja, through Homebrew | build whisper.cpp into an xcframework. Already installed on the dev machine (CMake 4.0, Ninja 1.12), but new as build tools of this project |
 | Swift Testing | tests; part of Xcode |
