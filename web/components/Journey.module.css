@@ -59,6 +59,11 @@
   display: none;
 }
 
+/* The rail beside the steps, on a wide screen only. */
+.rail {
+  display: none;
+}
+
 @media (min-width: 900px) {
   .journey {
     padding-block: 96px;
@@ -105,24 +110,68 @@
     top: max(calc(var(--header) + 16px), calc(50vh - 270px));
   }
 
-  .swap {
-    animation: swap 0.4s var(--ease) both;
+  /* The rail runs from the first step's point to the last one's (Journey.tsx
+     measures it), 2 wide, its centre 6 from the left. It fills down to the
+     middle of the window, where a step becomes active. */
+  /* The room below the last step keeps the phone in place while that step is
+     read, even in a short window. */
+  .track {
+    position: relative;
+    padding-bottom: 12vh;
   }
-}
 
-@keyframes swap {
-  from {
-    opacity: 0;
+  .steps {
+    padding-left: 40px;
   }
-  to {
-    opacity: 1;
+
+  .rail {
+    display: block;
+    position: absolute;
+    left: 5px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--line);
+  }
+
+  .railFill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--fg2);
+    transform-origin: top;
+  }
+
+  /* Each step's point, on the rail, level with its count: an outlined
+     circle, filled once the journey has reached it. */
+  .count {
+    position: relative;
+  }
+
+  .count::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: -40px;
+    width: 12px;
+    height: 12px;
+    margin-top: -6px;
+    border: 2px solid var(--outline);
+    border-radius: 50%;
+    background: var(--bg);
+    transition:
+      background-color 0.3s var(--ease),
+      border-color 0.3s var(--ease);
+  }
+
+  .step[data-reached="true"] .count::before {
+    border-color: var(--fg);
+    background: var(--fg);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .step,
-  .swap {
+  .count::before {
     transition: none;
-    animation: none;
   }
 }

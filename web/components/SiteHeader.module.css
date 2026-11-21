@@ -79,3 +79,14 @@
     margin-right: 8px;
   }
 }
+
+/* A press gives a little, as a finger expects. */
+@media (prefers-reduced-motion: no-preference) {
+  .cta {
+    transition: transform 0.15s var(--ease);
+  }
+
+  .cta:active {
+    transform: scale(0.97);
+  }
+}

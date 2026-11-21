@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { CSSProperties } from "react";
+import { type CSSProperties, Fragment } from "react";
 import { HeroLoop } from "@/components/HeroLoop";
 import { Faq } from "@/components/Faq";
 import { Journey } from "@/components/Journey";
@@ -43,7 +43,15 @@ export default function Home() {
       <main>
         <section className={s.hero}>
           <div className={s.heroText}>
-            <h1 className={s.promise}>{PROMISE}</h1>
+            <h1 className={s.promise}>
+              {PROMISE.split(" ").map((word, i) => (
+                <Fragment key={i}>
+                  <span className={s.word} style={{ "--w": i } as CSSProperties}>
+                    {word}
+                  </span>{" "}
+                </Fragment>
+              ))}
+            </h1>
             <p className={s.promiseLine}>{PROMISE_LINE}</p>
             {hasSample() && <SamplePlayer original={SAMPLE.original} translated={SAMPLE.translated} />}
             <div className={s.actions}>

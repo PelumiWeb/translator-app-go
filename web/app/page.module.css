@@ -32,22 +32,38 @@
   color: var(--fg2);
 }
 
-/* The hero's words arrive one after another, each rising 8 as it fades in:
-   the wordmark's entrance, as the page opens. */
-.heroText > * {
+/* The promise is written down as the page opens, word by word, the way the
+   app writes down what someone says: each word arrives dim, then firms up
+   (Pearl's "words arriving"). The rest of the hero follows, each part rising
+   8 as it fades in: the wordmark's entrance. */
+.word {
+  animation: arrive 0.8s var(--ease) both;
+  animation-delay: calc(var(--w) * 60ms);
+}
+
+@keyframes arrive {
+  0% {
+    opacity: 0;
+  }
+  25%,
+  60% {
+    opacity: 0.44;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.heroText > :not(:first-child) {
   animation: rise 0.7s var(--ease) both;
 }
 
 .heroText > :nth-child(2) {
-  animation-delay: 0.08s;
+  animation-delay: 0.35s;
 }
 
-.heroText > :nth-child(3) {
-  animation-delay: 0.16s;
-}
-
-.heroText > :nth-child(n + 4) {
-  animation-delay: 0.24s;
+.heroText > :nth-child(n + 3) {
+  animation-delay: 0.45s;
 }
 
 @keyframes rise {
@@ -90,6 +106,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .word,
   .heroText > * {
     animation: none;
   }
@@ -291,5 +308,23 @@
 
 .secondary:hover {
   border-color: var(--fg2);
+}
+
+/* A press gives a little, as a finger expects. */
+@media (prefers-reduced-motion: no-preference) {
+  .cta {
+    transition: transform 0.15s var(--ease);
+  }
+
+  .secondary {
+    transition:
+      border-color 0.2s var(--ease),
+      transform 0.15s var(--ease);
+  }
+
+  .cta:active,
+  .secondary:active {
+    transform: scale(0.97);
+  }
 }
 

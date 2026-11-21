@@ -9,15 +9,21 @@
   text-align: left;
 }
 
+/* Its own stack, so the names' z-index stays inside the form. */
 .phones {
   display: flex;
   gap: 8px;
   margin: 0;
   padding: 0;
   border: 0;
+  isolation: isolate;
 }
 
+/* Each choice a raised capsule. The chosen one's warm white is a separate
+   capsule (.chosen) that slides from one to the other; the names sit above
+   it, and the chosen name turns petrol as it arrives. */
 .phone {
+  position: relative;
   display: inline-flex;
   align-items: center;
   height: 44px;
@@ -27,12 +33,22 @@
   color: var(--fg);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s var(--ease), color 0.2s var(--ease);
+  transition: color 0.35s var(--ease);
 }
 
 .phone[data-selected="true"] {
-  background: var(--you);
   color: var(--on-you);
+}
+
+.chosen {
+  position: absolute;
+  inset: 0;
+  background: var(--you);
+}
+
+.phoneName {
+  position: relative;
+  z-index: 1;
 }
 
 .phone:has(input:focus-visible) {
@@ -40,7 +56,14 @@
   outline-offset: 3px;
 }
 
+/* The Android line opens under the choices; the space above it is inside
+   what opens, so nothing jumps when it shuts. */
+.noteWrap {
+  overflow: hidden;
+}
+
 .note {
+  padding-top: 12px;
   font-size: 15px;
   color: var(--fg2);
 }
@@ -96,6 +119,17 @@
 .button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* A press gives a little, as a finger expects. */
+@media (prefers-reduced-motion: no-preference) {
+  .button {
+    transition: transform 0.15s var(--ease);
+  }
+
+  .button:not(:disabled):active {
+    transform: scale(0.97);
+  }
 }
 
 .failed {

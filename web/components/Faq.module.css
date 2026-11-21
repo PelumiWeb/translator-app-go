@@ -26,19 +26,42 @@
   display: none;
 }
 
-.question::after {
-  content: "+";
+/* The sign: two 14 bars. Open, the upright one turns flat, and the plus is
+   a minus; it turns back as soon as the answer starts closing. */
+.sign {
+  position: relative;
   flex: none;
-  width: 24px;
-  font-size: 22px;
-  font-weight: 400;
-  line-height: 1;
-  text-align: center;
-  color: var(--fg2);
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
 }
 
-details[open] > .question::after {
-  content: "\2212";
+.sign::before,
+.sign::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 14px;
+  height: 1.5px;
+  margin-top: -0.75px;
+  border-radius: 1px;
+  background: var(--fg2);
+}
+
+.sign::after {
+  transform: rotate(90deg);
+  transition: transform 0.45s var(--ease);
+}
+
+.details[open]:not([data-closing]) .sign::after {
+  transform: rotate(0deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sign::after {
+    transition: none;
+  }
 }
 
 .answer {

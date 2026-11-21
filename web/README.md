@@ -23,9 +23,21 @@ Each installs the packages first when `package-lock.json` has changed. Node
   the journey and its stage frames, the sample player, who it's for, the
   ways to talk, the waitlist, the questions, the header and footer, the
   layout of the text pages, and `Reveals`, which lets each part marked
-  `data-reveal` rise into view
+  `data-reveal` rise into view; `MotionProvider`, round every page, which
+  sets up Motion (ADR 0028, addendum)
 - `lib/site.ts`: the name, written only here until its trademark check is
   done (ADR 0021); the site's address; the copy; the journey's stages
+- `lib/motion.ts`: Pearl's easing and duration for Motion's animations;
+  `lib/motion-features.ts`, Motion's features, loaded after the page is shown
+
+## Motion
+
+CSS keyframes play what loops or runs on its own; Motion (`framer-motion`)
+animates what changes with the page's state. Use its `m` components (`m.div`,
+not `motion.div`: the provider is `strict`, so the full `motion` component
+fails rather than loading every feature up front), and import from
+`framer-motion`, not `motion/react`, which would bring all of Motion into the
+first load. Reduce Motion is handled by the provider: only fades remain.
 
 ## The sample in the hero
 

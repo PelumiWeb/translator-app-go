@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, m } from "framer-motion";
 import { useState, type FormEvent } from "react";
 import { CONTACT_EMAIL, WAITLIST } from "@/lib/site";
 import s from "./Waitlist.module.css";
@@ -46,34 +47,45 @@ export function Waitlist() {
     }
   }
 
-  if (state.kind === "joined") {
-    return (
-      <p className={s.joined} role="status">
-        {state.phone === "iphone" ? WAITLIST.joinedIPhone : WAITLIST.joinedAndroid}
-      </p>
-    );
-  }
-
   const sending = state.kind === "sending";
-  return (
-    <form className={s.form} onSubmit={join}>
-      <fieldset className={s.phones}>
-        <legend className="visually-hidden">Your phone</legend>
-        {PHONES.map((option) => (
-          <label key={option.value} className={s.phone} data-selected={phone === option.value}>
-            <input
-              type="radio"
-              name="phone"
-              value={option.value}
-              checked={phone === option.value}
-              onChange={() => setPhone(option.value)}
-              className="visually-hidden"
-            />
-            {option.label}
-          </label>
-        ))}
-      </fieldset>
-      {phone === "android" && <p className={s.note}>{WAITLIST.android}</p>}
+  const form = (
+    <m.form key="form" className={s.form} onSubmit={join} exit={{ opacity: 0, y: -8, transition: { duration: 0.25 } }}>
+      <div>
+        {/* The chosen phone's warm-white capsule slides across to the other
+            choice, under its name. */}
+        <fieldset className={s.phones}>
+          <legend className="visually-hidden">Your phone</legend>
+          {PHONES.map((option) => (
+            <label key={option.value} className={s.phone} data-selected={phone === option.value}>
+              <input
+                type="radio"
+                name="phone"
+                value={option.value}
+                checked={phone === option.value}
+                onChange={() => setPhone(option.value)}
+                className="visually-hidden"
+              />
+              {phone === option.value && (
+                <m.span layoutId="waitlist-phone" className={s.chosen} style={{ borderRadius: 999 }} transition={{ duration: 0.35 }} />
+              )}
+              <span className={s.phoneName}>{option.label}</span>
+            </label>
+          ))}
+        </fieldset>
+        <AnimatePresence initial={false}>
+          {phone === "android" && (
+            <m.div
+              key="android"
+              className={s.noteWrap}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+            >
+              <p className={s.note}>{WAITLIST.android}</p>
+            </m.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       <label className={s.field}>
         <span className={s.label}>Your email</span>
@@ -112,6 +124,20 @@ export function Waitlist() {
           "To be taken off the list, reply to any email from us."
         )}
       </p>
-    </form>
+    </m.form>
+  );
+
+  // Once joined, the form gives way to the thanks: it fades and rises out,
+  // then the thanks rises in, the page's own entrance.
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {state.kind === "joined" ? (
+        <m.p key="joined" className={s.joined} role="status" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          {state.phone === "iphone" ? WAITLIST.joinedIPhone : WAITLIST.joinedAndroid}
+        </m.p>
+      ) : (
+        form
+      )}
+    </AnimatePresence>
   );
 }

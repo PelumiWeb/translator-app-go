@@ -1,20 +1,19 @@
 import { FAQ } from "@/lib/site";
 import { WithContact } from "./Contact";
+import { FaqItem } from "./FaqItem";
 import s from "./Faq.module.css";
 
-// Each question opens on its own, with no script: the browser's own
-// disclosure, which keyboards and screen readers already know.
+// The questions, each opening on its own (FaqItem).
 export function Faq() {
   return (
     <ul className={s.list}>
       {FAQ.map(({ question, answer }) => (
         <li key={question} className={s.item}>
-          <details>
-            <summary className={s.question}>{question}</summary>
+          <FaqItem question={question}>
             <p className={s.answer}>
               <WithContact text={answer} />
             </p>
-          </details>
+          </FaqItem>
         </li>
       ))}
     </ul>

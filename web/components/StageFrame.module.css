@@ -11,9 +11,16 @@
   color: var(--fg2);
 }
 
+/* The travelling frame's place line: the old one is lifted out of the flow
+   (positioned against this row) while the new one fades in. */
+.placeRow {
+  position: relative;
+}
+
 /* A phone's screen: the page's petrol inside a bezel of the deepest layer,
    as the handoff's mock-ups draw it. */
 .screen {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -23,6 +30,14 @@
   border-radius: 40px;
   background: var(--bg);
   overflow: hidden;
+}
+
+/* One stage's screen inside the travelling frame. */
+.scene {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 
 /* The onboarding progress bar: 3 high, 6 apart, done in fg, to do at 20%. */
@@ -62,22 +77,39 @@
   width: 100%;
 }
 
-/* Cards: mine warm white, theirs raised petrol. Radius 12, padding 16. */
+/* Cards: mine warm white, theirs raised petrol. Radius 12, padding 16. The
+   colour is a surface behind the words (StageFrame.tsx says why). */
 
 .card {
+  position: relative;
   width: 100%;
   padding: 16px;
+}
+
+.surface {
+  position: absolute;
+  inset: 0;
   border-radius: 12px;
 }
 
+.content {
+  position: relative;
+}
+
 .mine {
-  background: var(--you);
   color: var(--on-you);
 }
 
+.mine > .surface {
+  background: var(--you);
+}
+
 .theirs {
-  background: var(--bg-raised);
   color: var(--fg);
+}
+
+.theirs > .surface {
+  background: var(--bg-raised);
 }
 
 .text {
