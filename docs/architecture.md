@@ -876,9 +876,10 @@ with the Android one. The only Swift packages are the ones ML Kit needs.
 | Node.js 20.9 or later, with npm | builds the site; the dev machine has it through nvm |
 | `next` 16.4, `react` and `react-dom` 19.3 | Next.js, which the owner chose for the website, and the React it needs |
 | `typescript` 5.9, `@types/react`, `@types/react-dom`, `@types/node` (development only) | the site is written in TypeScript; `next build` checks the types |
+| `framer-motion` 14.10.1, with `motion-dom`, `motion-utils` and `tslib` (*added* 2026-11-21) | Motion, the animation library: the journey's card moving between screens, the questions opening, the waitlist's choice sliding (ADR 0028, addendum). Imported as `framer-motion`, not through the `motion` package, so the build can leave out what the site doesn't use |
 
-No CSS framework, no animation library, no linter, no test runner. IBM Plex
-Sans comes through `next/font`, part of Next.js.
+No CSS framework, no linter, no test runner. Not motion-primitives, which
+needs Tailwind. IBM Plex Sans comes through `next/font`, part of Next.js.
 
 ## 7. Planned ADRs
 
@@ -920,6 +921,8 @@ Written in the milestone where the decision is implemented.
 | 0031 | The website on Vercel (written) | 18 |
 | 0032 | Help, privacy and terms pages, and a minimum age of 16 (written) | 18 |
 | 0033 | The language barrier as the theme (written) | 18 |
+| 0034 | Paid from the start: subscriptions with a free trial, checked by our server | 21 |
+| 0035 | Block, report, and acting on reports | 16 |
 
 ## 8. Known limits
 
@@ -954,7 +957,9 @@ People sign up with their name and their voice, and can talk to anyone, each
 in their own language: what one says reaches the other in the listener's
 language and the speaker's voice. Breaking that language barrier is the whole
 point, and the theme of everything the apps and the website say (ADR 0033). Voice notes first (milestone 14), then text
-messages (15), later live calls for premium users (17).
+messages (15). Live calls (17) are dropped for now (2026-11-21). On the App
+Store, Shinar is paid from the start (milestone 21): a free trial with a cap,
+then a subscription, on the iPhone first.
 
 What stays: the two native apps and their seams; transcription on the phone
 with the server as the fallback; the Go server, Postgres, the job queue and
@@ -989,13 +994,19 @@ What changes:
   a phone that is not in it.
 - **Safety** (milestone 16): block, report, and acting on reports, before
   anyone can be found at random.
-- **Calls** (milestone 17): a stream, not jobs; designed when they come.
+- **Calls** (milestone 17, dropped for now): a stream, not jobs; designed
+  if they come back.
+- **Paying** (milestone 21): Apple's In-App Purchase on the iPhone, a
+  subscription with a free trial. The phone buys with StoreKit; the server
+  checks Apple's signed records itself and decides what each person may
+  send. Google Play's billing comes with milestone 22.
 - **Going live** (milestone 18): a public HTTPS server, storage for audio,
   and a privacy policy that covers voices.
 
 Every voice note costs money: a translation and a synthesis per listener.
-The engine is chosen per request (section 4.5), so a cheaper engine for free
-users stays possible.
+The engine is chosen per request (section 4.5). Since nobody uses the App
+Store version free, each person's sending is paid for by their subscription;
+about 2 cents a minute of voice note between two languages (milestone 21).
 
 ## 10. The website
 

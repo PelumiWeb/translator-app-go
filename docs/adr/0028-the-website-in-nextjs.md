@@ -92,3 +92,54 @@ The site now has one form, the waitlist for TestFlight invitations
 the site is still plain files, but it is no longer true that nothing is sent
 from it. It is hosted on Vercel, which passes the form on to the server
 (ADR 0031).
+
+## Addendum, 2026-11-21: Motion
+
+**Context.** On 2026-11-21 the owner pointed at four sites to make the
+website better: motion.dev (Motion, the animation library), motion-primitives
+(components built on Motion and Tailwind), interfacecraft.dev and Wispr
+Flow's Notetaker page. What they have that the site lacked is continuity:
+one phone that stays while its screen changes, a card that moves from one
+place to the next, an answer that opens rather than appears. CSS keyframes
+play a fixed sequence; they cannot carry an element from where it was to
+where it now is when the page's state changes. Asked whether to build that
+with the browser alone or with Motion, the owner chose Motion.
+
+**Decision.** Motion is added, for what changes with state; CSS keyframes
+stay for what loops or plays on its own (the rings, the dots, the hero's
+loop, a stage's own animation).
+
+- **The package is `framer-motion` 14.10.1**, Motion's React package under
+  its first name, which the `motion` package wraps at the same version. The
+  wrapper's `motion/react` imports all of Motion as one object, so the build
+  could not leave out the parts the site doesn't use: the page's first
+  scripts grew by 57 KB gzipped through it, and by 23 KB through
+  `framer-motion`. It brings `motion-dom`, `motion-utils` and `tslib`, all
+  MIT.
+- **Loaded in two parts.** `MotionProvider` wraps every page in
+  `LazyMotion`, `strict`, so only the small `m` components are used, and
+  loads the features (animation, layout) from their own file after the page
+  is shown. Until then the `m` parts are drawn still. The questions use
+  Motion's small `animate` (`framer-motion/dom/mini`), which runs on the
+  browser's own animations.
+- **Pearl's easing everywhere,** `cubic-bezier(0.22, 0.61, 0.36, 1)`
+  (`web/lib/motion.ts`), set once in `MotionConfig`; no springs, which Pearl
+  does not have.
+- **Reduce Motion** is Motion's `reducedMotion="user"`: only fades remain.
+  The questions open at once.
+- **Not motion-primitives.** Its components are written for Tailwind, a CSS
+  framework this site does not use; anything worth having from it is
+  written in CSS Modules.
+
+**What it is used for.** The journey's travelling frame (one phone, scenes
+that rise or fall with the scroll, Rosa's card moving between screens and
+changing side, the rail filling with the scroll), the questions opening and
+shutting, and the waitlist (the chosen phone's capsule sliding, the Android
+line opening, the form giving way to the thanks).
+
+**Consequences.** 24 KB more script at first load (182 KB before, 206 KB
+after, gzipped), and a 33 KB file of Motion's features fetched once the page
+is up. Each new dependency of
+Motion's, on an update, is a new dependency of the site. A Motion part used
+outside `LazyMotion`, or the full `motion` component, fails loudly
+(`strict`) rather than quietly loading everything.

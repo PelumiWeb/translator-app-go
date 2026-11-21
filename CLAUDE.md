@@ -8,14 +8,19 @@ Since 2026-10-31 it is a product, not a portfolio piece: a social app that
 breaks the language barrier, where people talk to anyone in the world without
 sharing a language. Each person
 signs up with their name and their voice; what they say reaches the other side
-in the listener's language and the speaker's voice. Voice notes first, then
-text messages, later calls for premium users. `docs/plan.md` has the order
-(milestones 13 onwards) and `docs/architecture.md` section 9 the direction.
+in the listener's language and the speaker's voice, in voice notes and text
+messages. On the App Store it is paid: a free trial with a cap, then a
+subscription, and no free use (2026-11-21). Calls are dropped for now.
+`docs/plan.md` has the order (milestones 13 onwards) and
+`docs/architecture.md` section 9 the direction.
 
 The Android app came first. The iOS app was added on 2026-10-14: a native
 Swift app on the same Go server, built to the same design. Milestone 10
-brought it level with Android (2026-10-29); every phone feature is built on
-both. The owner has a paid Apple Developer account (2026-10-31).
+brought it level with Android (2026-10-29), and from then every phone feature
+was built on both. On 2026-11-21 the owner chose to take the iPhone to the
+App Store first: new phone work is built on the iPhone only until Android
+catches up in milestone 22. The owner has a paid Apple Developer account
+(2026-10-31).
 
 The app is called Shinar (2026-11-01). Its identifier on both phones is
 `com.pelumi.shinar`; the code keeps its old names (the Kotlin package
@@ -147,6 +152,10 @@ migrations/          plain SQL, embedded in the binary
   and 3). The same stages, seams, rules and thresholds; where the logic is the
   same, the same test cases. A change to a rule on one phone is made on the
   other in the same milestone.
+- The exception, from 2026-11-21 until milestone 22: the work for the App
+  Store (milestones 16, 18 and 21) is built on the iPhone only. Keep the
+  server working for the Android app as it is, and list in milestone 22
+  whatever Android will need to catch up.
 - Each phone is idiomatic for its platform. Do not write Kotlin in Swift or
   Swift in Kotlin to make the two look alike.
 
@@ -199,8 +208,11 @@ migrations/          plain SQL, embedded in the binary
 ### Website
 
 - Next.js with TypeScript, exported as plain files: nothing on it needs a
-  server. CSS Modules and CSS keyframes; no CSS framework or animation
-  library.
+  server. CSS Modules; no CSS framework. CSS keyframes for what loops or
+  plays on its own, Motion (`framer-motion`, ADR 0028 addendum) for what
+  changes with state: a card between screens, an answer opening. Use its
+  `m` components (the provider loads the features lazily) and Pearl's
+  easing (`web/lib/motion.ts`).
 - Pearl, dark only, from the same tokens as the apps. The name lives only in
   `web/lib/site.ts`.
 - It shows only what the app does today (brief round 4, section 8).
@@ -277,10 +289,14 @@ on the same Wi-Fi (architecture, section 3.5).
 
 Do not build, scaffold, or add placeholders for any of these:
 
-- billing and premium plans (they come with calls, milestone 17)
+- calls, and the hands-free room mode planned before them (milestone 17,
+  dropped for now on 2026-11-21)
+- a free plan on the App Store: there is a capped trial, then a subscription
+- Google Play Billing, and anything else Android-only, until milestone 22
 - multi-region
 
 Accounts and sign-in stopped being non-goals on 2026-10-31: they are
-milestone 13. Voice keyboards (an Android IME and an iOS keyboard extension)
+milestone 13. Billing stopped being one on 2026-11-21: it is milestone 21,
+through Apple's In-App Purchase, checked by our own server. Voice keyboards (an Android IME and an iOS keyboard extension)
 are milestone 11, after the social milestones; until then, do not build them,
 only keep `core/` and `Core/` reusable for them.

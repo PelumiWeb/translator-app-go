@@ -12,19 +12,20 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done, `[-]` dropped.
 
 Milestones are numbered in the order they were planned, not the order they
 are built. On 2026-10-31 the app became a product, a social app where people
-talk across languages (ADR 0015), and the order changed. The order of work,
-as of 2026-10-31:
+talk across languages (ADR 0015), and the order changed. On 2026-11-21 it
+changed again, for the App Store (below). The order of work, as of
+2026-11-21:
 
-1. Milestone 13: accounts, profile, and your voice on the server
-2. Milestone 14: rooms of two, where two people talk in voice messages
-3. Milestone 12: voice notes shared in from other apps, such as WhatsApp
-4. Milestone 15: text messages
-5. Milestone 20: group rooms
-6. Milestone 16: safety and discovery
-7. Milestone 18: going live
-8. Milestone 17: calls, for premium users
-9. Milestone 11: voice keyboards
-10. Milestone 7 and checkpoint 8.2, in an order still to agree
+1. Milestone 16, its first part: block and report
+2. Milestone 21: paying for Shinar, after a free trial
+3. Milestone 18, the rest: the App Store
+4. Then, in an order to agree after the launch: milestone 12 (voice notes
+   shared in from other apps), milestone 20 (group rooms), the rest of
+   milestone 16 (discovery), milestone 22 (Android catches up, and Google
+   Play), milestone 11 (voice keyboards), milestone 7 and checkpoint 8.2
+
+Milestone 17, calls, is dropped for now. Milestones 13, 14 and 15 are built;
+what is left of them is listed under each.
 
 Milestone 10 was done on 2026-10-29; checkpoint 9.4 and milestone 19 (the
 design) on 2026-10-31. Milestone 12 was dropped on 2026-10-31, then brought
@@ -40,7 +41,27 @@ invited from a waitlist on the website, with marketing handed to Claude
 (`docs/marketing/brief-1-soft-launch.md`). Built for it, ahead of the rest of
 milestone 18: daily limits (checkpoint 18.5) and the waitlist (18.6).
 
-A checkpoint with phone work is done on Android, then on iOS.
+On 2026-11-21 the owner decided to take the app to the App Store with the
+features it has today, and chose:
+
+- **No free use on the App Store.** A new person gets a free trial, with a
+  cap of its own, then pays by subscription to keep using Shinar
+  (milestone 21).
+- **The iPhone first, on its own.** Payment through Apple's In-App Purchase
+  only. New phone work is built on the iPhone only until Android catches up
+  in milestone 22.
+- **Purchases checked by our own server.** No payment service in between,
+  such as RevenueCat.
+- **No calls for now.** Milestone 17 is dropped, and the call button goes
+  with it.
+- **Block and report before the App Store** (milestone 16), as Apple
+  requires.
+
+The first App Store version needs the first part of milestone 16, all of
+milestone 21, and the rest of milestone 18.
+
+A checkpoint with phone work is done on Android, then on iOS; from
+2026-11-21 until milestone 22, on iOS only.
 
 ---
 
@@ -1080,9 +1101,67 @@ those whose ID you know, including at random. Block and report come first:
 both app stores require them in apps where people contact each other, and
 contact at random invites abuse without them.
 
+Split on 2026-11-21: block and report now, for the App Store, on the iPhone
+(milestone 22 brings them to Android); discovery after the launch.
+
+Apple's Guideline 1.2 asks four things of apps where people contact each
+other: a way to filter objectionable material, reporting with a timely
+answer, blocking, and published contact details. The contact details are on
+the help page already (ADR 0032).
+
+**Checkpoint 16.1: block and report on the server**
+- Migration 0011: `blocks` (who blocked whom, and when) and `reports` (who
+  reported whom, the message if there is one, the reason, a note, when, and
+  what was done about it)
+- Blocking a person: they can no longer send into the room or open a new one
+  with the blocker, and nothing they send after the block is delivered.
+  Their phone says only that the note could not be sent. Unblocking undoes
+  it. `POST /v1/blocks`, `DELETE /v1/blocks/{user_id}`, `GET /v1/me/blocks`;
+  a room says whether it is blocked, and by whom
+- Reporting a person, or one of their messages: `POST /v1/reports`, with a
+  reason from a short list and an optional note. A reported message's
+  recording, words and translation are kept with the report until it is
+  closed, even if the sender deletes their account. Reporting blocks too,
+  unless the person unticks it
+- The owner hears of each new report at once, through a push notification
+  to their own account (`REPORTS_NOTIFY_HANDLE`), since there is no mail
+  service yet
+- The owner's commands on the machine, like the waitlist's:
+  `make reports-list` (open reports, with the words of reported messages),
+  `make report-close ID=... NOTE=...`, `make account-suspend HANDLE=...` (ends
+  the account's sessions and stops it signing in or sending) and
+  `make account-delete HANDLE=...` (deletion asked for by email, which 18.7
+  left to do)
+- Filtering, proposed and to confirm with the owner: translations are made
+  with the translator's own profanity option, which masks offensive words
+  in the translation, and so in the voice made from it (Azure's
+  `profanityAction`)
+- ADR 0035
+- Verify: `make server-test`
+
+**Checkpoint 16.2: block and report on the iPhone**
+- In a room: Block and Report in its menu, and Report on a message card
+  (press and hold). Reporting asks for the reason and a note, offers "Also
+  block Rosa", then says the report will be looked at within 24 hours (ADR
+  0032's commitment)
+- A blocked room says so, with Unblock; Profile lists the people you have
+  blocked
+- The help page, and the privacy pages on the website and the iPhone, say
+  what a report keeps and for how long
+- Not designed: a brief for Claude Design, and built from Pearl's parts
+  until it answers, as text messages were
+- Tests: the room's and the report sheet's logic, with the server stubbed
+- Verify: `make ios-test`; the iPhone and the simulator against the server
+  on this Mac: report a note from the other, then send from the blocked side
+
 ---
 
-## [ ] Milestone 17: Calls, for premium users
+## [-] Milestone 17: Calls, for premium users
+
+Dropped for now on 2026-11-21: the owner wants the App Store launch to focus
+on the features the app already has. The call button goes (checkpoint
+18.11), and the hands-free mode below waits with the calls. Billing comes
+without them, in milestone 21. What follows is kept for when calls come back.
 
 Live calls, each side hearing the other in their own language and the
 speaker's voice. Starts with a research checkpoint: recognising, translating
@@ -1203,7 +1282,8 @@ ahead of the rest of this milestone)
   Claude Design: `docs/design/brief-4-motion.md`
 - The owner chose Next.js. `web/`, exported as plain files into `web/out/`;
   no server runs it. Dependencies: Next.js, React, and TypeScript for
-  development; no CSS framework or animation library. ADR 0028
+  development; no CSS framework or animation library (Motion came in
+  checkpoint 18.10). ADR 0028
 - The home page: the promise, and a loop of the core turn (her note in
   Spanish, warm white, becomes his in English, mint, in her voice); the
   journey in seven stages while scrolling, each drawn as the screen it
@@ -1343,6 +1423,114 @@ the owner's request)
 - Verify: `make web-preview`, then http://localhost:3100 at a phone's width
   and a desktop's; scroll down and back up; open http://localhost:3100/og.png
 
+**Checkpoint 18.10: the website's motion, with Motion** (built 2026-11-21, at
+the owner's request)
+- The owner pointed at motion.dev, motion-primitives.com,
+  interfacecraft.dev and wisprflow.ai/notetaker to make the website better,
+  and chose to add Motion, the animation library, though ADR 0028 had left
+  one out. Not motion-primitives: it needs Tailwind. ADR 0028, addendum
+- Motion is `framer-motion` 14.10.1, its React package's first name: the
+  newer `motion/react` imports all of it at once, which kept the build from
+  leaving out what the site doesn't use (57 KB more at first load, not
+  23 KB, gzipped). Its layout features load after the page is shown
+- The journey, on a wide screen: one phone stays beside the steps and only
+  its screen changes, rising with the scroll going down and falling going
+  back; Rosa's note is one card from screen to screen, moving and resizing
+  into place, and changing side (warm white to raised petrol) as her words
+  become English; the place line cross-fades. A rail beside the steps fills
+  to the middle of the window and lights each step's point; a step is active
+  once its count has passed the middle, so its words are beside the phone
+- The questions slide open and shut, the plus turning into a minus; without
+  JavaScript, or under Reduce Motion, they open as before
+- The waitlist: the chosen phone's capsule slides to the other choice; the
+  Android line eases open; the form gives way to "You're on the list"
+- The hero's promise is written down word by word as the page opens, the
+  app's "words arriving"; buttons give a little when pressed
+- Reduce Motion: Motion keeps only fades; the CSS animations stop as before
+- Checked here: the build and its types; in Chrome, on the built site at a
+  desktop's width and a narrow one: the card's move and change of colour
+  measured frame by frame, the questions opening, closing and turned round
+  mid-slide, the capsule sliding, joining with the network call stubbed in
+  the page (nothing was sent). Not checked: a real phone, Safari, Reduce
+  Motion switched on
+- Verify: `make web-preview`, then http://localhost:3100 at a desktop's
+  width: scroll the journey down and back up, open and close a question,
+  switch iPhone and Android; then at a phone's width
+
+Planned on 2026-11-21, for the first App Store version, after the first part
+of milestone 16 and milestone 21. iPhone only.
+
+**Checkpoint 18.11: the rest of what App Review asks for**
+- Asking before words leave the phone. Guideline 5.1.2(i), since November
+  2025: an app must say which outside AI services get people's data, and ask
+  first; a privacy page alone is not enough, and Apple has rejected apps for
+  it. One step in sign-up, before anything is sent, naming each service and
+  what it gets: Groq writes the words down when the phone cannot, Microsoft's
+  translator translates them, Fish Audio speaks them in your voice. The
+  voice step already asks for Fish Audio. People who signed up before it see
+  the step once
+- Deleting an account revokes its Sign in with Apple (Guideline 5.1.1(v),
+  ADR 0018). The phone sends Apple's authorization code at sign-in; the
+  server exchanges it for a refresh token, keeps it, and revokes it when the
+  account is deleted. Needs a Sign in with Apple key (the owner, in the
+  developer account)
+- The call button goes, on both phones, since milestone 17 is dropped for
+  now. A few lines each, so Android does not wait for milestone 22
+- The terms: who runs Shinar and the governing law (the owner decides), and
+  the subscription: the price, the trial, renewal, and cancelling and refunds
+  through Apple. The privacy pages: what Apple tells us of a purchase (the
+  product and its dates, never card details)
+- The two test accounts stay behind the hidden entry (13.5); the review
+  notes say how to reach it
+- Verify: `make server-test`, `make ios-test`; on the iPhone, sign up afresh,
+  then delete the account: Shinar leaves the Apple account's list of apps
+  using Sign in with Apple
+
+**Checkpoint 18.12: paid engines, within a monthly budget**
+- Paying people cannot be cut off by a free allowance that everyone shares.
+  The owner moves each engine to its paid tier: Fish Audio's paid model with
+  credit (open question 2), Azure AI Translator on S1, Groq's paid tier
+- The monthly budget per engine that ADR 0029 asks for before any paid tier.
+  The server counts what it sends to each engine in a month. At 80% the
+  owner is told, by a push notification to their account. Past the budget
+  the server stops calling that engine: speech falls back to the phone's
+  voice, and translations wait until the owner raises the budget. A setting
+  per engine
+- Verify: `make server-test`
+
+**Checkpoint 18.13: audio off the machine's disk**
+- Recordings, kept voices and the speech made from them are on the machine's
+  disk, with no backup (ADR 0023). Before paying people trust it with their
+  voices, they move to object storage (Cloudflare R2 or Azure Blob Storage,
+  to decide). A command moves the files already kept, and the phones
+  download through short-lived signed links
+- Audio is kept compressed (AAC), about 8 times smaller than WAV. The iPhone
+  encodes with its own encoder before uploading, and Fish Audio is asked for
+  compressed audio. The server accepts both, for Android's builds until
+  milestone 22
+- Verify: `make server-test`; on the iPhone, an old note and a new one both
+  play
+
+**Checkpoint 18.14: the listing and the submission**
+- The name's trademark check (ADR 0021), before the name is on the store
+- The owner, in App Store Connect: the name, subtitle, description (with the
+  Terms of Use link Apple asks of subscription apps), keywords, screenshots,
+  the help page as Support URL, the privacy page, the App Privacy answers,
+  the age rating (16+), and the review notes (the two test accounts and how
+  to reach their sign-in; reviewers subscribe in the sandbox). The
+  subscriptions are submitted with this version
+- Claude: the App Privacy answers, from what the app and the server do; the
+  description and the review notes, to the marketing brief; and a run on two
+  iPhones against the hosted server of everything a reviewer will try:
+  sign-up, the voice, a room, voice notes and messages, notifications, block
+  and report, buying, the trial's cap, restoring, deleting the account.
+  Checkpoint 15.2 gets its check on two phones then
+- The website and the marketing brief: the price and the trial, said
+  plainly; "Free while we test" goes; the App Store badge once it is live
+- The soft launch's testers get the build with the paywall first, on
+  TestFlight, where buying costs nothing; their welcome note says so
+- Verify: Apple's review
+
 Asked on 2026-11-02 and put off by the owner: telling people when a new
 version is out. Two ways were weighed: our server answering with the latest
 and minimum build for each phone (works on TestFlight and both phones, a
@@ -1435,6 +1623,157 @@ covers group rooms as well as rooms of two.
 
 ---
 
+## [ ] Milestone 21: Paying for Shinar, after a free trial
+
+Added on 2026-11-21. On the App Store nobody uses Shinar free: a new person
+tries it free for a few days, within a cap, then subscribes to keep sending.
+iPhone only, through Apple's In-App Purchase, every purchase checked by our
+own server. Android's turn is milestone 22. No calls: what is sold is what
+the app does today.
+
+People pay with their Apple account. Apple requires In-App Purchase for
+anything used inside the app (Guideline 3.1.1), so Apple Pay, which is for
+physical goods, does not apply. Under the Small Business Program, Apple keeps
+15%.
+
+**The trial** (proposed, to confirm): Apple's own free trial on the
+subscription, an introductory offer. On the paywall the person chooses
+monthly or yearly and confirms with their Apple account; nothing is charged
+during the trial, and it becomes the paid plan unless they cancel. Apple
+gives each Apple account one trial per subscription group, so a new Shinar
+account does not bring a second one. Apple's signed record says when a
+period is a free trial, so the server applies the trial's cap then. The
+other way, a trial our server runs without asking for payment, would let
+anyone start again with a new account.
+
+**Still to decide:** the price, monthly and yearly; the trial's length (Apple
+offers 3 days, a week, 2 weeks, a month, and longer); its cap; the limits
+for subscribers; and who has to subscribe. The cap and the limits are
+settings. Proposed for who: sending (voice notes, messages, the
+interpreter's work on the server) needs a trial or a subscription; reading
+and hearing what you receive does not, since the sender's subscription paid
+for it.
+
+**What a minute costs** (2026-11-21, at the engines' paid rates): about 2
+cents a minute of voice note between two languages. Fish Audio is about 1.2
+cents ($15 per million bytes), the translation about 0.8 ($10 per million
+characters), and Groq at most 0.2 ($0.111 an hour), only when the phone
+cannot write the words down. A $4.99 subscription brings $4.24 after Apple's
+15%, which pays for about 7 minutes a day. At today's limit of 10 minutes a
+day one subscriber can cost about $6 a month. The average will be far
+below that, but the limits should be set with it in mind.
+
+**Checkpoint 21.1: Apple's set-up** (the owner, in App Store Connect; the
+code does not wait for it)
+- Business: the Paid Applications Agreement, with the bank account, the tax
+  forms and contact details; then the App Store Small Business Program,
+  before the first sale
+- Business, Compliance: the EU trader status (Digital Services Act). Spain
+  is in the EU. A trader's address, phone and email are shown on the EU
+  store
+- The subscriptions: one group, "Shinar", with a monthly and a yearly
+  subscription (product IDs such as `com.pelumi.shinar.monthly`; an ID can
+  never be used again, even after it is deleted), each with its price, name
+  and description, the free trial as its introductory offer, and a
+  screenshot of the paywall for review. Billing Grace Period on, so a failed
+  card does not cut someone off at once. The first subscription is reviewed
+  with an app version
+- An In-App Purchase key (Users and Access, Integrations): its Key ID, the
+  Issuer ID, and the `.p8` file into `~/keys/shinar/`, named in
+  `/etc/shinar/env`
+- The server notification URLs, version 2, for production and for the
+  sandbox:
+  `https://shinar-api.southafricanorth.cloudapp.azure.com/v1/billing/apple/notifications`
+- Sandbox Apple accounts, for testing purchases
+- Claude: a StoreKit configuration file in the Xcode project with the same
+  products, so purchases work in the simulator and the tests before any of
+  the above exists
+
+**Checkpoint 21.2: the server**
+- Migration 0012: `subscriptions` (one per Apple original transaction: the
+  user, the product, sandbox or production, its state, when the period ends,
+  whether it is a free trial, whether it renews) and `store_notifications`
+  (each of Apple's notifications once, by its ID, as Apple sent it)
+- `internal/billing`: checks Apple's signed records, each a JWS whose
+  certificate chain must end at Apple Root CA G3 (kept in the program) and
+  whose ES256 signature must hold, with the standard library; and calls the
+  App Store Server API with a token signed by the In-App Purchase key, as
+  `internal/push` signs for APNs
+- `POST /v1/me/subscription/apple`: the phone sends the signed transaction
+  after a purchase, after a restore, and when the app opens. The server
+  checks it, ties it to the user (its `appAccountToken` must be the user's
+  ID) and answers with the user's access
+- `POST /v1/billing/apple/notifications`: Apple's notifications (subscribed,
+  renewed, failed to renew, in grace period, expired, refunded, revoked),
+  each checked, recorded once and applied. A missed one is caught up by
+  asking the App Store Server API for the subscription's status
+- Access is `none`, `trial`, `active`, `grace` or `expired`, in `GET /v1/me`,
+  with when it ends and what is left of the trial's cap
+- What needs access: sending a voice note or a message
+  (`POST /v1/rooms/{id}/messages`), and the interpreter's work on the server
+  (`POST /v1/jobs`, `POST /v1/speech`), which is now tied to a person and
+  counted, closing the gap ADR 0029 left. Refused with `402` and
+  `subscription_required`, or `429` and `trial_limit_reached`. Nothing of a
+  refused message is kept, as with the daily limits
+- Limits by access: the trial's `TRIAL_VOICE_MINUTES` and
+  `TRIAL_TEXT_MESSAGES`, counted over the whole trial; for subscribers, the
+  daily ones (ADR 0029)
+- One subscription, one account: a subscription tied to another account that
+  still exists is refused, and the phone says why; one whose account was
+  deleted moves to the account that restores it
+- Sandbox purchases count, marked as sandbox: App Review and TestFlight
+  testers buy in the sandbox, at no cost
+- `BILLING=on` switches it on. The hosted server keeps it off until the
+  iPhone build with the paywall reaches TestFlight, so builds already on
+  testers' phones keep working; the server on this Mac keeps it off, for
+  work on Android
+- ADR 0034
+- Tests: signed records (a good one; the wrong chain, app, signature or
+  environment), each kind of notification, the access rules, the limits by
+  access, the account rules, the switch. A live test against the sandbox,
+  run only with the key
+- Verify: `make server-test`
+
+**Checkpoint 21.3: the iPhone**
+- `Core/Billing`, on StoreKit 2 (part of the SDK, no new dependency): the
+  products; a purchase carrying the user's ID as `appAccountToken`;
+  `Transaction.updates`, listened to for as long as the app runs and owned
+  by the container; each verified transaction sent to the server, and
+  finished once the server has it; Restore (`AppStore.sync()`)
+- The paywall, after the voice step of sign-up and wherever sending is
+  refused: what Shinar does, the trial's length and cap, the price after it
+  and how often, that it renews until cancelled and how to cancel, links to
+  the Terms of Use and the privacy page, and Restore. Apple reviews this
+  screen closely (Guideline 3.1.2)
+- Profile: your plan (the trial ends on…, renews on…), Manage subscription
+  (Apple's own sheet), Restore purchases. Deleting your account says first
+  that Apple goes on charging until the subscription is cancelled, and how to
+  cancel it
+- In a room: a refused send says why and opens the paywall; the note waits
+  on its card, as at the daily limit
+- Not designed: a brief for Claude Design (round 5); built from Pearl's parts
+  until it answers
+- Tests: Swift Testing with the StoreKit configuration file (buying, the
+  trial, renewal, expiry, a refund, restoring), the server stubbed with
+  `URLProtocol`
+- Verify: `make ios-test`; on the iPhone with a sandbox account: buy, see
+  the trial in Profile, send until the cap, cancel in Settings
+
+---
+
+## [ ] Milestone 22: Android catches up, and Google Play
+
+Added on 2026-11-21, when the owner chose to take the iPhone to the App Store
+first. Android gets what was built for the iPhone alone from milestone 16
+on: block and report, asking before words leave the phone, and the paywall
+and subscriptions through Google Play Billing (a dependency to approve), with
+the server checking purchases with Google (the Play Developer API, and
+notifications through Cloud Pub/Sub). Then Google Play itself: a developer
+account ($25), the closed test that new personal accounts must run (at least
+12 testers for 14 days) before they can publish, and the listing.
+
+---
+
 ## Open questions
 
 Answered on 2026-10-04: dependencies approved; Postgres through Homebrew
@@ -1489,3 +1828,9 @@ Still open:
    on the iPhone, one test on a real phone settles whether iOS decodes it and
    whether WhatsApp's share menu offers the app. The reply reaches WhatsApp as
    an audio file, not a voice-note bubble.
+9. The price, the trial's length and cap, the subscribers' limits, and who
+   has to subscribe (milestone 21).
+10. Who runs Shinar, and the governing law, for the terms and Apple's Paid
+    Applications Agreement (checkpoint 18.11).
+11. How Guideline 1.2's filtering is met: the translator's profanity option,
+    or something else (checkpoint 16.1).

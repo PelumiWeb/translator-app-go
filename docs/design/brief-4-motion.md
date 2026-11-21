@@ -204,7 +204,9 @@ looping hero card, the seven stages while scrolling, each drawn as the screen
 it happens on, a section on what is kept of your voice, and the two voices
 before the footer. Treat it as a sketch to improve on, not a constraint.
 Whatever you design should be buildable with SVG, CSS and a little
-JavaScript; there is no animation library.
+JavaScript. Since 2026-11-21 the site also has Motion (motion.dev) for
+changes between states, such as a card moving from one screen to the next;
+there is still no video or 3D.
 
 **The home page.**
 
