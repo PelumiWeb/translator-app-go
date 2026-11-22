@@ -508,13 +508,13 @@ is answered as not found.
 | Endpoint | What it does |
 | --- | --- |
 | `POST /v1/rooms` | JSON `handle`: opens a room of two with that person, or returns the one the two have (`201` / `200`). `400 cannot_add_self`, `404 user_not_found`, `409 profile_incomplete` before the user has a language |
-| `GET /v1/rooms` | `{ "rooms": [ { "id", "people", "last_message", "unread", "created_at" } ] }`, most recent first; `people` is everyone but the user |
+| `GET /v1/rooms` | `{ "rooms": [ { "id", "people", "last_message", "unread", "you_blocked", "created_at" } ] }`, most recent first; `people` is everyone but the user; `you_blocked` is true only for a member who blocked the other |
 | `GET /v1/rooms/{id}` | one room |
 | `GET /v1/rooms/{id}/messages` | `{ "messages": [...] }`, oldest first: the newest 50, or `?before=<message id>&limit=` for older ones |
-| `POST /v1/rooms/{id}/messages` | A voice note as `multipart/form-data`: `audio` (WAV, up to 30 s), `transcript` (written on the phone, up to 1000 characters), `duration_ms`, optional `lang`. A text message as JSON: `text` (up to 1000 characters), optional `lang` (ADR 0027). `Idempotency-Key` as for jobs. `201` with the message; `409 room_closed` when the other person has deleted their account; `429 voice_limit_reached` or `429 text_limit_reached` past what one person may send in 24 hours (ADR 0029) |
+| `POST /v1/rooms/{id}/messages` | A voice note as `multipart/form-data`: `audio` (WAV, up to 30 s), `transcript` (written on the phone, up to 1000 characters), `duration_ms`, optional `lang`. A text message as JSON: `text` (up to 1000 characters), optional `lang` (ADR 0027). `Idempotency-Key` as for jobs. `201` with the message; `409 room_closed` when the other person has deleted their account; `429 voice_limit_reached` or `429 text_limit_reached` past what one person may send in 24 hours (ADR 0029); `403 cannot_send` when the other person has blocked the sender, saying no more; `409 you_blocked` when the sender blocked them (ADR 0035) |
 | `POST /v1/rooms/{id}/read` | the user has seen the room so far |
 | `GET /v1/messages/{id}` | one message |
-| `POST /v1/messages/{id}/retry` | the sender asks for a failed translation to be tried again |
+| `POST /v1/messages/{id}/retry` | the sender asks for a failed translation to be tried again; refused as a send is while a block stands |
 | `POST /v1/messages/{id}/speech?lang=` | asks for a text message to be spoken in its sender's voice in that language: a listener for their own, the sender for any of the room's. `200` with the message, its rendition `speaking` until the voice is made; once made it is kept. `404 no_rendition` for a language the user cannot see, `409 not_text` for a voice note, `409 not_ready` before the words are translated |
 | `GET /v1/messages/{id}/audio?lang=` | the audio in one language: the sender's recording for the language it was said in, or the spoken translation once ready; `404 no_audio` until then |
 | `GET /v1/me/events` | Server-Sent Events: `ready` once listening, then `room` with `{ "room_id", "message_id" }` whenever something in one of the user's rooms changes. Hints only, nothing replayed: the phone fetches on `ready` |
@@ -536,6 +536,32 @@ a worker tells the listeners' phones through APNs or FCM (ADR 0026): the
 sender's name and "Sent a voice note · 0:14", or "Sent a message" for a
 text, with the room and message IDs for the app. Not the words. A text
 message's voice, made later on request, is not pushed again.
+
+**Block and report** (milestone 16, ADR 0035). All signed in.
+
+| Endpoint | What it does |
+| --- | --- |
+| `POST /v1/blocks` | JSON `user_id`: blocks that person. In a room of two, neither can then send into it until the blocker unblocks. `204`; twice is not an error. `400 invalid_user_id`, `400 cannot_block_self`, `404 user_not_found` |
+| `DELETE /v1/blocks/{user_id}` | lifts a block; `204`, also when there was none |
+| `GET /v1/me/blocks` | `{ "blocked": [ { "id", "display_name", "handle", "language", "blocked_at" } ] }`, the most recent first |
+| `POST /v1/reports` | JSON `message_id` (a message of someone else's in one of the user's rooms) or `user_id` (someone they share a room with), a `reason` (`spam`, `harassment`, `hate`, `sexual`, `violence`, `self_harm`, `other`), an optional `note` (up to 500 characters), and `block` (true when left out). `201 {"id"}`. `400 invalid_reason`, `invalid_note`, `cannot_report_self` or `invalid_request`; `404 message_not_found` or `user_not_found` |
+
+The person blocked is not told: their sends are refused with no reason, their
+rooms look as before, and only the blocker's stream hears of the block. A
+report copies the reported message, as the reporter saw it, into the report:
+its words, their translation, and the recording, into `REPORTS_DIR`. The copy
+outlives the message and its sender's account, and is cleared when the owner
+closes the report. Each report adds a `report` job, and a worker tells the
+owner's phones (`REPORTS_NOTIFY_HANDLE`): "New report", "A voice note ·
+harassment". Not the words. The owner reads and closes reports, and suspends
+or deletes accounts, with the binary's commands (`make reports-list`,
+`report-close`, `account-suspend`, `account-delete`). A suspended account is
+signed out everywhere, cannot sign in (`403 account_suspended`), and cannot
+be found by its ID.
+
+Translations are made with Azure's profanity option, which writes `***` for
+an offensive word; the voice leaves those out. Same-language rooms, with no
+translation, are not filtered.
 
 **Daily limits** (ADR 0029). Each person may send 10 minutes of voice notes
 and 100 text messages in any 24 hours (`DAILY_VOICE_MINUTES`,
@@ -610,6 +636,10 @@ CREATE INDEX jobs_ready ON jobs (run_at) WHERE status = 'queued';
 -- adding up what someone sent in the last 24 hours. Migration 0009, ADR 0029.
 -- The waitlist (18.6): waitlist (email, unique whatever its capitals; name;
 -- phone; invited_at). Migration 0010, ADR 0030.
+-- Block and report (16.1): blocks (blocker, blocked); reports (reporter and
+-- reported, the reported as they were, reason, note, a copy of the message,
+-- closed_at, outcome); users.suspended_at; jobs.kind gains 'report', with
+-- jobs.report_id. Migration 0011, ADR 0035.
 
 CREATE TABLE job_events (
     job_id     uuid NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -746,7 +776,9 @@ Users' kept voices live in a second directory (`VOICES_DIR`), apart from job
 audio, and are deleted only when the user replaces or deletes the voice, or
 deletes the account (ADR 0016). Room messages live in a third
 (`MESSAGES_DIR`): each sender's recording and the copies spoken in their
-voice, kept until the sender deletes their account (ADR 0020).
+voice, kept until the sender deletes their account (ADR 0020). Reports keep copies of reported
+recordings in a fourth (`REPORTS_DIR`), each until its report is closed (ADR
+0035).
 
 ### 4.7 Configuration and logging
 
@@ -757,7 +789,7 @@ Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 `GOOGLE_TRANSLATE_KEY`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`,
 `TRANSCRIBE_ENGINE`, `GROQ_API_KEY`, `GROQ_MODEL`, `APNS_KEY_FILE`,
 `APNS_KEY_ID`, `APNS_TEAM_ID`, `FCM_SERVICE_ACCOUNT_FILE`, `DAILY_VOICE_MINUTES`,
-`DAILY_TEXT_MESSAGES`). Secrets live in
+`DAILY_TEXT_MESSAGES`, `REPORTS_DIR`, `REPORTS_NOTIFY_HANDLE`). Secrets live in
 `server/.env`, which git ignores and the Makefile's server targets load; the
 push notification keys are files outside the repository, which the settings
 name (ADR 0026).
@@ -925,7 +957,7 @@ Written in the milestone where the decision is implemented.
 | 0032 | Help, privacy and terms pages, and a minimum age of 16 (written) | 18 |
 | 0033 | The language barrier as the theme (written) | 18 |
 | 0034 | Paid from the start: subscriptions with a free trial, checked by our server | 21 |
-| 0035 | Block, report, and acting on reports | 16 |
+| 0035 | Block, report, and acting on reports (written) | 16 |
 
 ## 8. Known limits
 

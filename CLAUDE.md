@@ -71,7 +71,7 @@ Senior React Native engineer, comfortable in Kotlin/Compose, newer to Go.
 /web       the website: Next.js, exported as plain files (ADR 0028), hosted on Vercel (ADR 0031)
 /docs      architecture.md, plan.md, adr/, design/ (briefs for Claude Design), marketing/ (briefs for marketing)
 /third_party/whisper.cpp   git submodule, pinned to a release tag
-/deploy    the hosted server: one-time set-up, service and Caddy files, the ship script, the waitlist commands (ADR 0023, 0030)
+/deploy    the hosted server: one-time set-up, service and Caddy files, the ship script, the owner's commands for the waitlist, reports and accounts (ADR 0023, 0030, 0035)
 Makefile   common commands for all three
 ```
 
@@ -126,7 +126,7 @@ internal/queue       job store (Postgres), worker pool, event listener and bus
 internal/provider    Provider, Synthesizer and Translator interfaces, fakes, Whisper on Groq (groq/), Fish Audio (fish/), Google Cloud Translation (google/), Azure AI Translator (azure/)
 internal/accounts    users, identities, sessions, handles, kept voices
 internal/auth        Apple and Google identity token checks
-internal/rooms       rooms, messages, renditions; the deliverer, its push notifications, and the change hub
+internal/rooms       rooms, messages, renditions; blocks and reports; the deliverer, its push notifications, and the change hub
 internal/push        sending notifications through APNs and FCM
 internal/models      manifest and model file serving
 internal/storage     audio blob storage
@@ -256,6 +256,8 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make server-lint` | `go vet` and `gofmt -l` |
 | `make server-ship` | build the server for the Azure machine and ship it over SSH; GitHub Actions runs the same on pushes to `main` that change `server/` (ADR 0023) |
 | `make waitlist-count` / `make waitlist-list` / `make waitlist-invite N=20` / `make waitlist-remove EMAIL=...` | the hosted server's waitlist: how many wait, everyone on it (invites nobody), the next N iPhone sign-ups into `invitations.csv` for TestFlight, or one address removed (ADR 0030) |
+| `make reports-list` / `make report-close ID=... NOTE="..."` | the hosted server's open reports, oldest first, with what was said; or one closed, with what was done, which deletes its copy of the message (ADR 0035) |
+| `make account-suspend HANDLE=...` / `make account-delete HANDLE=...` | suspend an account (signed out everywhere, cannot sign in or be found), or delete one on request; delete only says what would go until run again with `YES=1` |
 | `make sample-job` | upload a test clip to the running server and stream its events |
 | `make voice-check` | one real request to Fish Audio (key from `server/.env`), then plays what it made |
 | `make transcribe-check` | one real transcription from Groq (key from `server/.env`) of whisper.cpp's sample clip |

@@ -1094,7 +1094,7 @@ Asked for by the owner on 2026-11-18, "for more comfort", ahead of milestone
 
 ---
 
-## [ ] Milestone 16: Safety and discovery
+## [~] Milestone 16: Safety and discovery
 
 Block and report, and a way to act on reports; then finding people beyond
 those whose ID you know, including at random. Block and report come first:
@@ -1109,34 +1109,64 @@ other: a way to filter objectionable material, reporting with a timely
 answer, blocking, and published contact details. The contact details are on
 the help page already (ADR 0032).
 
-**Checkpoint 16.1: block and report on the server**
-- Migration 0011: `blocks` (who blocked whom, and when) and `reports` (who
-  reported whom, the message if there is one, the reason, a note, when, and
-  what was done about it)
-- Blocking a person: they can no longer send into the room or open a new one
-  with the blocker, and nothing they send after the block is delivered.
-  Their phone says only that the note could not be sent. Unblocking undoes
-  it. `POST /v1/blocks`, `DELETE /v1/blocks/{user_id}`, `GET /v1/me/blocks`;
-  a room says whether it is blocked, and by whom
-- Reporting a person, or one of their messages: `POST /v1/reports`, with a
-  reason from a short list and an optional note. A reported message's
-  recording, words and translation are kept with the report until it is
-  closed, even if the sender deletes their account. Reporting blocks too,
-  unless the person unticks it
-- The owner hears of each new report at once, through a push notification
-  to their own account (`REPORTS_NOTIFY_HANDLE`), since there is no mail
-  service yet
-- The owner's commands on the machine, like the waitlist's:
-  `make reports-list` (open reports, with the words of reported messages),
-  `make report-close ID=... NOTE=...`, `make account-suspend HANDLE=...` (ends
-  the account's sessions and stops it signing in or sending) and
-  `make account-delete HANDLE=...` (deletion asked for by email, which 18.7
-  left to do)
-- Filtering (agreed by the owner, 2026-11-21): translations are made with
-  the translator's own profanity option, which masks offensive words
-  in the translation, and so in the voice made from it (Azure's
-  `profanityAction`)
+**Checkpoint 16.1: block and report on the server** (built 2026-11-23)
+- Migration 0011: `blocks` (who blocked whom, and when); `reports` (who
+  reported whom, the reported person as they were, the reason, a note, a copy
+  of the message, when, and when and how it was closed); `users.suspended_at`;
+  a fifth kind of job, `report`, with `jobs.report_id`
+- Blocking: in a room of two, a block either way stops the room. Neither can
+  send into it, nor have a failed note tried again, until the blocker
+  unblocks; a resend of a note kept before the block is answered as before.
+  `POST /v1/blocks`, `DELETE /v1/blocks/{user_id}`, `GET /v1/me/blocks`
+- The person blocked is not told, a change from the plan's "a room says by
+  whom": their sends get `403 cannot_send` and no reason, their room looks
+  as before, and only the blocker's stream hears of the block. The blocker's
+  room says `you_blocked`, and their sends get `409 you_blocked`. Opening a
+  room with the blocker is not refused either, since that would tell them;
+  nothing can be sent into it
+- Reporting a person, or one of their messages, someone the reporter shares a
+  room with: `POST /v1/reports`, with a reason (spam, harassment, hate,
+  sexual, violence, self_harm, other) and an optional note of up to 500
+  characters. It blocks too, unless `block` is false. The message is copied
+  into the report as the reporter saw it: its words, its translation into
+  their language, and the recording, into a folder of its own
+  (`REPORTS_DIR`). The copy outlives the message and its sender's account,
+  and goes when the report is closed
+- The owner hears of each report at once: a `report` job, added with it, sends
+  a push notification to every phone of the account named by
+  `REPORTS_NOTIFY_HANDLE`, "New report" / "A voice note · harassment", never
+  the words, retried like any notification. The iPhone opens nothing when it
+  is tapped, since it names no room
+- The owner's commands on the machine: `make reports-list`,
+  `make report-close ID=... NOTE=...`, `make account-suspend HANDLE=...`
+  (signed out everywhere, cannot sign in, `403 account_suspended`, and
+  cannot be found by ID) and `make account-delete HANDLE=...`, which only
+  says what would go until run again with `YES=1`, and deletes through the
+  same code as deleting an account in the app. `deploy/waitlist.sh` is now
+  `deploy/command.sh`, since it runs both kinds
+- Filtering (agreed by the owner, 2026-11-21): Azure translates with
+  `profanityAction=Marked`, writing `***` for an offensive word; the voice
+  made from the translation leaves those out, and a translation with nothing
+  left to say goes to the listener's phone. Same-language rooms, with no
+  translation, are not filtered
 - ADR 0035
+- Tests: 26 new, in the rooms store (blocks both ways, resends, who sees the
+  block, the list, retries, the stream telling only the blocker; a report
+  outliving its sender's account, blocking unless asked not to, the shared
+  room, the owner's notice, closing; masked words left out of the voice),
+  the API (every answer of the new endpoints, the refusals, a suspended
+  sign-in, deleting an account leaving the report's copy), suspension in
+  accounts, the queue's new job, and the commands. Also checked: the
+  migration on this Mac's database with its existing jobs; lint, and the
+  changed packages under the race detector
+- Owner, before this server is pushed to `main` (which ships it): on the
+  machine, create the folder, which the server cannot create itself since
+  `/var/lib/shinar` is root's, with
+  `sudo install -d -m 750 -o shinar -g shinar /var/lib/shinar/reports` (or run
+  `deploy/setup.sh` again, which is safe); and add
+  `REPORTS_DIR=/var/lib/shinar/reports` and `REPORTS_NOTIFY_HANDLE=<your ID>`
+  to `/etc/shinar/env`. Without the folder the server stops at start. Then
+  stay signed in on your iPhone with notifications on
 - Verify: `make server-test`
 
 **Checkpoint 16.2: block and report on the iPhone**
@@ -1147,7 +1177,12 @@ the help page already (ADR 0032).
 - A blocked room says so, with Unblock; Profile lists the people you have
   blocked
 - The help page, and the privacy pages on the website and the iPhone, say
-  what a report keeps and for how long
+  what a report keeps and for how long: a reported message stays with its
+  report until it is closed, even if its sender deletes their account
+- A refused send says why only to the blocker ("You blocked Rosa. Unblock to
+  send."); the person blocked sees the usual failed note
+- The phone's own voice, reading a translation, leaves out the `***` the
+  translator writes for an offensive word, as the server's voice does
 - Not designed: a brief for Claude Design, and built from Pearl's parts
   until it answers, as text messages were
 - Tests: the room's and the report sheet's logic, with the server stubbed
@@ -1795,7 +1830,9 @@ code does not wait for it)
 
 Added on 2026-11-21, when the owner chose to take the iPhone to the App Store
 first. Android gets what was built for the iPhone alone from milestone 16
-on: block and report, asking before words leave the phone, and the paywall
+on: block and report (the screens, `you_blocked`, and leaving `***` out of
+the phone's voice; the server's side is shared), `account_suspended` at
+sign-in, asking before words leave the phone, and the paywall
 and subscriptions through Google Play Billing (a dependency to approve), with
 the server checking purchases with Google (the Play Developer API, and
 notifications through Cloud Pub/Sub). Then Google Play itself: a developer

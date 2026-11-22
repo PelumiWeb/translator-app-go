@@ -107,22 +107,42 @@ server-ship: ## Build the server for the host and ship it (SERVER_HOST=..., SERV
 
 .PHONY: waitlist-count
 waitlist-count: ## How many are waiting on the hosted server's waitlist (ssh as azureuser with ~/.ssh/shinar_admin)
-	deploy/waitlist.sh -waitlist-count
+	deploy/command.sh -waitlist-count
 
 .PHONY: waitlist-list
 waitlist-list: ## Everyone on the hosted server's waitlist, invited or not; invites nobody
-	deploy/waitlist.sh -waitlist-list
+	deploy/command.sh -waitlist-list
 
 .PHONY: waitlist-invite
 waitlist-invite: ## Take the next N iPhone sign-ups (N=20) into invitations.csv, for TestFlight
 	@test -n "$(N)" || { echo "N is required, for example: make waitlist-invite N=20"; exit 2; }
-	deploy/waitlist.sh -waitlist-invite $(N) > invitations.csv
+	deploy/command.sh -waitlist-invite $(N) > invitations.csv
 	@echo "Written to invitations.csv (git-ignored). Import it in App Store Connect, TestFlight, your external group."
 
 .PHONY: waitlist-remove
 waitlist-remove: ## Take EMAIL=... off the hosted server's waitlist
 	@test -n "$(EMAIL)" || { echo "EMAIL is required"; exit 2; }
-	deploy/waitlist.sh -waitlist-remove '$(EMAIL)'
+	deploy/command.sh -waitlist-remove '$(EMAIL)'
+
+.PHONY: reports-list
+reports-list: ## The open reports on the hosted server, oldest first, with what was said (ADR 0035)
+	deploy/command.sh -reports-list
+
+.PHONY: report-close
+report-close: ## Close report ID=... with NOTE="what you did"; deletes its copy of the message
+	@test -n "$(ID)" || { echo "ID is required, from make reports-list"; exit 2; }
+	@test -n "$(NOTE)" || { echo 'NOTE is required, for example NOTE="warned them"'; exit 2; }
+	deploy/command.sh -report-close '$(ID)' -note '$(NOTE)'
+
+.PHONY: account-suspend
+account-suspend: ## Suspend the account HANDLE=...: signed out everywhere, cannot sign in or be found
+	@test -n "$(HANDLE)" || { echo "HANDLE is required, the account's ID"; exit 2; }
+	deploy/command.sh -account-suspend '$(HANDLE)'
+
+.PHONY: account-delete
+account-delete: ## Delete the account HANDLE=... and everything it said, on request; says what would go unless YES=1
+	@test -n "$(HANDLE)" || { echo "HANDLE is required, the account's ID"; exit 2; }
+	deploy/command.sh -account-delete '$(HANDLE)' $(if $(YES),-yes)
 
 .PHONY: server-test
 server-test: ## Run the Go tests (needs `make db-up`)

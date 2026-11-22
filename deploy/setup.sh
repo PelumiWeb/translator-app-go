@@ -56,7 +56,7 @@ install -d -m 755 -o deploy -g deploy /opt/shinar
 echo 'deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart shinar' > /etc/sudoers.d/shinar-deploy
 chmod 440 /etc/sudoers.d/shinar-deploy
 visudo -cf /etc/sudoers.d/shinar-deploy
-for dir in audio voices messages models; do
+for dir in audio voices messages reports models; do
     install -d -m 750 -o shinar -g shinar "/var/lib/shinar/$dir"
 done
 # The shinar group may enter it, to read the push notification keys (root:shinar,
