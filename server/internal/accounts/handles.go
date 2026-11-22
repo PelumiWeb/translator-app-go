@@ -63,9 +63,15 @@ func (s *Store) SuggestHandles(ctx context.Context, handle, name string, n int) 
 
 // UserByHandle returns the user with this ID, or ErrNoUser. Someone who has
 // not yet said which language they speak is not found: nobody could be heard
-// in it.
+// in it. Nor is a suspended account (ADR 0035).
 func (s *Store) UserByHandle(ctx context.Context, handle string) (User, error) {
-	return scanUser(s.db.QueryRow(ctx, selectUser+` WHERE handle = $1 AND language <> ''`, handle))
+	return scanUser(s.db.QueryRow(ctx, selectUser+` WHERE handle = $1 AND language <> '' AND suspended_at IS NULL`, handle))
+}
+
+// FindAccount returns the account with this ID, whatever its state: for the
+// owner's commands, which act on suspended and unfinished accounts too.
+func (s *Store) FindAccount(ctx context.Context, handle string) (User, error) {
+	return scanUser(s.db.QueryRow(ctx, selectUser+` WHERE handle = lower($1)`, handle))
 }
 
 // handleCandidates lists IDs to suggest in place of handle, best first: the

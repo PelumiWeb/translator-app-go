@@ -160,3 +160,40 @@ func TestDeleteUserEndsTheirSessions(t *testing.T) {
 		t.Errorf("deleting twice: error = %v, want ErrNoUser", err)
 	}
 }
+
+func TestASuspendedAccountIsSignedOutAndStaysOut(t *testing.T) {
+	store := NewStore(testdb.New(t))
+	ctx := context.Background()
+	token, user, _, err := store.SignIn(ctx, ProviderApple, "sub-1", "", "Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.UpdateProfile(ctx, user.ID, ProfileUpdate{Handle: ptr("ada"), Language: ptr("en")}); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 2 { // suspending twice changes nothing
+		if err := store.Suspend(ctx, user.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.UserForToken(ctx, token); !errors.Is(err, ErrNoSession) {
+		t.Errorf("the old session: err = %v, want ErrNoSession", err)
+	}
+	if _, _, _, err := store.SignIn(ctx, ProviderApple, "sub-1", "", "Ada"); !errors.Is(err, ErrSuspended) {
+		t.Errorf("signing in again: err = %v, want ErrSuspended", err)
+	}
+	var sessions int
+	if err := store.db.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id = $1`, user.ID).Scan(&sessions); err != nil || sessions != 0 {
+		t.Errorf("sessions = %d (%v), want none, not even from the refused sign-in", sessions, err)
+	}
+	if _, err := store.UserByHandle(ctx, "ada"); !errors.Is(err, ErrNoUser) {
+		t.Errorf("finding them by ID: err = %v, want ErrNoUser", err)
+	}
+	if found, err := store.FindAccount(ctx, "ADA"); err != nil || found.ID != user.ID {
+		t.Errorf("the owner's lookup: %+v, %v; want the account", found, err)
+	}
+	if err := store.Suspend(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrNoUser) {
+		t.Errorf("suspending no one: err = %v, want ErrNoUser", err)
+	}
+}

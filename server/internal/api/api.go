@@ -74,6 +74,9 @@ type API struct {
 	// Messages holds the audio of room messages: the senders' recordings and
 	// the translations spoken in their voices.
 	Messages AudioStore
+	// Reports holds copies of reported recordings, each kept until its report
+	// is closed (ADR 0035).
+	Reports AudioStore
 
 	// Wake nudges an idle worker after a job is enqueued.
 	Wake func()
@@ -128,6 +131,10 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/messages/{id}/retry", a.signedIn(a.handleRetryMessage))
 	mux.HandleFunc("POST /v1/messages/{id}/speech", a.signedIn(a.handleRequestSpeech))
 	mux.HandleFunc("GET /v1/messages/{id}/audio", a.signedIn(a.handleMessageAudio))
+	mux.HandleFunc("POST /v1/blocks", a.signedIn(a.handleBlock))
+	mux.HandleFunc("DELETE /v1/blocks/{id}", a.signedIn(a.handleUnblock))
+	mux.HandleFunc("GET /v1/me/blocks", a.signedIn(a.handleListBlocked))
+	mux.HandleFunc("POST /v1/reports", a.signedIn(a.handleReport))
 	mux.HandleFunc("GET /v1/models/manifest", a.handleModelManifest)
 	mux.HandleFunc("GET /v1/models/{id}", a.handleModelDownload)
 	// From the website, by people who have no account yet.

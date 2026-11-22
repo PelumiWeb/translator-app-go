@@ -1476,9 +1476,10 @@ of milestone 16 and milestone 21. iPhone only.
   developer account)
 - The call button goes, on both phones, since milestone 17 is dropped for
   now. A few lines each, so Android does not wait for milestone 22
-- The terms: Shinar is run by the owner, as an individual in Nigeria, under
-  Nigerian law (the owner's choice, 2026-11-21), named as the App Store names
-  the seller; and the subscription: the price, the trial, renewal, and cancelling and refunds
+- The terms: Shinar is run by the owner's company, a private company limited
+  by shares registered in Nigeria, under Nigerian law (the owner's choice,
+  2026-11-22; its name to come), named as the App Store names the seller;
+  and the subscription: the price, the trial, renewal, and cancelling and refunds
   through Apple. The privacy pages: what Apple tells us of a purchase (the
   product and its dates, never card details)
 - The two test accounts stay behind the hidden entry (13.5); the review
@@ -1681,6 +1682,16 @@ below that, but the limits should be set with it in mind.
 
 **Checkpoint 21.1: Apple's set-up** (the owner, in App Store Connect; the
 code does not wait for it)
+- First, the seller (the owner's choice, 2026-11-22): Shinar is published by
+  the owner's company, so other apps can sit beside it. The company is
+  registered with CAC as a private company limited by shares (a business
+  name is not enough: Apple takes only legal entities as organisations). It
+  needs a bank account in its name, a website and work email on its own
+  domain, and a D-U-N-S number; then Apple converts the individual
+  membership to an organisation one, keeping the app. The agreement, tax,
+  bank and trader status below are done as the company, after the
+  conversion. Sandbox purchases on a real iPhone wait for the agreement; the
+  StoreKit configuration file does not
 - Business: the Paid Applications Agreement, with the bank account, the tax
   forms and contact details; then the App Store Small Business Program,
   before the first sale
@@ -1851,7 +1862,8 @@ Still open:
 9. Settled 2026-11-21: one subscription at $4.99 a month, Apple's 7-day free
    trial, and only senders pay (milestone 21). The trial's cap is proposed,
    still to confirm.
-10. Settled 2026-11-21: the owner runs Shinar as an individual in Nigeria,
-    under Nigerian law (checkpoint 18.11).
+10. Settled 2026-11-22: the owner's company runs Shinar, a private company
+    limited by shares registered in Nigeria, under Nigerian law (checkpoints
+    18.11 and 21.1). Its name is to come.
 11. Settled 2026-11-21: Guideline 1.2's filtering is the translator's
     profanity option (checkpoint 16.1).

@@ -140,6 +140,10 @@ func (a *API) handleEmailSignIn(w http.ResponseWriter, r *http.Request) {
 // phone to keep.
 func (a *API) openSession(w http.ResponseWriter, r *http.Request, provider string, identity auth.Identity, name string) {
 	token, user, created, err := a.Accounts.SignIn(r.Context(), provider, identity.Subject, identity.Email, name)
+	if errors.Is(err, accounts.ErrSuspended) {
+		writeError(w, http.StatusForbidden, "account_suspended", "this account has been suspended")
+		return
+	}
 	if err != nil {
 		a.Logger.Error("signing in", "provider", provider, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal", "could not sign in")
@@ -223,23 +227,10 @@ func (a *API) handleUpdateMe(w http.ResponseWriter, r *http.Request, user accoun
 // handleDeleteMe deletes the account, its sign-ins, its sessions, its voice,
 // and everything it said in its rooms.
 func (a *API) handleDeleteMe(w http.ResponseWriter, r *http.Request, user accounts.User, _ string) {
-	// The voice and the messages first: the database would drop their rows
-	// with the user, but not their audio files, which only this knows to
-	// delete.
-	if err := a.deleteKeptVoice(r.Context(), user); err != nil {
+	if err := a.DeleteAccount(r.Context(), user); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal", "could not delete the account")
 		return
 	}
-	if err := a.forgetMessages(r.Context(), user); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", "could not delete the account")
-		return
-	}
-	if err := a.Accounts.DeleteUser(r.Context(), user.ID); err != nil && !errors.Is(err, accounts.ErrNoUser) {
-		a.Logger.Error("deleting an account", "user_id", user.ID, "error", err)
-		writeError(w, http.StatusInternalServerError, "internal", "could not delete the account")
-		return
-	}
-	a.Logger.Info("account deleted", "user_id", user.ID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

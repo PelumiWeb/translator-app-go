@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -53,6 +55,9 @@ type Deliverer struct {
 	// then see a message when they next open the app.
 	Pusher Pusher
 	Phones PhoneBook
+	// ReportsTo is the ID (handle) of the owner's account, whose phones are
+	// told of each new report. Empty for no one.
+	ReportsTo string
 }
 
 // Deliver translates the message and speaks it. A retry picks up where the
@@ -106,8 +111,13 @@ func (d *Deliverer) Deliver(ctx context.Context, messageID, lang string, attempt
 	}
 	defer sample.Close()
 
+	spoken := speakable(text)
+	if spoken == "" {
+		// Nothing left to say once the masked words are left out.
+		return d.Store.ready(ctx, messageID, lang, VoicePhone, "")
+	}
 	var speech bytes.Buffer
-	opts := provider.SynthesisOptions{Text: text, Language: lang, Attempt: attempt}
+	opts := provider.SynthesisOptions{Text: spoken, Language: lang, Attempt: attempt}
 	if err := d.Speaker.Synthesize(ctx, sample, opts, &speech); err != nil {
 		return err
 	}
@@ -224,4 +234,14 @@ func (s *Store) updateRendition(ctx context.Context, messageID, lang, update str
 		return fmt.Errorf("updating a rendition: %w", err)
 	}
 	return nil
+}
+
+// masked is a word the translator hid as offensive (ADR 0035): Azure writes
+// "***" in its place.
+var masked = regexp.MustCompile(`\s*\*{3,}`)
+
+// speakable is a translation as the voice says it: without the masked words,
+// which would otherwise be read out as asterisks or as noise.
+func speakable(text string) string {
+	return strings.TrimSpace(masked.ReplaceAllString(text, ""))
 }

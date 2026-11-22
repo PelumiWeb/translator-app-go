@@ -34,6 +34,16 @@ var (
 	// Limits allows in the last 24 hours.
 	ErrVoiceLimit = errors.New("rooms: voice note limit reached")
 	ErrTextLimit  = errors.New("rooms: text message limit reached")
+	// ErrBlocked means another member of the room has blocked the sender;
+	// ErrYouBlocked, that the sender has blocked another member. Either way
+	// nothing can be sent into the room until the block is lifted.
+	ErrBlocked    = errors.New("rooms: the sender is blocked")
+	ErrYouBlocked = errors.New("rooms: the sender has blocked someone in the room")
+	// ErrNoPerson means there is no such person, or none the user may act on:
+	// themselves, or someone they share no room with.
+	ErrNoPerson = errors.New("rooms: no such person")
+	// ErrNoReport means there is no such report open.
+	ErrNoReport = errors.New("rooms: no such open report")
 )
 
 // Limits caps what one person may send in any 24 hours, so that a few people
@@ -75,11 +85,14 @@ type Person struct {
 
 // Room is a conversation as one of its members sees it.
 type Room struct {
-	ID        string
-	People    []Person // everyone in it but the member asking
-	Last      *Message // the newest message; nil before the first
-	Unread    int      // messages from the others the member has not seen
-	CreatedAt time.Time
+	ID     string
+	People []Person // everyone in it but the member asking
+	Last   *Message // the newest message; nil before the first
+	Unread int      // messages from the others the member has not seen
+	// YouBlocked is true when the member asking has blocked someone in it.
+	// The person blocked is not told: for them the room looks as before.
+	YouBlocked bool
+	CreatedAt  time.Time
 }
 
 // Message is a message as it was sent, with what it has become for the
@@ -125,6 +138,8 @@ type NewMessage struct {
 type Enqueuer interface {
 	EnqueueDeliveries(ctx context.Context, tx pgx.Tx, messageID string, langs []string) error
 	EnqueuePushes(ctx context.Context, tx pgx.Tx, messageID string, langs []string) error
+	// EnqueueReportNotice adds the job that tells the owner of a new report.
+	EnqueueReportNotice(ctx context.Context, tx pgx.Tx, reportID string) error
 }
 
 // Store keeps rooms in Postgres.
@@ -141,9 +156,7 @@ func NewStore(db *pgxpool.Pool, jobs Enqueuer, limits Limits) *Store {
 // OpenPair returns the room of two for userID and otherID, opening it if
 // they have none. The same two people always get the same room.
 func (s *Store) OpenPair(ctx context.Context, userID, otherID string) (roomID string, created bool, err error) {
-	ids := []string{userID, otherID}
-	slices.Sort(ids)
-	pair := ids[0] + " " + ids[1]
+	pair := pairOf(userID, otherID)
 
 	err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
@@ -175,6 +188,13 @@ func (s *Store) OpenPair(ctx context.Context, userID, otherID string) (roomID st
 	return roomID, created, nil
 }
 
+// pairOf is rooms.pair for a room of two: their IDs, the smaller first.
+func pairOf(a, b string) string {
+	ids := []string{a, b}
+	slices.Sort(ids)
+	return ids[0] + " " + ids[1]
+}
+
 // Rooms lists the rooms userID is in, the most recently active first. A room
 // with no messages yet is listed only for the member who opened it.
 func (s *Store) Rooms(ctx context.Context, userID string) ([]Room, error) {
@@ -198,7 +218,9 @@ func (s *Store) rooms(ctx context.Context, userID, roomID string) ([]Room, error
 	rows, err := s.db.Query(ctx, `
 		SELECT r.id, r.created_at, coalesce(last.id::text, ''),
 		       (SELECT count(*) FROM messages m
-		        WHERE m.room_id = r.id AND m.sender_id <> $1 AND m.created_at > me.read_at)
+		        WHERE m.room_id = r.id AND m.sender_id <> $1 AND m.created_at > me.read_at),
+		       EXISTS (SELECT 1 FROM room_members o JOIN blocks b ON b.blocked_id = o.user_id
+		               WHERE o.room_id = r.id AND o.user_id <> $1 AND b.blocker_id = $1)
 		FROM room_members me
 		JOIN rooms r ON r.id = me.room_id
 		LEFT JOIN LATERAL (
@@ -219,7 +241,7 @@ func (s *Store) rooms(ctx context.Context, userID, roomID string) ([]Room, error
 	for rows.Next() {
 		var room Room
 		var lastID string
-		if err := rows.Scan(&room.ID, &room.CreatedAt, &lastID, &room.Unread); err != nil {
+		if err := rows.Scan(&room.ID, &room.CreatedAt, &lastID, &room.Unread, &room.YouBlocked); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("listing rooms: %w", err)
 		}
@@ -376,8 +398,11 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 			return err
 		}
 		created = true
-		// Counted with the new message, after it is in: a resend of one
-		// already kept is never refused.
+		// Checked with the new message in, as the limits are: a resend of
+		// one kept before the block, or under the limit, is never refused.
+		if err := checkBlocks(ctx, tx, m.RoomID, m.SenderID); err != nil {
+			return err
+		}
 		if err := s.withinLimits(ctx, tx, m.SenderID, m.Kind); err != nil {
 			return err
 		}
@@ -413,7 +438,8 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 		}
 		return notifyMessage(ctx, tx, id)
 	})
-	if errors.Is(err, ErrNoRoom) || errors.Is(err, ErrRoomClosed) || errors.Is(err, ErrVoiceLimit) || errors.Is(err, ErrTextLimit) {
+	if errors.Is(err, ErrNoRoom) || errors.Is(err, ErrRoomClosed) || errors.Is(err, ErrVoiceLimit) || errors.Is(err, ErrTextLimit) ||
+		errors.Is(err, ErrBlocked) || errors.Is(err, ErrYouBlocked) {
 		return Message{}, false, err
 	}
 	if err != nil {
@@ -450,17 +476,21 @@ func (s *Store) withinLimits(ctx context.Context, tx pgx.Tx, senderID, kind stri
 }
 
 // Retry tries again to deliver the renditions of a message that failed. Only
-// its sender may ask.
+// its sender may ask, and not while a block stands in the room.
 func (s *Store) Retry(ctx context.Context, userID, messageID string) (Message, error) {
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		var mine bool
-		if err := tx.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM messages WHERE id = $1 AND sender_id = $2)`, messageID, userID,
-		).Scan(&mine); err != nil {
+		var roomID string
+		err := tx.QueryRow(ctx,
+			`SELECT room_id FROM messages WHERE id = $1 AND sender_id = $2`, messageID, userID,
+		).Scan(&roomID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNoMessage
+		}
+		if err != nil {
 			return err
 		}
-		if !mine {
-			return ErrNoMessage
+		if err := checkBlocks(ctx, tx, roomID, userID); err != nil {
+			return err
 		}
 		rows, err := tx.Query(ctx, `
 			UPDATE renditions SET status = 'translating', updated_at = now()
@@ -478,7 +508,7 @@ func (s *Store) Retry(ctx context.Context, userID, messageID string) (Message, e
 		}
 		return notifyMessage(ctx, tx, messageID)
 	})
-	if errors.Is(err, ErrNoMessage) {
+	if errors.Is(err, ErrNoMessage) || errors.Is(err, ErrBlocked) || errors.Is(err, ErrYouBlocked) {
 		return Message{}, err
 	}
 	if err != nil {

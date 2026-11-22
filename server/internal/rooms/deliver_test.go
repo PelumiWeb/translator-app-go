@@ -176,3 +176,28 @@ func TestDeliveryFailed(t *testing.T) {
 		}
 	})
 }
+
+// maskingTranslator translates every word as one the translator would mask.
+type maskingTranslator struct{}
+
+func (maskingTranslator) Translate(context.Context, string, string, string) (string, error) {
+	return "***", nil
+}
+
+func TestDeliverLeavesAWhollyMaskedTranslationToThePhone(t *testing.T) {
+	w, d, m := deliveryWorld(t)
+	d.Translator = maskingTranslator{}
+
+	if err := d.Deliver(context.Background(), m.ID, "es", 1); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing would be left for the voice to say; the text, as masked, is
+	// still shown.
+	r := w.rendition(t, m.ID)
+	if r.Status != StatusReady || r.Text != "***" || r.Voice != VoicePhone {
+		t.Errorf("rendition = %+v, want ready for the phone, the masked text kept", r)
+	}
+	if got := d.Messages.(*memFiles).keys(); len(got) != 0 {
+		t.Errorf("message files = %v, want no speech made", got)
+	}
+}

@@ -60,7 +60,13 @@ func (t Translator) Translate(ctx context.Context, text, from, to string) (strin
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
-	query := url.Values{"api-version": {"3.0"}, "from": {code(from)}, "to": {code(to)}}
+	query := url.Values{
+		"api-version": {"3.0"}, "from": {code(from)}, "to": {code(to)},
+		// The filter Apple asks for (Guideline 1.2, ADR 0035): Azure hides
+		// offensive words as "***", in the listener's language. The voice
+		// leaves them out.
+		"profanityAction": {"Marked"}, "profanityMarker": {"Asterisk"},
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/translate?"+query.Encode(), bytes.NewReader(body))
 	if err != nil {
 		return "", provider.Permanent(fmt.Errorf("building the request: %w", err))

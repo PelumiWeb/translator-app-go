@@ -20,6 +20,9 @@ func TestTranslateSendsTheTextAndReadsTheTranslation(t *testing.T) {
 		if q.Get("api-version") != "3.0" || q.Get("from") != "en" || q.Get("to") != "zh-Hans" {
 			t.Errorf("query = %q", r.URL.RawQuery)
 		}
+		if q.Get("profanityAction") != "Marked" || q.Get("profanityMarker") != "Asterisk" {
+			t.Errorf("query = %q, want offensive words masked", r.URL.RawQuery)
+		}
 		if got := r.Header.Get("Ocp-Apim-Subscription-Key"); got != "test-key" {
 			t.Errorf("key header = %q", got)
 		}

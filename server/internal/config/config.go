@@ -13,6 +13,7 @@ type Config struct {
 	AudioDir    string
 	VoicesDir   string // users' kept voice samples, apart from job audio
 	MessagesDir string // the audio of room messages
+	ReportsDir  string // copies of reported recordings, until each report is closed
 	ModelsDir   string
 	Workers     int
 
@@ -88,6 +89,10 @@ type Config struct {
 	// notes, and text messages.
 	DailyVoiceMinutes int
 	DailyTexts        int
+
+	// ReportsNotifyHandle is the ID of the owner's account, whose phones are
+	// told of each new report (ADR 0035). Empty for no one.
+	ReportsNotifyHandle string
 }
 
 // Load is called once from main. Nothing else in the server reads the
@@ -101,6 +106,7 @@ func Load() Config {
 		AudioDir:    env("AUDIO_DIR", "data/audio"),
 		VoicesDir:   env("VOICES_DIR", "data/voices"),
 		MessagesDir: env("MESSAGES_DIR", "data/messages"),
+		ReportsDir:  env("REPORTS_DIR", "data/reports"),
 		ModelsDir:   env("MODELS_DIR", "data/models"),
 		Workers:     envInt("WORKERS", 4),
 
@@ -134,6 +140,8 @@ func Load() Config {
 
 		DailyVoiceMinutes: envInt("DAILY_VOICE_MINUTES", 10),
 		DailyTexts:        envInt("DAILY_TEXT_MESSAGES", 100),
+
+		ReportsNotifyHandle: env("REPORTS_NOTIFY_HANDLE", ""),
 	}
 }
 

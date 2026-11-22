@@ -74,6 +74,13 @@ func run(logger *slog.Logger) error {
 	flag.StringVar(&wl.remove, "waitlist-remove", "", "instead of serving: take this `email` off the waitlist")
 	flag.BoolVar(&wl.count, "waitlist-count", false, "instead of serving: print how many are waiting")
 	flag.BoolVar(&wl.list, "waitlist-list", false, "instead of serving: print everyone on the waitlist, invited or not, without inviting anyone")
+	var sc safetyCommand
+	flag.BoolVar(&sc.listReports, "reports-list", false, "instead of serving: print the open reports, oldest first")
+	flag.StringVar(&sc.closeReport, "report-close", "", "instead of serving: close the report with this `id`, deleting its copy of the message")
+	flag.StringVar(&sc.note, "note", "", "with -report-close: what was done about it")
+	flag.StringVar(&sc.suspend, "account-suspend", "", "instead of serving: suspend the account with this `ID`, signing it out everywhere")
+	flag.StringVar(&sc.deleteUser, "account-delete", "", "instead of serving: delete the account with this `ID` and everything it said (with -yes)")
+	flag.BoolVar(&sc.yes, "yes", false, "with -account-delete: really delete it; without, only say what would go")
 	flag.Parse()
 	role := role(*roleFlag)
 	if !role.runsAPI() && !role.runsWorkers() {
@@ -121,6 +128,24 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer messages.Close()
+	reports, err := storage.NewLocal(cfg.ReportsDir)
+	if err != nil {
+		return err
+	}
+	defer reports.Close()
+
+	if sc.set() {
+		queueStore, accountStore := queue.NewStore(pool), accounts.NewStore(pool)
+		roomStore := rooms.NewStore(pool, queueStore, rooms.Limits{})
+		return sc.run(ctx, safetyStores{
+			accounts: accountStore,
+			rooms:    roomStore,
+			reports:  reports,
+			api: &api.API{
+				Logger: logger, Accounts: accountStore, Rooms: roomStore, Voices: voices, Messages: messages,
+			},
+		}, os.Stdout)
+	}
 
 	catalog, err := models.Load(cfg.ModelsDir)
 	if err != nil {
@@ -204,6 +229,7 @@ func run(logger *slog.Logger) error {
 			Files:      voices,
 			Messages:   messages,
 			Phones:     accountStore,
+			ReportsTo:  cfg.ReportsNotifyHandle,
 		}
 		// Left nil, not an empty Services, when neither is set up: the
 		// deliverer checks for nil to skip the work of finding phones.
@@ -285,6 +311,7 @@ func run(logger *slog.Logger) error {
 		Rooms:          roomStore,
 		Changes:        hub,
 		Messages:       messages,
+		Reports:        reports,
 		Waitlist:       waitlist.NewStore(pool),
 	}
 

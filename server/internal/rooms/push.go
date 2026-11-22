@@ -51,8 +51,60 @@ func (d *Deliverer) Push(ctx context.Context, messageID, lang string) error {
 		CollapseID: messageID,
 		Data:       map[string]string{"room_id": work.roomID, "message_id": messageID},
 	}
+	return d.sendToAll(ctx, work.phones, n)
+}
+
+// NotifyReport tells the owner, on every phone they are signed in on, that a
+// report came in, so that it is looked at within the day (ADR 0032). It says
+// what was reported and why, never the words: the push services would see
+// them.
+func (d *Deliverer) NotifyReport(ctx context.Context, reportID string) error {
+	if d.Pusher == nil || d.ReportsTo == "" {
+		return nil
+	}
+	kind, reason, err := d.Store.reportSummary(ctx, reportID)
+	if errors.Is(err, ErrNoReport) {
+		return provider.Permanent(err)
+	}
+	if err != nil {
+		return err
+	}
+	phones, err := d.Store.phonesOf(ctx, d.ReportsTo)
+	if err != nil {
+		return err
+	}
+	what := map[string]string{KindVoice: "A voice note", KindText: "A message"}[kind]
+	if what == "" {
+		what = "Someone"
+	}
+	n := push.Notification{
+		Title:      "New report",
+		Body:       what + " · " + reasonWords[reason],
+		CollapseID: reportID,
+		// No room: tapping it only opens the app. The report is read with
+		// make reports-list.
+		Data: map[string]string{"report_id": reportID},
+	}
+	return d.sendToAll(ctx, phones, n)
+}
+
+// reasonWords says each reason as the owner's notification shows it.
+var reasonWords = map[string]string{
+	ReasonSpam:       "spam",
+	ReasonHarassment: "harassment",
+	ReasonHate:       "hate",
+	ReasonSexual:     "sexual content",
+	ReasonViolence:   "violence",
+	ReasonSelfHarm:   "someone may be at risk",
+	ReasonOther:      "another reason",
+}
+
+// sendToAll sends n to each phone, forgetting those the push service no
+// longer knows. A failure a retry may mend is returned as it is, so the job
+// is retried; one it cannot, as permanent.
+func (d *Deliverer) sendToAll(ctx context.Context, phones []push.Device, n push.Notification) error {
 	var retry, failed []error
-	for _, phone := range work.phones {
+	for _, phone := range phones {
 		err := d.Pusher.Push(ctx, phone, n)
 		switch {
 		case err == nil:
@@ -80,6 +132,44 @@ func (d *Deliverer) Push(ctx context.Context, messageID, lang string) error {
 func clock(ms int) string {
 	seconds := (ms + 500) / 1000
 	return fmt.Sprintf("%d:%02d", seconds/60, seconds%60)
+}
+
+// reportSummary is what the owner's notification says of a report: whether
+// it is about a voice note, a message or a person (kind is then empty), and
+// why.
+func (s *Store) reportSummary(ctx context.Context, reportID string) (kind, reason string, err error) {
+	err = s.db.QueryRow(ctx, `SELECT coalesce(message_kind, ''), reason FROM reports WHERE id = $1`, reportID).Scan(&kind, &reason)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", ErrNoReport
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("reading a report: %w", err)
+	}
+	return kind, reason, nil
+}
+
+// phonesOf lists the phones the user with this handle is signed in on.
+func (s *Store) phonesOf(ctx context.Context, handle string) ([]push.Device, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT p.service, p.token
+		FROM users u
+		JOIN sessions se ON se.user_id = u.id
+		JOIN push_tokens p ON p.session_hash = se.token_hash
+		WHERE u.handle = lower($1)`, handle)
+	if err != nil {
+		return nil, fmt.Errorf("finding the owner's phones: %w", err)
+	}
+	phones, err := pgx.CollectRows(rows, scanDevice)
+	if err != nil {
+		return nil, fmt.Errorf("finding the owner's phones: %w", err)
+	}
+	return phones, nil
+}
+
+func scanDevice(row pgx.CollectableRow) (push.Device, error) {
+	var d push.Device
+	err := row.Scan(&d.Service, &d.Token)
+	return d, err
 }
 
 // pushWork is what Push needs: who sent the message, and the phones of the
@@ -117,11 +207,7 @@ func (s *Store) pushWork(ctx context.Context, messageID, lang string) (pushWork,
 	if err != nil {
 		return pushWork{}, fmt.Errorf("finding the listeners' phones: %w", err)
 	}
-	w.phones, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (push.Device, error) {
-		var d push.Device
-		err := row.Scan(&d.Service, &d.Token)
-		return d, err
-	})
+	w.phones, err = pgx.CollectRows(rows, scanDevice)
 	if err != nil {
 		return pushWork{}, fmt.Errorf("finding the listeners' phones: %w", err)
 	}

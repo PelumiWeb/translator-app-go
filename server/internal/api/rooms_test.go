@@ -39,7 +39,7 @@ func newRoomsWorldWithLimits(t *testing.T, people map[string]string, limits room
 	db := testdb.New(t)
 	store := accounts.NewStore(db)
 	a := newTestAPI()
-	a.Accounts, a.Voices, a.Messages = store, &fakeAudio{}, &fakeAudio{}
+	a.Accounts, a.Voices, a.Messages, a.Reports = store, &fakeAudio{}, &fakeAudio{}, &fakeAudio{}
 	a.Rooms = rooms.NewStore(db, queue.NewStore(db), limits)
 
 	ctx, cancel := context.WithCancel(context.Background())

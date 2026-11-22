@@ -20,6 +20,9 @@ var (
 	ErrNoSession   = errors.New("accounts: no such session")
 	ErrNoUser      = errors.New("accounts: no such user")
 	ErrHandleTaken = errors.New("accounts: the handle is taken")
+	// ErrSuspended means the owner suspended the account (ADR 0035): it
+	// cannot sign in.
+	ErrSuspended = errors.New("accounts: the account is suspended")
 )
 
 // Identity providers, as stored in identities.provider.
@@ -35,6 +38,8 @@ type User struct {
 	DisplayName string
 	Handle      string // empty until chosen
 	Language    string // empty until chosen
+
+	suspended bool // read at sign-in only; a suspended user has no sessions
 }
 
 // ProfileUpdate holds the fields to change. A nil field is left as it is,
@@ -69,6 +74,9 @@ func (s *Store) SignIn(ctx context.Context, provider, subject, email, name strin
 		if !isUniqueViolation(err) || attempt == 2 {
 			return "", User{}, false, err
 		}
+	}
+	if user.suspended {
+		return "", User{}, false, ErrSuspended
 	}
 
 	token, hash, err := newToken()
@@ -108,9 +116,12 @@ func (s *Store) findOrCreate(ctx context.Context, provider, subject, email, name
 		return User{}, false, fmt.Errorf("looking up the identity: %w", err)
 	}
 
-	user, err := scanUser(tx.QueryRow(ctx, selectUser+` WHERE id = $1`, userID))
+	var user User
+	err = tx.QueryRow(ctx,
+		`SELECT id, display_name, coalesce(handle, ''), language, suspended_at IS NOT NULL FROM users WHERE id = $1`, userID,
+	).Scan(&user.ID, &user.DisplayName, &user.Handle, &user.Language, &user.suspended)
 	if err != nil {
-		return User{}, false, err
+		return User{}, false, fmt.Errorf("reading a user: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return User{}, false, fmt.Errorf("committing the sign-in: %w", err)
@@ -126,7 +137,8 @@ func (s *Store) UserForToken(ctx context.Context, token string) (User, error) {
 			UPDATE sessions SET last_used_at = now() WHERE token_hash = $1 RETURNING user_id
 		)
 		SELECT u.id, u.display_name, coalesce(u.handle, ''), u.language
-		FROM users u JOIN session ON u.id = session.user_id`,
+		FROM users u JOIN session ON u.id = session.user_id
+		WHERE u.suspended_at IS NULL`,
 		hashToken(token),
 	))
 	if errors.Is(err, ErrNoUser) {
@@ -160,6 +172,32 @@ func (s *Store) UpdateProfile(ctx context.Context, userID string, update Profile
 		return User{}, ErrHandleTaken
 	}
 	return user, err
+}
+
+// Suspend stops a user signing in and ends their sessions, which takes their
+// phones' push addresses with them. Their account and what they said stay,
+// for the owner to decide on. Suspending someone already suspended changes
+// nothing.
+func (s *Store) Suspend(ctx context.Context, userID string) error {
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx,
+			`UPDATE users SET suspended_at = coalesce(suspended_at, now()), updated_at = now() WHERE id = $1`, userID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNoUser
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
+		return err
+	})
+	if errors.Is(err, ErrNoUser) {
+		return err
+	}
+	if err != nil {
+		return fmt.Errorf("suspending a user: %w", err)
+	}
+	return nil
 }
 
 // DeleteUser deletes a user, and with them their identities and sessions.

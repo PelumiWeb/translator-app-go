@@ -711,6 +711,7 @@ type fakeDeliverer struct {
 	delivered []string // "message lang attempt"
 	failed    []string // "message lang: reason"
 	pushes    []string // "message lang"
+	reports   []string // report IDs
 }
 
 func (d *fakeDeliverer) Deliver(_ context.Context, messageID, lang string, attempt int) error {
@@ -739,6 +740,23 @@ func (d *fakeDeliverer) Push(_ context.Context, messageID, lang string) error {
 		return d.errs[len(d.pushes)-1]
 	}
 	return nil
+}
+
+// NotifyReport fails with errs, one per call, like Deliver.
+func (d *fakeDeliverer) NotifyReport(_ context.Context, reportID string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.reports = append(d.reports, reportID)
+	if len(d.reports) <= len(d.errs) {
+		return d.errs[len(d.reports)-1]
+	}
+	return nil
+}
+
+func (d *fakeDeliverer) reportCalls() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.reports)
 }
 
 func (d *fakeDeliverer) pushCalls() []string {
@@ -877,5 +895,38 @@ func TestPoolSendsPushes(t *testing.T) {
 				t.Errorf("delivered = %v, failed = %v, want neither", delivered, failed)
 			}
 		})
+	}
+}
+
+func TestPoolTellsTheOwnerOfAReport(t *testing.T) {
+	db := testdb.New(t)
+	store := NewStore(db)
+	ctx := context.Background()
+	deliverer := &fakeDeliverer{errs: []error{errors.New("APNs busy")}}
+
+	var reportID string
+	err := db.QueryRow(ctx,
+		`INSERT INTO reports (reported, reason) VALUES ('@someone', 'spam') RETURNING id`,
+	).Scan(&reportID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		return store.EnqueueReportNotice(ctx, tx, reportID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var id string
+	if err := db.QueryRow(ctx, `SELECT id FROM jobs WHERE report_id = $1`, reportID).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	startPoolWithDeliverer(t, store, fake.Provider{}, nil, deliverer, &fakeAudio{}, Config{Lease: testLease, ShutdownGrace: time.Second})
+
+	row := waitForStatus(t, db, id, "done")
+	if row.Attempts != 2 {
+		t.Errorf("attempts = %d, want 2: the first failure was temporary", row.Attempts)
+	}
+	if got, want := deliverer.reportCalls(), []string{reportID, reportID}; !slices.Equal(got, want) {
+		t.Errorf("reports = %v, want %v", got, want)
 	}
 }

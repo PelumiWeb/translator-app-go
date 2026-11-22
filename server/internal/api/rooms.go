@@ -30,6 +30,11 @@ type RoomStore interface {
 	RequestSpeech(ctx context.Context, userID, messageID, lang string) (rooms.Message, error)
 	MarkRead(ctx context.Context, userID, roomID string) error
 	ForgetSender(ctx context.Context, userID string) (audioKeys []string, err error)
+
+	Block(ctx context.Context, blockerID, blockedID string) error
+	Unblock(ctx context.Context, blockerID, blockedID string) error
+	Blocked(ctx context.Context, blockerID string) ([]rooms.BlockedPerson, error)
+	AddReport(ctx context.Context, r rooms.NewReport) (reportID string, err error)
 }
 
 // RoomChanges tells a user's open streams that something in their rooms changed.
@@ -55,7 +60,10 @@ type roomResponse struct {
 	People      []userResponse   `json:"people"` // everyone in it but the one asking
 	LastMessage *messageResponse `json:"last_message"`
 	Unread      int              `json:"unread"`
-	CreatedAt   time.Time        `json:"created_at"`
+	// YouBlocked is true when the one asking has blocked the other person;
+	// the person blocked sees false.
+	YouBlocked bool      `json:"you_blocked"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type messageResponse struct {
@@ -80,7 +88,7 @@ type renditionResponse struct {
 }
 
 func roomJSON(r rooms.Room, viewer accounts.User) roomResponse {
-	response := roomResponse{ID: r.ID, People: []userResponse{}, Unread: r.Unread, CreatedAt: r.CreatedAt}
+	response := roomResponse{ID: r.ID, People: []userResponse{}, Unread: r.Unread, YouBlocked: r.YouBlocked, CreatedAt: r.CreatedAt}
 	for _, p := range r.People {
 		response.People = append(response.People, userResponse{ID: p.ID, DisplayName: p.DisplayName, Handle: p.Handle, Language: p.Language})
 	}
@@ -267,6 +275,8 @@ func (a *API) handleSendMessage(w http.ResponseWriter, r *http.Request, user acc
 	case errors.Is(err, rooms.ErrTextLimit):
 		writeError(w, http.StatusTooManyRequests, "text_limit_reached", "you have sent as many messages as one day allows")
 		return
+	case sendRefused(w, err):
+		return
 	case err != nil:
 		a.Logger.Error("adding a message", "user_id", user.ID, "room_id", roomID, "error", err)
 		writeError(w, http.StatusInternalServerError, "internal", "could not send the message")
@@ -395,7 +405,7 @@ func (a *API) handleRetryMessage(w http.ResponseWriter, r *http.Request, user ac
 		return
 	}
 	message, err := a.Rooms.Retry(r.Context(), user.ID, messageID)
-	if !a.messageFound(w, err, user) {
+	if sendRefused(w, err) || !a.messageFound(w, err, user) {
 		return
 	}
 	a.Wake()

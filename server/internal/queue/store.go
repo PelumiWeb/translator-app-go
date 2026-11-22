@@ -28,6 +28,7 @@ const (
 	KindSynthesize = "synthesize"
 	KindDeliver    = "deliver" // a room message, for the listeners of one language
 	KindPush       = "push"    // telling those listeners' phones it is ready
+	KindReport     = "report"  // telling the owner's phones a report came in
 )
 
 // Job statuses, as stored in jobs.status.
@@ -50,7 +51,7 @@ const (
 // Job is what a worker needs to process one claimed job.
 type Job struct {
 	ID   string
-	Kind string // KindTranscribe, KindSynthesize, KindDeliver or KindPush
+	Kind string // KindTranscribe, KindSynthesize, KindDeliver, KindPush or KindReport
 
 	// AudioKey is the stored audio the job works from: the speech to
 	// transcribe, or the voice sample to imitate. Empty for a delivery,
@@ -61,6 +62,7 @@ type Job struct {
 	TargetLang string // synthesis, delivery and push: the language to speak in
 	Text       string // synthesis: what to say
 	MessageID  string // delivery and push: the message
+	ReportID   string // report: the report the owner is told of
 
 	Attempt     int // 1 on the first try
 	MaxAttempts int // the job fails for good once Attempt reaches this
@@ -127,6 +129,25 @@ func (s *Store) EnqueueDeliveries(ctx context.Context, tx pgx.Tx, messageID stri
 func (s *Store) EnqueuePushes(ctx context.Context, tx pgx.Tx, messageID string, langs []string) error {
 	if err := enqueueForMessage(ctx, tx, KindPush, messageID, langs); err != nil {
 		return fmt.Errorf("enqueueing a push: %w", err)
+	}
+	return nil
+}
+
+// EnqueueReportNotice adds a job to tell the owner's phones that a report came
+// in. It runs in the caller's transaction, the one that records the report.
+func (s *Store) EnqueueReportNotice(ctx context.Context, tx pgx.Tx, reportID string) error {
+	var id string
+	err := tx.QueryRow(ctx, `
+		INSERT INTO jobs (status, kind, audio_path, report_id)
+		VALUES ('queued', $1, '', $2)
+		RETURNING id`,
+		KindReport, reportID,
+	).Scan(&id)
+	if err == nil {
+		_, err = insertEvent(ctx, tx, id, EventQueued, struct{}{})
+	}
+	if err != nil {
+		return fmt.Errorf("enqueueing a report notice: %w", err)
 	}
 	return nil
 }
@@ -211,10 +232,10 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (Job, error) {
 			)
 			RETURNING id, kind, audio_path, attempts, max_attempts,
 			          COALESCE(source_lang, ''), COALESCE(target_lang, ''), COALESCE(input_text, ''),
-			          COALESCE(message_id::text, '')`,
+			          COALESCE(message_id::text, ''), COALESCE(report_id::text, '')`,
 			lease,
 		).Scan(&job.ID, &job.Kind, &job.AudioKey, &job.Attempt, &job.MaxAttempts,
-			&job.SourceLang, &job.TargetLang, &job.Text, &job.MessageID)
+			&job.SourceLang, &job.TargetLang, &job.Text, &job.MessageID, &job.ReportID)
 		if err != nil {
 			return err
 		}

@@ -25,6 +25,8 @@ type Deliverer interface {
 	// Push tells the phones of the listeners of one language that the
 	// message is ready for them.
 	Push(ctx context.Context, messageID, lang string) error
+	// NotifyReport tells the owner's phones that a report came in.
+	NotifyReport(ctx context.Context, reportID string) error
 }
 
 // AudioStore is what the workers need from audio storage.
@@ -284,6 +286,8 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, job Job) {
 		record, err = p.deliver(workCtx, job)
 	case KindPush:
 		record, err = p.push(workCtx, job)
+	case KindReport:
+		record, err = p.notifyReport(workCtx, job)
 	default:
 		record, err = p.transcribe(workCtx, logger, job)
 	}
@@ -375,6 +379,20 @@ func (p *Pool) push(ctx context.Context, job Job) (record func(context.Context) 
 		return nil, provider.Permanent(errors.New("this worker cannot send notifications"))
 	}
 	if err := p.deliverer.Push(ctx, job.MessageID, job.TargetLang); err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context) error {
+		return p.store.CompleteDelivery(ctx, job)
+	}, nil
+}
+
+// notifyReport hands a new report to the deliverer, to tell the owner's
+// phones. It returns the function that marks the job done.
+func (p *Pool) notifyReport(ctx context.Context, job Job) (record func(context.Context) error, err error) {
+	if p.deliverer == nil {
+		return nil, provider.Permanent(errors.New("this worker cannot send notifications"))
+	}
+	if err := p.deliverer.NotifyReport(ctx, job.ReportID); err != nil {
 		return nil, err
 	}
 	return func(ctx context.Context) error {
