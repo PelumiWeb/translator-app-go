@@ -1715,8 +1715,8 @@ physical goods, does not apply. Under the Small Business Program, Apple keeps
   the sender's subscription paid for it. Rosa can sign up and hear her
   grandson without paying, and subscribes when she wants to answer.
 
-**The trial's cap** (proposed, to confirm; settings): 10 minutes of voice
-notes and 50 messages over the 7 days, at most about 25 cents of engines per
+**The trial's cap** (confirmed by the owner, 2026-11-23; settings): 10
+minutes of voice notes and 50 messages over the 7 days, at most about 25 cents of engines per
 trial. Subscribers keep ADR 0029's daily limits, 10 minutes and 100
 messages.
 
@@ -1791,7 +1791,7 @@ code does not wait for it)
   the trial or a subscription (`402 subscription_required`, checked before a
   recording is stored). In the trial its cap counts from its start, in place
   of the daily limits (`429 trial_limit_reached`); `TRIAL_VOICE_MINUTES` and
-  `TRIAL_TEXT_MESSAGES`, 10 and 50, proposed, still to confirm. Reading and
+  `TRIAL_TEXT_MESSAGES`, 10 and 50, confirmed by the owner on 2026-11-23. Reading and
   hearing need nothing. Purchases are recorded with the switch off too
 - Changed from the plan: the interpreter's work is not counted against a cap,
   as no limit was ever set for it; the monthly budget (18.12) bounds it. Nor
@@ -1914,8 +1914,8 @@ Still open:
    whether WhatsApp's share menu offers the app. The reply reaches WhatsApp as
    an audio file, not a voice-note bubble.
 9. Settled 2026-11-21: one subscription at $4.99 a month, Apple's 7-day free
-   trial, and only senders pay (milestone 21). The trial's cap is proposed,
-   still to confirm.
+   trial, and only senders pay (milestone 21). The trial's cap, 10 minutes of
+   voice notes and 50 messages, confirmed 2026-11-23.
 10. Settled 2026-11-22: the owner's company runs Shinar, a private company
     limited by shares registered in Nigeria, under Nigerian law (checkpoints
     18.11 and 21.1). Its name is to come.

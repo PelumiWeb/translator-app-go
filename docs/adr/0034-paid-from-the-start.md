@@ -80,7 +80,8 @@ once. The trial, the paid period and the grace period may all send.
 interpreter's work on the server (`/v1/jobs`, `/v1/speech`), refused with
 `402 subscription_required`. Nothing of a refused message is kept, and a
 voice note's recording is not even stored. In the trial, the trial's cap
-(`TRIAL_VOICE_MINUTES`, `TRIAL_TEXT_MESSAGES`; proposed 10 and 50) is
+(`TRIAL_VOICE_MINUTES`, `TRIAL_TEXT_MESSAGES`: 10 minutes and 50 messages,
+confirmed by the owner on 2026-11-23) is
 counted from the trial's start, in place of the daily limits; past it,
 `429 trial_limit_reached`. Subscribers keep the daily limits (ADR 0029).
 
