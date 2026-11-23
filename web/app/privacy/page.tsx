@@ -87,6 +87,14 @@ export default function Privacy() {
         out. You can turn notifications off in your phone&apos;s settings.
       </p>
 
+      <h2>Your subscription</h2>
+      <p>
+        If you subscribe, Apple tells our server what you bought: the plan, when it started and when it ends, whether it
+        renews, and Apple&apos;s ID for the purchase, so we know you may send. We never see your card or bank details:
+        Apple keeps those. The record of a subscription stays while Apple keeps it going, even if you delete your
+        account, so that whoever restores it next can use it.
+      </p>
+
       <h2>The waitlist</h2>
       <p>
         On this website you can leave your email address, your first name if you like, and which phone you have. We use
@@ -143,6 +151,7 @@ export default function Privacy() {
       <ul>
         <li>Your account, your voice and your messages: until you delete them, or your account.</li>
         <li>A reported message: with its report, until we have looked into it.</li>
+        <li>A subscription&apos;s record: as the record of what was paid, after it ends too.</li>
         <li>Recordings and copies of your voice sent for the interpreter: until the work is done. Its speech: an hour.</li>
         <li>The waitlist: until {APP_NAME} is out and we&apos;ve told you, or until you ask.</li>
         <li>Deleted data can stay in the database&apos;s automatic backups for up to 35 days, until they are replaced.</li>

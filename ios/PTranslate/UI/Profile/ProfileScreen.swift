@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 
 /// Where the profile leads.
@@ -9,9 +10,13 @@ enum ProfileDestination: Hashable {
 struct ProfileScreen: View {
     let viewModel: ProfileViewModel
     let translate: TranslateViewModel
+    let subscriptions: Subscriptions
 
     @State private var confirmingVoice = false
     @State private var confirmingAccount = false
+    @State private var paywall = false
+    @State private var managing = false
+    @State private var restoring = false
 
     var body: some View {
         List {
@@ -56,6 +61,37 @@ struct ProfileScreen: View {
                 header("You")
             }
             .listRowBackground(Palette.bgRaised)
+
+            if let standing = subscriptions.standing, standing.required || standing.state != .none {
+                Section {
+                    HStack {
+                        Text("Your plan")
+                        Spacer()
+                        Text(planLine(standing)).foregroundStyle(Palette.fg2)
+                    }
+                    if standing.subscribed {
+                        Button("Manage subscription") { managing = true }
+                    } else {
+                        Button(standing.state == .none ? "Start your free week" : "Subscribe") { paywall = true }
+                    }
+                    Button(restoring ? "Restoring…" : "Restore purchases") {
+                        restoring = true
+                        Task {
+                            // Asks Apple for this Apple account's purchases again, then hands them to the server.
+                            try? await AppStore.sync()
+                            await subscriptions.sync()
+                            restoring = false
+                        }
+                    }
+                    .disabled(restoring)
+                    if let problem = subscriptions.problem {
+                        Text(problem.words).font(.pearlMeta).foregroundStyle(Palette.fg2)
+                    }
+                } header: {
+                    header("Plan")
+                }
+                .listRowBackground(Palette.bgRaised)
+            }
 
             Section {
                 NavigationLink("What we keep, and why", value: ProfileDestination.privacy)
@@ -103,6 +139,11 @@ struct ProfileScreen: View {
         .background(Palette.bg)
         .disabled(viewModel.busy)
         .task { await viewModel.refresh() }
+        .paywall(isPresented: $paywall, subscriptions: subscriptions)
+        .manageSubscriptionsSheet(isPresented: $managing)
+        .onChange(of: managing) { _, open in
+            if !open { Task { await subscriptions.refresh() } }
+        }
         .alert("Delete your voice?", isPresented: $confirmingVoice) {
             Button("Delete my voice", role: .destructive, action: viewModel.deleteVoiceConfirmed)
             Button("Cancel", role: .cancel) {}
@@ -113,8 +154,16 @@ struct ProfileScreen: View {
             Button("Delete account", role: .destructive, action: viewModel.deleteAccountConfirmed)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Everything goes: your profile, your voice, and everything you said in your rooms. This can't be undone.")
+            Text(deleteWarning)
         }
+    }
+
+    /// Apple asks apps to say that deleting an account does not cancel a subscription, and how to cancel it.
+    private var deleteWarning: String {
+        let everything = "Everything goes: your profile, your voice, and everything you said in your rooms. This can't be undone."
+        guard subscriptions.standing?.subscribed == true else { return everything }
+        return everything + " Your subscription is not cancelled with it: Apple keeps charging until you cancel it, "
+            + "under Manage subscription above, or in Settings, under your name, then Subscriptions."
     }
 
     private var voiceDetail: String {

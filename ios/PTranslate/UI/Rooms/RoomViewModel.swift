@@ -80,6 +80,8 @@ final class RoomViewModel {
     var reporting: ReportTarget?
     /// A report was sent: the screen says thank you, and when it will be looked at.
     var reportSent = false
+    /// The server refused a send for want of a subscription: the screen opens the paywall.
+    var needsSubscription = false
 
     var myLanguage: String? { account.profile?.language }
     /// The user blocked the other person: the composer gives way to a way to unblock.
@@ -452,7 +454,9 @@ final class RoomViewModel {
 
     private func notSent(_ id: String, _ error: any Error) {
         updatePending(id) { $0.stage = .failed }
-        if let refusal = Self.refusal((error as? BackendError)?.code) {
+        let code = (error as? BackendError)?.code
+        if code == "subscription_required" { needsSubscription = true }
+        if let refusal = Self.refusal(code) {
             problem = refusal
         }
     }
@@ -524,6 +528,9 @@ final class RoomViewModel {
         case "text_limit_reached": "You've sent as many messages as one day allows. You can send more later, or send a voice note."
         // The person blocked gets "cannot_send", and only the failed card: they are not told why.
         case "you_blocked": "You've blocked this person. Unblock them to send a message."
+        case "subscription_required": "Start your free week, or subscribe, to send. Your note is kept here to send then."
+        // The cap counts voice notes and messages apart: the other kind may still go.
+        case "trial_limit_reached": "You've sent as much as the free week allows. Your subscription starts when the week ends."
         default: nil
         }
     }

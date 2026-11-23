@@ -4,11 +4,13 @@ import SwiftUI
 /// A conversation: the messages, newest at the bottom, and the composer: type, or record a voice note.
 struct RoomScreen: View {
     @Bindable var viewModel: RoomViewModel
+    let subscriptions: Subscriptions
     let onRecordVoice: () -> Void
 
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var confirmingBlock = false
+    @State private var paywall = false
 
     var body: some View {
         let other = viewModel.room?.other
@@ -16,7 +18,10 @@ struct RoomScreen: View {
             ScrollViewReader { scroller in
                 ScrollView {
                     LazyVStack(spacing: 14) {
-                        ForEach(viewModel.messages) { message in
+                        ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, message in
+                            if startsDay(viewModel.messages, at: index) {
+                                DayHeading(date: message.createdAt)
+                            }
                             HStack {
                                 if message.mine {
                                     Spacer(minLength: 40)
@@ -32,6 +37,10 @@ struct RoomScreen: View {
                                 }
                             }
                             .id(message.id)
+                        }
+                        // Notes on their way are today's; a heading, if the last message was another day.
+                        if !viewModel.pending.isEmpty, !(viewModel.messages.last.map { Calendar.current.isDateInToday($0.createdAt) } ?? false) {
+                            DayHeading(date: .now)
                         }
                         ForEach(viewModel.pending) { note in
                             HStack {
@@ -107,6 +116,15 @@ struct RoomScreen: View {
                 await viewModel.sendReport(reason: reason, note: note, alsoBlock: alsoBlock)
             }
         }
+        .paywall(isPresented: $paywall, subscriptions: subscriptions)
+        .onChange(of: viewModel.needsSubscription) { _, needed in
+            // The server refused a send: the user's standing changed since it was last heard.
+            if needed {
+                paywall = true
+                viewModel.needsSubscription = false
+                Task { await subscriptions.refresh() }
+            }
+        }
         .alert("Thanks for telling us", isPresented: $viewModel.reportSent) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -174,6 +192,15 @@ struct RoomScreen: View {
             switch viewModel.notes.phase {
             case _ where other == nil && viewModel.room != nil:
                 EmptyView()
+            case _ where subscriptions.locked:
+                // Before recording, not after: nothing is recorded that could not be sent.
+                Banner(
+                    systemImage: "waveform",
+                    title: "Start your free week to send",
+                    message: "Reading and hearing what \(other?.shownName ?? "they") sends you is always free.",
+                    action: "See the plan",
+                    onAction: { paywall = true }
+                )
             case _ where viewModel.youBlocked:
                 Banner(
                     systemImage: "hand.raised",
@@ -213,6 +240,21 @@ struct RoomScreen: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
         .padding(.top, 6)
+    }
+}
+
+/// Over the first message of each day.
+private struct DayHeading: View {
+    let date: Date
+
+    var body: some View {
+        Text(dayHeading(date))
+            .font(.pearlMeta).foregroundStyle(Palette.fg2)
+            .padding(.horizontal, 12).padding(.vertical, 4)
+            .background(Palette.bgRaised, in: Capsule())
+            .frame(maxWidth: .infinity)
+            .padding(.top, 6)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

@@ -220,4 +220,33 @@ struct RoomsTests {
     func thePhonesVoiceLeavesOutMaskedWords(text: String, spoken: String) {
         #expect(Rendition.speakable(text) == spoken)
     }
+
+    // Day headings in a room.
+
+    @Test func aDaysHeadingSaysTodayYesterdayTheWeekdayOrTheDate() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Africa/Lagos"))
+        let locale = Locale(identifier: "en_GB")
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 23, hour: 10)))
+        func heading(daysAgo: Int, hour: Int = 9) throws -> String {
+            let day = try #require(calendar.date(byAdding: .day, value: -daysAgo, to: now))
+            let date = try #require(calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day))
+            return dayHeading(date, now: now, calendar: calendar, locale: locale)
+        }
+        #expect(try heading(daysAgo: 0) == "Today")
+        #expect(try heading(daysAgo: 1, hour: 23) == "Yesterday")
+        #expect(try heading(daysAgo: 3) == "Friday")
+        #expect(try heading(daysAgo: 7) == "16 November")
+        #expect(try heading(daysAgo: 400) == "19 October 2025")
+    }
+
+    @Test func aMessageStartsADayWhenTheOneBeforeWasAnotherDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        let late = 1_795_386_600.0 // 2026-11-22 22:30 GMT
+        let messages = [message("a", at: late), message("b", at: late + 600), message("c", at: late + 7200)]
+        #expect(startsDay(messages, at: 0, calendar: calendar))
+        #expect(!startsDay(messages, at: 1, calendar: calendar))
+        #expect(startsDay(messages, at: 2, calendar: calendar)) // past midnight
+    }
 }

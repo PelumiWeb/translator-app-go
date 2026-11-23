@@ -37,6 +37,8 @@ final class AppContainer {
     let account: Account
 
     let rooms: RoomsClient
+    /// The subscription: where the user stands, and every purchase passed on to the server (ADR 0034).
+    let subscriptions: Subscriptions
 
     /// One stream of room changes for every screen that shows rooms.
     let roomFeed: RoomFeed
@@ -57,6 +59,7 @@ final class AppContainer {
 
     /// Hands the session to `push` each time it changes. Lives as long as the app.
     private let followSession: Task<Void, Never>
+    private let followSubscription: Task<Void, Never>
 
     /// The recording of the user's voice, in the app's private files.
     let voice: any VoiceSampleStore = FileVoiceSampleStore(directory: .applicationSupportDirectory.appending(path: "voice"))
@@ -104,6 +107,20 @@ final class AppContainer {
         }
         let rooms = RoomsClient(rest: rest)
         self.rooms = rooms
+        let subscriptions = Subscriptions(client: BillingClient(rest: rest)) { [weak account] in account?.profile?.id }
+        self.subscriptions = subscriptions
+        subscriptions.listen()
+        // Whoever signs in, what their Apple account holds goes to the server, and they hear where they stand.
+        followSubscription = Task { [weak account] in
+            var signedIn: String?
+            while let account, !Task.isCancelled {
+                if account.token != signedIn {
+                    signedIn = account.token
+                    if signedIn == nil { subscriptions.signedOut() } else { await subscriptions.sync() }
+                }
+                await nextChange { _ = account.session }
+            }
+        }
         roomFeed = RoomFeed(rooms: rooms)
         let models = ModelManager(
             backend: backend,
@@ -187,6 +204,7 @@ final class AppContainer {
     isolated deinit {
         measureWhenReady.cancel()
         followSession.cancel()
+        followSubscription.cancel()
     }
 
     /// Multilingual "base", quantised: 57 MB. The reasons are in ADR 0004.

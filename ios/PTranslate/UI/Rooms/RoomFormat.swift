@@ -32,6 +32,27 @@ func roomTime(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> 
     }
 }
 
+/// The heading over a day's messages in a room: "Today", "Yesterday", the weekday this week, else the date, with the
+/// year when it is not this one.
+func dayHeading(_ date: Date, now: Date = .now, calendar: Calendar = .current, locale: Locale = .current) -> String {
+    let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
+    var style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+    switch days {
+    case 0: return "Today"
+    case 1: return "Yesterday"
+    case 2...6: style = style.weekday(.wide)
+    default:
+        style = style.day().month(.wide)
+        if !calendar.isDate(date, equalTo: now, toGranularity: .year) { style = style.year() }
+    }
+    return date.formatted(style)
+}
+
+/// Whether the message at `index` is the first of its day, and so goes under a new heading.
+func startsDay(_ messages: [Message], at index: Int, calendar: Calendar = .current) -> Bool {
+    index == 0 || !calendar.isDate(messages[index].createdAt, inSameDayAs: messages[index - 1].createdAt)
+}
+
 extension Message {
     /// The words the user reads for someone else's message, once there are words to read: a voice note's when it can
     /// be heard, a text message's as soon as it is translated (its voice comes later, if asked for).

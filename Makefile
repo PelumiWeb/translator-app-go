@@ -255,16 +255,19 @@ ios-test: ios-whisper ios-mlkit ## Run the iOS tests on the simulator and print 
 # must be unlocked, with Developer Mode on (Settings, Privacy & Security).
 IOS_DEVICE ?= iPhone
 MAC_HOST   := $(shell scutil --get LocalHostName 2>/dev/null).local
+# The server the phone talks to: this Mac's by default, or the hosted one with
+# IOS_BACKEND=https://shinar-api.southafricanorth.cloudapp.azure.com
+IOS_BACKEND ?= http://$(MAC_HOST):8080
 
 .PHONY: ios-device
-ios-device: ios-whisper ios-mlkit ## Build, install and open the app on the connected iPhone; start the server first
+ios-device: ios-whisper ios-mlkit ## Build, install and open the app on the connected iPhone, on this Mac's server (start it first) or IOS_BACKEND=...
 	xcodebuild build -project $(IOS_PROJECT) -scheme PTranslate -destination 'platform=iOS,name=$(IOS_DEVICE)' \
-		-allowProvisioningUpdates -quiet BACKEND_URL=http://$(MAC_HOST):8080
+		-allowProvisioningUpdates -quiet BACKEND_URL=$(IOS_BACKEND)
 	@app=$$(xcodebuild -project $(IOS_PROJECT) -scheme PTranslate -destination 'generic/platform=iOS' -showBuildSettings 2>/dev/null \
 		| awk -F' = ' '/ TARGET_BUILD_DIR /{dir=$$2} / FULL_PRODUCT_NAME /{name=$$2} END{print dir "/" name}'); \
 	xcrun devicectl device install app --device "$(IOS_DEVICE)" "$$app"
 	xcrun devicectl device process launch --device "$(IOS_DEVICE)" $(BUNDLE_ID)
-	@echo "The app on the phone talks to http://$(MAC_HOST):8080"
+	@echo "The app on the phone talks to $(IOS_BACKEND)"
 
 # Builds for the App Store and uploads to TestFlight. The GitHub workflow
 # (.github/workflows/testflight.yml) runs it; it runs the same here given the

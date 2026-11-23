@@ -5,6 +5,9 @@ enum Brand {
     /// From the display name, `APP_NAME` in the project's build settings: the one place the name is written, since
     /// it waits on a trademark check (ADR 0021).
     static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Shinar"
+    /// The website, with the terms and the privacy page: `SITE_URL` in web/lib/site.ts. Change the two together, as
+    /// when the domain comes.
+    static let website = URL(string: "https://web-nine-phi-84.vercel.app")!
 }
 
 /// The mark: two voices, mint for them on the left and warm white for you on the right, overlapping above a horizon

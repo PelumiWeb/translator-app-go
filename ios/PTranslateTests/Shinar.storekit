@@ -1,0 +1,65 @@
+{
+  "identifier" : "5E1A7C3B",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "8C2D4E61",
+      "localizations" : [
+
+      ],
+      "name" : "Shinar",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6E9F1A27",
+          "introductoryOffer" : {
+            "internalID" : "7B3C5D82",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Send voice notes and messages in your voice",
+              "displayName" : "Shinar",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.pelumi.shinar.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Shinar monthly",
+          "subscriptionGroupID" : "8C2D4E61",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

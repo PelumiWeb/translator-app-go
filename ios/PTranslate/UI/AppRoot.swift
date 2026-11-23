@@ -84,6 +84,8 @@ private struct MainTabs: View {
     @State private var profile: ProfileViewModel
     @State private var roomsPath: [String] = []
     @State private var profilePath: [ProfileDestination] = []
+    @State private var paywall = false
+    @Environment(\.scenePhase) private var scenePhase
 
     init(container: AppContainer, translate: TranslateViewModel, voiceSetup: VoiceSetupViewModel, addHandle: Binding<String?>) {
         self.container = container
@@ -108,11 +110,15 @@ private struct MainTabs: View {
                 }
             }
             Tab("Interpreter", systemImage: "arrow.left.arrow.right", value: TabID.interpreter) {
-                TranslateScreen(viewModel: translate, hasOwnVoice: container.voice.state.duration != nil)
+                if container.subscriptions.locked {
+                    LockedInterpreter { paywall = true }
+                } else {
+                    TranslateScreen(viewModel: translate, hasOwnVoice: container.voice.state.duration != nil)
+                }
             }
             Tab("Profile", systemImage: "person", value: TabID.profile) {
                 NavigationStack(path: $profilePath) {
-                    ProfileScreen(viewModel: profile, translate: translate)
+                    ProfileScreen(viewModel: profile, translate: translate, subscriptions: container.subscriptions)
                         .navigationDestination(for: ProfileDestination.self) { destination in
                             profileDestination(destination)
                         }
@@ -138,6 +144,25 @@ private struct MainTabs: View {
                 UIApplication.shared.registerForRemoteNotifications()
             }
         }
+        .task {
+            await offerTheTrialOnce()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Back from Settings, where a subscription can be cancelled, or from buying elsewhere.
+            if phase == .active { Task { await container.subscriptions.refresh() } }
+        }
+        .paywall(isPresented: $paywall, subscriptions: container.subscriptions)
+    }
+
+    /// The first time someone reaches the app with no subscription, the paywall is offered once, with "Not now".
+    private func offerTheTrialOnce() async {
+        let subscriptions = container.subscriptions
+        if subscriptions.standing == nil { await subscriptions.refresh() }
+        guard let id = container.account.profile?.id, subscriptions.locked, subscriptions.standing?.state == Standing.State.none else { return }
+        let key = "paywallOffered.\(id)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        paywall = true
     }
 
     @ViewBuilder
@@ -165,6 +190,7 @@ private struct MainTabs: View {
 private struct RoomDestination: View {
     let roomID: String
     let notifications: VoiceNoteNotifications
+    let subscriptions: Subscriptions
     let onRecordVoice: () -> Void
     @State private var viewModel: RoomViewModel
     @Environment(\.scenePhase) private var scenePhase
@@ -172,6 +198,7 @@ private struct RoomDestination: View {
     init(container: AppContainer, roomID: String, onRecordVoice: @escaping () -> Void) {
         self.roomID = roomID
         notifications = container.notifications
+        subscriptions = container.subscriptions
         self.onRecordVoice = onRecordVoice
         _viewModel = State(
             initialValue: RoomViewModel(
@@ -188,7 +215,7 @@ private struct RoomDestination: View {
     }
 
     var body: some View {
-        RoomScreen(viewModel: viewModel, onRecordVoice: onRecordVoice)
+        RoomScreen(viewModel: viewModel, subscriptions: subscriptions, onRecordVoice: onRecordVoice)
             // While the room is on the screen its notes appear as they arrive, so they need no notification, and
             // those that may have brought the person here are done with.
             .onAppear { notifications.roomOnScreen = roomID }

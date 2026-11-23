@@ -1034,6 +1034,14 @@ the room, each message appears as soon as it is ready.
   app in the background: a note from the other shows a notification, and
   tapping it opens the room
 
+**Fix after 14.4: dates in a room** (2026-11-23, at the owner's request)
+- The cards showed a time, and only on the user's own messages, so older
+  conversations had no dates. A heading now goes over the first message of
+  each day: "Today", "Yesterday", the weekday within the week, else the date,
+  with the year when it is not this one. iPhone only for now; Android in
+  milestone 22
+- Verify: `make ios-test`; a room with messages from more than one day
+
 **Checkpoint 14.6: recording with pause, stop and send** (built, 2026-11-18,
 at the owner's request: "record should have pause, stop and send; it
 currently just has stop, which also sends")
@@ -1814,32 +1822,56 @@ code does not wait for it)
   notifications start arriving at the address set in App Store Connect
 - Verify: `make server-test`; `make appstore-check`
 
-**Checkpoint 21.3: the iPhone**
-- `Core/Billing`, on StoreKit 2 (part of the SDK, no new dependency): the
-  products; a purchase carrying the user's ID as `appAccountToken`;
-  `Transaction.updates`, listened to for as long as the app runs and owned
-  by the container; each verified transaction sent to the server, and
-  finished once the server has it; Restore (`AppStore.sync()`)
-- The paywall, after the voice step of sign-up with "Not now" (you can still
-  read and hear what you are sent), and again whenever you try to send or
-  open the interpreter: what Shinar does, "7 days free, then $4.99 a month"
-  in the person's own currency, the trial's cap, that it renews every month
-  until cancelled and how to cancel, links to the Terms of Use and the
-  privacy page, and Restore. Apple reviews this
-  screen closely (Guideline 3.1.2)
-- Profile: your plan (the trial ends on…, renews on…), Manage subscription
-  (Apple's own sheet), Restore purchases. Deleting your account says first
-  that Apple goes on charging until the subscription is cancelled, and how to
-  cancel it
-- In a room: a refused send says why and opens the paywall; the note waits
-  on its card, as at the daily limit
-- Not designed: a brief for Claude Design (round 5); built from Pearl's parts
-  until it answers
-- Tests: Swift Testing with the StoreKit configuration file (buying, the
-  trial, renewal, expiry, a refund, restoring), the server stubbed with
-  `URLProtocol`
-- Verify: `make ios-test`; on the iPhone with a sandbox account: buy, see
-  the trial in Profile, send until the cap, cancel in Settings
+**Checkpoint 21.3: the iPhone** (built 2026-11-23)
+- `Core/Billing/Subscriptions`, on StoreKit 2: where the user stands, from
+  the server; every purchase carries the user's ID as `appAccountToken`;
+  `Transaction.updates` heard for as long as the app runs (renewals, refunds,
+  Ask to Buy, offer codes); on signing in, and after Restore, everything the
+  Apple account holds is sent to the server. A transaction is finished only
+  once the server has it, or has refused it for good, so one that could not
+  be sent goes again on the next launch. `Core/Net/BillingClient` for the two
+  endpoints
+- The paywall is Apple's own `SubscriptionStoreView` for the one plan, rather
+  than one drawn by hand: it shows the price, the free week and how it renews
+  in the person's currency, with Restore, the terms and the privacy page, as
+  App Review checks (Guideline 3.1.2). Shinar's words above it: what it does,
+  the free week's cap, and that reading and hearing are always free. Its close
+  button is the "Not now". It closes by itself once a purchase comes to
+  something, good or bad (the owner's ask, 2026-11-23), and an alert over the
+  screen underneath says what: the free week started, subscribed, waiting for
+  approval, or what went wrong. Backing out of Apple's sheet leaves it open
+- Where it shows: once, the first time someone reaches the app with no
+  subscription; in a room, in place of the composer ("Start your free week to
+  send", before anything is recorded); when the server refuses a send for
+  want of one; on the Interpreter tab, which is locked without one; and from
+  Profile
+- Profile, under Plan: the plan in a line ("Free week · until 30 Nov",
+  "Subscribed · renews 30 Dec", "Payment failed · Apple is retrying"),
+  Manage subscription (Apple's sheet), or Start your free week, and Restore
+  purchases. Deleting the account says first that Apple keeps charging until
+  the subscription is cancelled, and where
+- With the server's `BILLING` off, nothing of this shows: the server says a
+  subscription is not required, so TestFlight testers see no paywall and no
+  plan
+- The website's terms (a Subscription section: renewal, cancelling at least
+  24 hours before, refunds through Apple, and that deleting the account does
+  not cancel it; no price, which the app shows) and both privacy pages (what
+  Apple tells us of a purchase, never card details)
+- `PTranslateTests/Shinar.storekit`: the plan as App Store Connect sells it,
+  for the tests, and for the simulator when chosen in the scheme (Run,
+  Options, StoreKit Configuration). A purchase there is signed by Xcode, not
+  Apple, so the server refuses it: the server's check is seen working, the
+  purchase is not
+- Tests: the client over the wire, unknown states, who may send, the plan's
+  wording, the refusals, and the configuration file read by a StoreKit test
+  session (a month, its first week free). iOS 219 pass, none skipped
+- Not checked yet: a real purchase in Apple's sandbox, which needs the Paid
+  Applications Agreement, which waits on the company (21.1); the paywall on a
+  screen
+- Verify: `make ios-test`. To see it: `BILLING=on make server-run`, the
+  simulator with the StoreKit configuration chosen, sign up as a test account:
+  the paywall is offered, the room's composer asks for the free week, the
+  Interpreter is locked
 
 ---
 
@@ -1849,7 +1881,8 @@ Added on 2026-11-21, when the owner chose to take the iPhone to the App Store
 first. Android gets what was built for the iPhone alone from milestone 16
 on: block and report (the screens, `you_blocked`, and leaving `***` out of
 the phone's voice; the server's side is shared), `account_suspended` at
-sign-in, asking before words leave the phone, and the paywall
+sign-in, the day headings in a room, asking before words leave the phone, and
+the paywall
 and subscriptions through Google Play Billing (a dependency to approve), with
 the server checking purchases with Google (the Play Developer API, and
 notifications through Cloud Pub/Sub). Then Google Play itself: a developer

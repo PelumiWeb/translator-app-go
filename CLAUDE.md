@@ -109,6 +109,7 @@ Core/Pipeline    transcribe -> translate -> speak, the reusable entry point
 Core/Account     the signed-in user: session, profile, sign-up progress
 Core/Rooms       rooms and voice messages: models, live feed, playback
 Core/Push        push notifications: registering the phone, what they do
+Core/Billing     the subscription: StoreKit's purchases, passed on to the server (iPhone only until milestone 22)
 UI/              SwiftUI views and their view models
 ```
 

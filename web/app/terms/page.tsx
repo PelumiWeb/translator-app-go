@@ -30,6 +30,21 @@ export default function Terms() {
         any time.
       </p>
 
+      <h2>Subscription</h2>
+      <p>
+        On the App Store, sending voice notes and messages, and using the interpreter, needs a subscription, after a
+        free week. The free week includes 10 minutes of voice notes and 50 messages. Reading and hearing what
+        you&apos;re sent is always free.
+      </p>
+      <p>
+        The subscription is bought from Apple, at the price the app shows before you start, in your country&apos;s
+        currency. It renews every month, and Apple charges your Apple account, until you cancel it in your
+        iPhone&apos;s settings, under your name, then Subscriptions. Cancel at least 24 hours before it renews to stop
+        the next charge; you keep what you&apos;ve paid for until then. Cancel during the free week and you pay
+        nothing. Refunds are asked for from Apple. Deleting your {APP_NAME} account doesn&apos;t cancel the
+        subscription.
+      </p>
+
       <h2>Only your own voice</h2>
       <p>
         Record only your own voice, reading the passage the app gives you. Never record someone else or play a recording
