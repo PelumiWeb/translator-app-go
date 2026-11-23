@@ -27,7 +27,10 @@ final class MessagePlayer {
             try await player.play(audio)
         } else if !rendition.text.isEmpty {
             onStart(nil)
-            try await phoneVoice.speak(rendition.text, language: Language(rendition.lang))
+            let words = rendition.speakableText
+            // Every word masked: nothing left to say.
+            guard !words.isEmpty else { return }
+            try await phoneVoice.speak(words, language: Language(rendition.lang))
         }
     }
 

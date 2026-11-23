@@ -147,6 +147,8 @@ private struct MainTabs: View {
             EditProfileScreen(container: container, field: destination) { profilePath.removeLast() }
         case .privacy:
             PrivacyScreen()
+        case .blocked:
+            BlockedScreen(client: container.rooms)
         case .advanced:
             AdvancedSettings(viewModel: translate)
         case .recordVoice:

@@ -8,6 +8,9 @@ struct Room: Decodable, Equatable, Identifiable, Sendable {
     var lastMessage: Message?
     /// Messages from the others the user has not seen.
     var unread: Int
+    /// The user has blocked the other person: neither can send here until they unblock. The person blocked is not
+    /// told, so for them this stays false.
+    var youBlocked = false
     var createdAt: Date
 
     /// The other person, in a room of two.
@@ -16,8 +19,54 @@ struct Room: Decodable, Equatable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, people, unread
         case lastMessage = "last_message"
+        case youBlocked = "you_blocked"
         case createdAt = "created_at"
     }
+}
+
+extension Room {
+    /// In an extension, so the memberwise initialiser stays. A server older than blocking does not send `you_blocked`.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        people = try container.decode([Profile].self, forKey: .people)
+        lastMessage = try container.decodeIfPresent(Message.self, forKey: .lastMessage)
+        unread = try container.decode(Int.self, forKey: .unread)
+        youBlocked = try container.decodeIfPresent(Bool.self, forKey: .youBlocked) ?? false
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+    }
+}
+
+/// Someone the user has blocked.
+struct BlockedPerson: Decodable, Equatable, Identifiable, Sendable {
+    let profile: Profile
+    let blockedAt: Date
+
+    var id: String { profile.id }
+
+    private enum CodingKeys: String, CodingKey {
+        case blockedAt = "blocked_at"
+    }
+
+    init(profile: Profile, blockedAt: Date) {
+        self.profile = profile
+        self.blockedAt = blockedAt
+    }
+
+    /// The server sends the person's profile and the date side by side, in one object.
+    init(from decoder: any Decoder) throws {
+        profile = try Profile(from: decoder)
+        blockedAt = try decoder.container(keyedBy: CodingKeys.self).decode(Date.self, forKey: .blockedAt)
+    }
+}
+
+/// Why someone is reported, as the server names it (ADR 0035).
+enum ReportReason: String, CaseIterable, Identifiable, Sendable {
+    case spam, harassment, hate, sexual, violence
+    case selfHarm = "self_harm"
+    case other
+
+    var id: String { rawValue }
 }
 
 /// A message as it was sent, a voice note or typed text, and what it has become for its listeners.
@@ -127,6 +176,14 @@ struct Rendition: Decodable, Equatable, Sendable {
 extension Rendition {
     /// Whether there is something to hear, now: a voice note ready, or a text message whose voice has been made.
     var audible: Bool { status == .ready && voice != .none }
+
+    /// The translation as a voice says it. The translator writes "***" for a word it masks as offensive (ADR 0035);
+    /// read aloud that would be asterisks or noise, so it is left out, as the server's voice leaves it out.
+    var speakableText: String { Self.speakable(text) }
+
+    static func speakable(_ text: String) -> String {
+        text.replacing(/\s*\*{3,}/, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 /// What the server's stream of room changes says.

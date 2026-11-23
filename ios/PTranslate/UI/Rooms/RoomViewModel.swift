@@ -30,6 +30,19 @@ final class RoomViewModel {
         case tooShort, silent, noSpeech, unclear
     }
 
+    /// What the user is reporting: one of the other person's messages, or the person.
+    enum ReportTarget: Identifiable, Equatable {
+        case message(Message)
+        case person(Profile)
+
+        var id: String {
+            switch self {
+            case .message(let message): "message-\(message.id)"
+            case .person(let person): "person-\(person.id)"
+            }
+        }
+    }
+
     /// A voice note is at most 30 seconds; from 25, the composer counts down.
     static let maxNote = Duration.seconds(30)
     static let countdownFrom = Duration.seconds(25)
@@ -63,8 +76,14 @@ final class RoomViewModel {
     private(set) var waitingToHear: Set<String> = []
     private(set) var loading = true
     private(set) var problem: String?
+    /// What the report sheet is open for; nil when it is closed.
+    var reporting: ReportTarget?
+    /// A report was sent: the screen says thank you, and when it will be looked at.
+    var reportSent = false
 
     var myLanguage: String? { account.profile?.language }
+    /// The user blocked the other person: the composer gives way to a way to unblock.
+    var youBlocked: Bool { room?.youBlocked == true }
     var connected: Bool { feed.connected }
 
     @ObservationIgnored private let roomID: String
@@ -78,6 +97,7 @@ final class RoomViewModel {
     @ObservationIgnored private var sending: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var playback: Task<Void, Never>?
     @ObservationIgnored private var review: Task<Void, Never>?
+    @ObservationIgnored private var blocking: Task<Void, Never>?
     /// The recordings of pending notes, for sending again.
     @ObservationIgnored private var wavs: [String: Data] = [:]
 
@@ -105,6 +125,7 @@ final class RoomViewModel {
         notes.cancel()
         playback?.cancel()
         review?.cancel()
+        blocking?.cancel()
         sending.values.forEach { $0.cancel() }
         player.stop()
     }
@@ -262,6 +283,64 @@ final class RoomViewModel {
                 await uploadText(note.id, text: note.text, lang: lang)
             } else {
                 await upload(note.id, text: note.text, duration: note.duration, lang: lang)
+            }
+        }
+    }
+
+    /// Blocks the other person, after the screen has asked. Neither can send here until the user unblocks them.
+    func blockConfirmed() {
+        guard let other = room?.other else { return }
+        changeBlock { [client] in try await client.block(userID: other.id) }
+    }
+
+    func unblockTapped() {
+        guard let other = room?.other else { return }
+        changeBlock { [client] in try await client.unblock(userID: other.id) }
+    }
+
+    func reportTapped(_ message: Message) {
+        guard !message.mine else { return }
+        reporting = .message(message)
+    }
+
+    func reportPersonTapped() {
+        guard let other = room?.other else { return }
+        reporting = .person(other)
+    }
+
+    /// Sends the report the sheet was open for, and returns what went wrong, or nil once it is sent. A report that
+    /// blocks too leaves the room blocked.
+    func sendReport(reason: ReportReason, note: String, alsoBlock: Bool) async -> String? {
+        guard let target = reporting else { return nil }
+        let note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            switch target {
+            case .message(let message):
+                try await client.report(messageID: message.id, reason: reason, note: note, block: alsoBlock)
+            case .person(let person):
+                try await client.report(userID: person.id, reason: reason, note: note, block: alsoBlock)
+            }
+        } catch {
+            return (error as? BackendError)?.status == 0
+                ? "No connection. Check you're online, then send it again."
+                : "The report couldn't be sent just now. Please try again."
+        }
+        reporting = nil
+        reportSent = true
+        if alsoBlock { await load(firstTime: false) }
+        return nil
+    }
+
+    private func changeBlock(_ change: @escaping @Sendable () async throws -> Void) {
+        blocking?.cancel()
+        blocking = Task { [self] in
+            do {
+                try await change()
+                problem = nil
+                await load(firstTime: false)
+            } catch is CancellationError {
+            } catch {
+                problem = "That didn't work just now. Please try again."
             }
         }
     }
@@ -443,6 +522,8 @@ final class RoomViewModel {
         case "room_closed": "This person has left, so the message can't reach them."
         case "voice_limit_reached": "You've sent as many voice notes as one day allows. You can send more later, or write a message."
         case "text_limit_reached": "You've sent as many messages as one day allows. You can send more later, or send a voice note."
+        // The person blocked gets "cannot_send", and only the failed card: they are not told why.
+        case "you_blocked": "You've blocked this person. Unblock them to send a message."
         default: nil
         }
     }

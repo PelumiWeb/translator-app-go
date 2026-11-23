@@ -1169,25 +1169,38 @@ the help page already (ADR 0032).
   stay signed in on your iPhone with notifications on
 - Verify: `make server-test`
 
-**Checkpoint 16.2: block and report on the iPhone**
-- In a room: Block and Report in its menu, and Report on a message card
-  (press and hold). Reporting asks for the reason and a note, offers "Also
-  block Rosa", then says the report will be looked at within 24 hours (ADR
-  0032's commitment)
-- A blocked room says so, with Unblock; Profile lists the people you have
-  blocked
-- The help page, and the privacy pages on the website and the iPhone, say
-  what a report keeps and for how long: a reported message stays with its
-  report until it is closed, even if its sender deletes their account
-- A refused send says why only to the blocker ("You blocked Rosa. Unblock to
-  send."); the person blocked sees the usual failed note
+**Checkpoint 16.2: block and report on the iPhone** (built 2026-11-23)
+- In a room, a menu at the top in place of the call button: Report Rosa, and
+  Block Rosa (asked once: "Neither of you will be able to send messages here
+  until you unblock them. They won't be told.") or Unblock. Press and hold one
+  of their messages: Report this voice note, or this message
+- The report sheet: the reason (spam or a scam, harassment or bullying, hate,
+  sexual content, threats or violence, someone may be at risk, something
+  else), an optional note of up to 500 characters, "Also block Rosa", on by
+  default, and what is kept and that every report is looked at within a day.
+  Then "Thanks for telling us"
+- A blocked room says so in place of the composer, with Unblock. Profile,
+  under Privacy, lists the people blocked, each with Unblock
+- A refused send tells only the blocker why; the person blocked sees the usual
+  failed card. A suspended account's sign-in says it has been suspended
 - The phone's own voice, reading a translation, leaves out the `***` the
-  translator writes for an offensive word, as the server's voice does
-- Not designed: a brief for Claude Design, and built from Pearl's parts
-  until it answers, as text messages were
-- Tests: the room's and the report sheet's logic, with the server stubbed
-- Verify: `make ios-test`; the iPhone and the simulator against the server
-  on this Mac: report a note from the other, then send from the blocked side
+  translator writes for an offensive word, as the server's voice does, with
+  the server's test cases
+- What is kept: the iPhone's privacy page ("Reports and blocking", and
+  Deleting), the website's privacy page, help page and terms, and the
+  marketing brief. They describe the build this checkpoint makes, which
+  reaches testers through TestFlight when it is pushed
+- Not designed: built from Pearl's list rows, menus and banner, as text
+  messages were; a design pass can follow
+- Tests: the client's new calls (block, unblock, the list, both kinds of
+  report and their bodies), a room's blocked flag from a server with and
+  without it, the refusals, and the masked words. iOS 209 pass, none
+  skipped; the website builds
+- Not checked yet: on a phone against a server, which needs 16.1 shipped
+- Verify: `make ios-test`; then, with the server on this Mac, the iPhone and
+  the simulator signed in as the two test accounts: report a note from the
+  other, see the room blocked, send from the blocked side (it fails with no
+  reason), unblock from Profile
 
 ---
 
@@ -1509,8 +1522,9 @@ of milestone 16 and milestone 21. iPhone only.
   server exchanges it for a refresh token, keeps it, and revokes it when the
   account is deleted. Needs a Sign in with Apple key (the owner, in the
   developer account)
-- The call button goes, on both phones, since milestone 17 is dropped for
-  now. A few lines each, so Android does not wait for milestone 22
+- The call button goes on Android too, since milestone 17 is dropped for
+  now: a few lines, so Android does not wait for milestone 22. The iPhone's
+  went in 16.2, where the room's menu took its place
 - The terms: Shinar is run by the owner's company, a private company limited
   by shares registered in Nigeria, under Nigerian law (the owner's choice,
   2026-11-22; its name to come), named as the App Store names the seller;

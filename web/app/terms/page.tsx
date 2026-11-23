@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: `Terms · ${APP_NAME}` };
 
 // The terms of use (ADR 0032). The App Store asks apps where people message
 // each other to have terms with no tolerance for abuse, and a way to report
-// it; until the app has a report button, reports come by email.
+// it: in the app since checkpoint 16.2, and by email (ADR 0035).
 export default function Terms() {
   return (
     <TextPage title="Terms of use">
@@ -51,8 +51,9 @@ export default function Terms() {
 
       <h2>Reporting someone</h2>
       <p>
-        If someone breaks these rules, write to <Contact /> with their ID and what happened. We look into every report
-        within 24 hours, and we delete what breaks these rules and close the accounts that send it.
+        If someone breaks these rules, report them in the app: press and hold their message, or use the menu at the top
+        of the room. You can also write to <Contact /> with their ID and what happened. We look into every report within
+        24 hours, and we delete what breaks these rules and close the accounts that send it.
       </p>
 
       <h2>What you say</h2>

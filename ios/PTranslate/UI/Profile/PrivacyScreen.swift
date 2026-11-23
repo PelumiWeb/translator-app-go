@@ -35,7 +35,11 @@ struct PrivacyScreen: View {
         ("Notifications", "When a message reaches you and its room is not open, our server tells your iPhone through Apple: "
             + "the sender's name, and for a voice note how long it is, never its words or its sound. Turn them off in Settings, "
             + "under Shinar."),
+        ("Reports and blocking", "When you report a message, we keep it with your report, as you saw it: its words, their "
+            + "translation and the recording, until we have looked into it, even if the person who sent it deletes their account. "
+            + "Then that copy is deleted. The person you report or block is not told."),
         ("Deleting", "Delete your voice in Profile, under Your voice: your messages then use the phone's voice. Delete your account, "
-            + "and your profile, your voice and everything you said in your rooms are deleted with it."),
+            + "and your profile, your voice and everything you said in your rooms are deleted with it, except a message someone "
+            + "reported, which stays with the report until we have looked into it."),
     ]
 }

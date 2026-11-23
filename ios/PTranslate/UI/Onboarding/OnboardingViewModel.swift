@@ -84,6 +84,7 @@ final class OnboardingViewModel {
             case error.status == 0: "No connection. Check you're online, then try again."
             case error.code == "invalid_token": "That sign-in couldn't be checked. Please try again."
             case error.code == "invalid_code": "That email and code don't match. Check them, then try again."
+            case error.code == "account_suspended": "This account has been suspended. If you think that's a mistake, write to us from the help page."
             case error.status == 501: "That way of signing in isn't set up on the server yet."
             default: "Sign-in didn't work just now. Please try again."
             }

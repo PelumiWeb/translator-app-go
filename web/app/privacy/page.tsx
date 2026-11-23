@@ -52,6 +52,11 @@ export default function Privacy() {
         kept so the people in the room can read and play them, until you delete your account.
       </p>
       <p>
+        When you report a message, we keep it with your report as you saw it: its words, their translation and the
+        recording. That copy stays until we have looked into the report, even if the person who sent it deletes their
+        account, and is then deleted. The person you report or block is not told.
+      </p>
+      <p>
         Messages travel encrypted between your phone and our server, but they are not end-to-end encrypted: our server
         reads the words in order to translate them.
       </p>
@@ -137,6 +142,7 @@ export default function Privacy() {
       <h2>How long we keep it</h2>
       <ul>
         <li>Your account, your voice and your messages: until you delete them, or your account.</li>
+        <li>A reported message: with its report, until we have looked into it.</li>
         <li>Recordings and copies of your voice sent for the interpreter: until the work is done. Its speech: an hour.</li>
         <li>The waitlist: until {APP_NAME} is out and we&apos;ve told you, or until you ask.</li>
         <li>Deleted data can stay in the database&apos;s automatic backups for up to 35 days, until they are replaced.</li>
@@ -145,8 +151,8 @@ export default function Privacy() {
       <h2>Deleting, and your other choices</h2>
       <p>
         Change your name, ID, language or voice in Profile. Delete your voice in Profile, under Your voice. Delete your
-        account in Profile: your profile, your voice and everything you said in your rooms are deleted with it, and this
-        can&apos;t be undone. If you can&apos;t open the app, write to <Contact /> with your ID, and we&apos;ll delete it
+        account in Profile: your profile, your voice and everything you said in your rooms are deleted with it, except a
+        message someone reported, which stays with their report until we have looked into it. This can&apos;t be undone. If you can&apos;t open the app, write to <Contact /> with your ID, and we&apos;ll delete it
         for you.
       </p>
       <p>

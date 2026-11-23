@@ -119,6 +119,9 @@ struct RoomsTests {
             == "You've sent as many voice notes as one day allows. You can send more later, or write a message.")
         #expect(RoomViewModel.refusal("text_limit_reached")
             == "You've sent as many messages as one day allows. You can send more later, or send a voice note.")
+        #expect(RoomViewModel.refusal("you_blocked") == "You've blocked this person. Unblock them to send a message.")
+        // Blocked by them: the failed card only. They are not told why.
+        #expect(RoomViewModel.refusal("cannot_send") == nil)
         #expect(RoomViewModel.refusal("internal") == nil)
         #expect(RoomViewModel.refusal(nil) == nil)
     }
@@ -150,5 +153,71 @@ struct RoomsTests {
         #expect(handle(fromCode: "shinar://add/Rosa.LM") == "rosa.lm")
         #expect(handle(fromCode: "https://example.com/rosa") == nil)
         #expect(handle(fromCode: "shinar://add/") == nil)
+    }
+
+    // Block and report (ADR 0035).
+
+    @Test func aRoomSaysWhetherTheUserBlockedTheOtherPerson() async throws {
+        let room = #"{"id":"r1","people":[{"id":"u2"}],"last_message":null,"unread":0,"created_at":"2026-11-23T09:00:00Z""#
+        server.enqueue(.json(status: 200, body: room + #","you_blocked":true}"#))
+        server.enqueue(.json(status: 200, body: room + "}")) // a server older than blocking
+
+        #expect(try await client.room("r1").youBlocked)
+        #expect(try await client.room("r1").youBlocked == false)
+    }
+
+    @Test func blockingAndUnblockingNameThePerson() async throws {
+        server.enqueue(.status(204))
+        server.enqueue(.status(204))
+
+        try await client.block(userID: "u2")
+        try await client.unblock(userID: "u2")
+
+        let block = try #require(server.requests.first)
+        #expect(block.method == "POST")
+        #expect(block.path == "/v1/blocks")
+        #expect(try JSONSerialization.jsonObject(with: block.body) as? [String: String] == ["user_id": "u2"])
+        let unblock = try #require(server.requests.last)
+        #expect(unblock.method == "DELETE")
+        #expect(unblock.path == "/v1/blocks/u2")
+    }
+
+    @Test func theBlockedListIsReadWithWhenEachWasBlocked() async throws {
+        server.enqueue(.json(status: 200, body: """
+            {"blocked":[{"id":"u2","display_name":"Rosa","handle":"rosa","language":"es","blocked_at":"2026-11-23T09:15:00.5Z"}]}
+            """))
+
+        let blocked = try await client.blocked()
+
+        #expect(blocked.map(\.profile) == [Profile(id: "u2", displayName: "Rosa", handle: "rosa", language: "es")])
+        #expect(blocked.first?.blockedAt == Date(timeIntervalSince1970: 1_795_425_300.5))
+        #expect(server.requests.first?.path == "/v1/me/blocks")
+    }
+
+    @Test func aReportNamesWhatIsReportedWhyAndWhetherToBlock() async throws {
+        server.enqueue(.json(status: 201, body: #"{"id":"rep1"}"#))
+        server.enqueue(.json(status: 201, body: #"{"id":"rep2"}"#))
+
+        let first = try await client.report(messageID: "m1", reason: .harassment, note: "every day", block: true)
+        try await client.report(userID: "u2", reason: .selfHarm, note: "", block: false)
+
+        #expect(first == "rep1")
+        let aboutAMessage = try JSONSerialization.jsonObject(with: try #require(server.requests.first).body) as? NSDictionary
+        #expect(aboutAMessage == ["message_id": "m1", "reason": "harassment", "note": "every day", "block": true])
+        let aboutAPerson = try JSONSerialization.jsonObject(with: try #require(server.requests.last).body) as? NSDictionary
+        #expect(aboutAPerson == ["user_id": "u2", "reason": "self_harm", "note": "", "block": false])
+        #expect(server.requests.allSatisfy { $0.method == "POST" && $0.path == "/v1/reports" })
+    }
+
+    /// The same cases as the server's speakable test.
+    @Test(arguments: [
+        ("I said what I said", "I said what I said"),
+        ("You are a *** and a ***.", "You are a and a."),
+        ("*** you", "you"),
+        ("***", ""),
+        ("2 * 3 = 6", "2 * 3 = 6"),
+    ])
+    func thePhonesVoiceLeavesOutMaskedWords(text: String, spoken: String) {
+        #expect(Rendition.speakable(text) == spoken)
     }
 }

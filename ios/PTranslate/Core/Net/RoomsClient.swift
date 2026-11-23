@@ -72,6 +72,31 @@ final class RoomsClient: Sendable {
         try rest.decode(try await rest.send(await rest.request("/v1/messages/\(id)/retry", method: "POST")))
     }
 
+    /// Blocks someone: neither can send to the other until the user unblocks them. They are not told (ADR 0035).
+    func block(userID: String) async throws {
+        var request = await rest.request("/v1/blocks", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["user_id": userID])
+        try await rest.send(request)
+    }
+
+    func unblock(userID: String) async throws {
+        try await rest.send(await rest.request("/v1/blocks/\(userID)", method: "DELETE"))
+    }
+
+    /// The people the user has blocked, the most recent first.
+    func blocked() async throws -> [BlockedPerson] {
+        try await rest.get("/v1/me/blocks", as: BlockedList.self).blocked
+    }
+
+    /// Reports one of someone's messages, or with `userID` and no message, the person. `block` blocks them too.
+    /// Returns the report's ID.
+    @discardableResult
+    func report(messageID: String? = nil, userID: String? = nil, reason: ReportReason, note: String, block: Bool) async throws -> String {
+        let body = ReportBody(messageID: messageID, userID: userID, reason: reason.rawValue, note: note, block: block)
+        return try await rest.send("POST", "/v1/reports", json: body, as: ReportCreated.self).id
+    }
+
     /// The audio at a rendition's audio URL, as a WAV file.
     func audio(_ url: String) async throws -> Data {
         try await rest.send(await rest.request(url))
@@ -160,6 +185,28 @@ private struct ChangePayload: Decodable {
 
 private struct RoomList: Decodable {
     let rooms: [Room]
+}
+
+private struct BlockedList: Decodable {
+    let blocked: [BlockedPerson]
+}
+
+private struct ReportBody: Encodable {
+    let messageID: String?
+    let userID: String?
+    let reason: String
+    let note: String
+    let block: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case reason, note, block
+        case messageID = "message_id"
+        case userID = "user_id"
+    }
+}
+
+private struct ReportCreated: Decodable {
+    let id: String
 }
 
 private struct MessageList: Decodable {

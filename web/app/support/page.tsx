@@ -37,10 +37,16 @@ export default function Support() {
         it as beta feedback. Either way it reaches us with the screenshot. Tell us which languages you used.
       </p>
 
-      <h2>Reporting someone</h2>
+      <h2>Reporting or blocking someone</h2>
       <p>
-        Write to <Contact /> with their ID and what happened. We look into every report within 24 hours. The{" "}
-        <a href="/terms">terms</a> say what isn&apos;t allowed.
+        In a room, press and hold one of their messages and choose Report, or open the menu at the top of the room and
+        report them. Reporting blocks them too, unless you choose not to. You can also write to <Contact /> with their
+        ID and what happened. We look into every report within 24 hours. The <a href="/terms">terms</a> say what
+        isn&apos;t allowed.
+      </p>
+      <p>
+        To block someone without reporting them, choose Block in the same menu. Neither of you can then send messages in
+        that room until you unblock them, in the room or in Profile, under Blocked people. They aren&apos;t told.
       </p>
 
       <h2>Deleting your voice</h2>
@@ -52,7 +58,8 @@ export default function Support() {
       <h2>Deleting your account</h2>
       <p>
         In Profile, choose Delete account. Your profile, your voice and everything you said in your rooms are deleted,
-        and this can&apos;t be undone. If you can&apos;t open the app, write to <Contact /> with your ID, and we&apos;ll
+        and this can&apos;t be undone. A message someone reported stays with their report until we&apos;ve looked into
+        it. If you can&apos;t open the app, write to <Contact /> with your ID, and we&apos;ll
         delete it for you.
       </p>
 

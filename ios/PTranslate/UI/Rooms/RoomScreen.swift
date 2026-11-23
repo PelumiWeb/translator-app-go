@@ -8,7 +8,7 @@ struct RoomScreen: View {
 
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
-    @State private var callsSoon = false
+    @State private var confirmingBlock = false
 
     var body: some View {
         let other = viewModel.room?.other
@@ -18,9 +18,18 @@ struct RoomScreen: View {
                     LazyVStack(spacing: 14) {
                         ForEach(viewModel.messages) { message in
                             HStack {
-                                if message.mine { Spacer(minLength: 40) }
-                                card(message)
-                                if !message.mine { Spacer(minLength: 40) }
+                                if message.mine {
+                                    Spacer(minLength: 40)
+                                    card(message)
+                                } else {
+                                    // Press and hold one of theirs to report it.
+                                    card(message).contextMenu {
+                                        Button { viewModel.reportTapped(message) } label: {
+                                            Label(message.isText ? "Report this message" : "Report this voice note", systemImage: "flag")
+                                        }
+                                    }
+                                    Spacer(minLength: 40)
+                                }
                             }
                             .id(message.id)
                         }
@@ -66,19 +75,42 @@ struct RoomScreen: View {
                 }
                 .accessibilityElement(children: .combine)
             }
-            if other != nil {
+            if let other {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { callsSoon = true } label: {
-                        Image(systemName: "phone").foregroundStyle(Palette.fg)
+                    Menu {
+                        Button { viewModel.reportPersonTapped() } label: {
+                            Label("Report \(other.shownName)", systemImage: "flag")
+                        }
+                        if viewModel.youBlocked {
+                            Button { viewModel.unblockTapped() } label: {
+                                Label("Unblock \(other.shownName)", systemImage: "hand.raised.slash")
+                            }
+                        } else {
+                            Button(role: .destructive) { confirmingBlock = true } label: {
+                                Label("Block \(other.shownName)", systemImage: "hand.raised")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle").foregroundStyle(Palette.fg)
                     }
-                    .accessibilityLabel("Call, coming soon")
+                    .accessibilityLabel("More")
                 }
             }
         }
-        .alert("Calls are coming soon", isPresented: $callsSoon) {
+        .confirmationDialog("Block \(other?.shownName ?? "them")?", isPresented: $confirmingBlock, titleVisibility: .visible) {
+            Button("Block", role: .destructive, action: viewModel.blockConfirmed)
+        } message: {
+            Text("Neither of you will be able to send messages here until you unblock them. They won't be told.")
+        }
+        .sheet(item: $viewModel.reporting) { target in
+            ReportSheet(target: target, name: other?.shownName ?? "them") { reason, note, alsoBlock in
+                await viewModel.sendReport(reason: reason, note: note, alsoBlock: alsoBlock)
+            }
+        }
+        .alert("Thanks for telling us", isPresented: $viewModel.reportSent) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("You'll be able to call \(other?.shownName ?? "them") and hear each other in your own languages. Until then, send a voice note or a message.")
+            Text("We look at every report within a day.")
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
@@ -142,6 +174,14 @@ struct RoomScreen: View {
             switch viewModel.notes.phase {
             case _ where other == nil && viewModel.room != nil:
                 EmptyView()
+            case _ where viewModel.youBlocked:
+                Banner(
+                    systemImage: "hand.raised",
+                    title: "You blocked \(other?.shownName ?? "them")",
+                    message: "Neither of you can send messages here. They haven't been told.",
+                    action: "Unblock",
+                    onAction: viewModel.unblockTapped
+                )
             case .recording, .paused:
                 RecordingComposer(
                     notes: viewModel.notes, onPause: viewModel.pauseTapped, onResume: viewModel.resumeTapped,

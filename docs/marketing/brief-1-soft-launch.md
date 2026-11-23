@@ -94,9 +94,11 @@ On the iPhone, through TestFlight:
   their own language.
 - **Change** your name, ID, language or voice; **delete** your voice; **delete**
   your account and everything in it.
+- **Block or report** someone from the room: press and hold one of their
+  messages, or use the menu at the top. They are not told.
 
-The room has a call button. It says calls are coming. Calls are not built;
-do not mention them (section 7).
+There is no call button any more (2026-11-23): calls are dropped for now,
+and are not to be mentioned (section 7).
 
 ## 5. What testers should expect
 
@@ -124,9 +126,10 @@ Tell people these plainly, before they find them out:
 - **First-time downloads.** The phone downloads a speech model (57 MB) to
   write down speech by itself, and the interpreter downloads a language pack
   (about 30 to 50 MB) for each language. Wi-Fi helps.
-- **Only people you know.** You can't be found unless someone has your ID,
-  and there is no block or report button yet. For now, talk with people you
-  know.
+- **Only people you know.** You can't be found unless someone has your ID.
+  If someone bothers you, block or report them from the room: press and hold
+  their message, or use the menu at the top (since 2026-11-23, ADR 0035). The
+  person is not told. Reports are looked at within a day.
 - **TestFlight builds expire after 90 days.** New versions arrive through
   TestFlight; testers should keep its notifications on.
 - **Rough edges.** It is a test. Things will break, and that is what the

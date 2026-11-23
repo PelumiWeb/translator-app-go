@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Where the profile leads.
 enum ProfileDestination: Hashable {
-    case name, handle, language, privacy, advanced, recordVoice
+    case name, handle, language, privacy, blocked, advanced, recordVoice
 }
 
 /// Who the user is, their voice, privacy, the advanced controls, and the account.
@@ -59,6 +59,7 @@ struct ProfileScreen: View {
 
             Section {
                 NavigationLink("What we keep, and why", value: ProfileDestination.privacy)
+                NavigationLink("Blocked people", value: ProfileDestination.blocked)
             } header: {
                 header("Privacy")
             }
