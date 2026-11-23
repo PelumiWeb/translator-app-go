@@ -563,6 +563,21 @@ Translations are made with Azure's profanity option, which writes `***` for
 an offensive word; the voice leaves those out. Same-language rooms, with no
 translation, are not filtered.
 
+**Paying** (milestone 21, ADR 0034). Signed in, except Apple's notifications.
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /v1/me/subscription` | `{ "required", "state", "until", "renews", "trial": { "voice_ms_left", "texts_left" } }`: `state` is `none`, `trial`, `active`, `grace` or `expired`; `trial` only in the trial; `required` is false while `BILLING` is off, when the phone shows no paywall |
+| `POST /v1/me/subscription/apple` | JSON `signed_transaction` (StoreKit's JWS) and optional `signed_renewal_info`, after a purchase, a restore, and when the app opens. `200` with the subscription; `400 invalid_purchase`, `403 not_your_purchase`, `409 subscription_in_use` |
+| `POST /v1/billing/apple/notifications` | the App Store's server notifications, version 2: JSON `signedPayload`. No sign-in; `400` for one that does not verify, `500` for one that could not be applied, which Apple sends again |
+
+Every record is checked before it is believed: its chain to Apple Root CA -
+G3, kept in the program; Apple's marks on the leaf and the intermediate; the
+ES256 signature; the bundle ID. With `BILLING=on`, sending a message and the
+interpreter's work need the trial or a subscription (`402
+subscription_required`); in the trial the cap counts from its start (`429
+trial_limit_reached`). Purchases are recorded with the switch off too.
+
 **Daily limits** (ADR 0029). Each person may send 10 minutes of voice notes
 and 100 text messages in any 24 hours (`DAILY_VOICE_MINUTES`,
 `DAILY_TEXT_MESSAGES`). They are counted from the person's own messages, in
@@ -636,6 +651,10 @@ CREATE INDEX jobs_ready ON jobs (run_at) WHERE status = 'queued';
 -- adding up what someone sent in the last 24 hours. Migration 0009, ADR 0029.
 -- The waitlist (18.6): waitlist (email, unique whatever its capitals; name;
 -- phone; invited_at). Migration 0010, ADR 0030.
+-- Paying (21.2): subscriptions (one per Apple original transaction: the
+-- account, product, environment, the period and whether it is the trial,
+-- revoked_at, auto_renew, grace_until) and store_notifications (each of
+-- Apple's notifications once). Migration 0012, ADR 0034.
 -- Block and report (16.1): blocks (blocker, blocked); reports (reporter and
 -- reported, the reported as they were, reason, note, a copy of the message,
 -- closed_at, outcome); users.suspended_at; jobs.kind gains 'report', with
@@ -789,7 +808,10 @@ Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 `GOOGLE_TRANSLATE_KEY`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`,
 `TRANSCRIBE_ENGINE`, `GROQ_API_KEY`, `GROQ_MODEL`, `APNS_KEY_FILE`,
 `APNS_KEY_ID`, `APNS_TEAM_ID`, `FCM_SERVICE_ACCOUNT_FILE`, `DAILY_VOICE_MINUTES`,
-`DAILY_TEXT_MESSAGES`, `REPORTS_DIR`, `REPORTS_NOTIFY_HANDLE`). Secrets live in
+`DAILY_TEXT_MESSAGES`, `REPORTS_DIR`, `REPORTS_NOTIFY_HANDLE`, `BILLING`,
+`TRIAL_VOICE_MINUTES`, `TRIAL_TEXT_MESSAGES`). The In-App Purchase key
+(`APPSTORE_KEY_FILE`, `APPSTORE_KEY_ID`, `APPSTORE_ISSUER_ID`) is read only by
+`make appstore-check` for now. Secrets live in
 `server/.env`, which git ignores and the Makefile's server targets load; the
 push notification keys are files outside the repository, which the settings
 name (ADR 0026).
@@ -956,7 +978,7 @@ Written in the milestone where the decision is implemented.
 | 0031 | The website on Vercel (written) | 18 |
 | 0032 | Help, privacy and terms pages, and a minimum age of 16 (written) | 18 |
 | 0033 | The language barrier as the theme (written) | 18 |
-| 0034 | Paid from the start: subscriptions with a free trial, checked by our server | 21 |
+| 0034 | Paid from the start: subscriptions with a free trial, checked by our server (written) | 21 |
 | 0035 | Block, report, and acting on reports (written) | 16 |
 
 ## 8. Known limits

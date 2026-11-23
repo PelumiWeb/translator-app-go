@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/PelumiWeb/translator-app-go/server/internal/accounts"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
@@ -165,5 +166,52 @@ func TestMessagesSentAtOnceStayWithinTheLimit(t *testing.T) {
 	wg.Wait()
 	if accepted != limit {
 		t.Errorf("%d of 8 sent at once were accepted, want %d", accepted, limit)
+	}
+}
+
+func TestTheTrialsCapIsCountedFromItsStart(t *testing.T) {
+	w := newLimitedWorld(t, Limits{VoiceMS: 60_000, Texts: 100})
+	ctx := context.Background()
+	ada, rosa := w.user(t, "ada", "en"), w.user(t, "rosa", "es")
+	room := w.open(t, ada, rosa)
+
+	// Sent before the trial began (on TestFlight, say): not counted.
+	before := voiceNote(room, ada, 4000, "old")
+	if _, _, err := w.rooms.AddMessage(ctx, before); err != nil {
+		t.Fatal(err)
+	}
+	var since time.Time
+	if err := w.db.QueryRow(ctx, `SELECT now()`).Scan(&since); err != nil {
+		t.Fatal(err)
+	}
+	trial := &Allowance{Since: since, VoiceMS: 5000, Texts: 1}
+
+	send := func(m NewMessage) error {
+		m.RoomID, m.SenderID, m.Trial = room, ada, trial
+		_, _, err := w.rooms.AddMessage(ctx, m)
+		return err
+	}
+	for _, step := range []struct {
+		m    NewMessage
+		want error
+	}{
+		{voiceNote("", "", 4000, "v1"), nil},
+		{voiceNote("", "", 2000, "v2"), ErrTrialLimit},
+		{voiceNote("", "", 1000, "v3"), nil}, // the 5 seconds are not used up
+		{textMessage("", "", "t1"), nil},
+		{textMessage("", "", "t2"), ErrTrialLimit},
+	} {
+		if err := send(step.m); !errors.Is(err, step.want) {
+			t.Errorf("%s: err = %v, want %v", step.m.IdempotencyKey, err, step.want)
+		}
+	}
+
+	voiceMS, texts, err := w.rooms.SentSince(ctx, ada, since)
+	if err != nil || voiceMS != 5000 || texts != 1 {
+		t.Errorf("SentSince = %d ms, %d texts (%v); want 5000 and 1, without the note before the trial", voiceMS, texts, err)
+	}
+	// Without the trial, the daily limit applies again: more is allowed.
+	if _, _, err := w.rooms.AddMessage(ctx, textMessage(room, ada, "t3")); err != nil {
+		t.Errorf("after the trial: %v", err)
 	}
 }

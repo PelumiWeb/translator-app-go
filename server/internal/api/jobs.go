@@ -36,7 +36,12 @@ type createJobResponse struct {
 // An optional Idempotency-Key header makes the request safe to send again:
 // every request with the same key gets the same job. Only for people signed
 // in; whose job it is is not recorded.
-func (a *API) handleCreateJob(w http.ResponseWriter, r *http.Request, _ accounts.User, _ string) {
+func (a *API) handleCreateJob(w http.ResponseWriter, r *http.Request, user accounts.User, _ string) {
+	// The interpreter's work on the server needs the trial or a subscription,
+	// as sending does. Its cap is the monthly budget (checkpoint 18.12).
+	if _, ok := a.mayUse(w, r, user); !ok {
+		return
+	}
 	// Cap the body before anything reads it. Past the limit, reads fail and
 	// the connection is closed, so a huge upload cannot fill the disk.
 	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUploadBytes)

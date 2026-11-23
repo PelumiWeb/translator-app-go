@@ -1684,7 +1684,7 @@ covers group rooms as well as rooms of two.
 
 ---
 
-## [ ] Milestone 21: Paying for Shinar, after a free trial
+## [~] Milestone 21: Paying for Shinar, after a free trial
 
 Added on 2026-11-21. On the App Store nobody uses Shinar free: a new person
 tries it free for 7 days, within a cap, then subscribes to keep sending.
@@ -1765,51 +1765,54 @@ code does not wait for it)
   products, so purchases work in the simulator and the tests before any of
   the above exists
 
-**Checkpoint 21.2: the server**
+**Checkpoint 21.2: the server** (built 2026-11-23)
 - Migration 0012: `subscriptions` (one per Apple original transaction: the
-  user, the product, sandbox or production, its state, when the period ends,
-  whether it is a free trial, whether it renews) and `store_notifications`
-  (each of Apple's notifications once, by its ID, as Apple sent it)
-- `internal/billing`: checks Apple's signed records, each a JWS whose
-  certificate chain must end at Apple Root CA G3 (kept in the program) and
-  whose ES256 signature must hold, with the standard library; and calls the
-  App Store Server API with a token signed by the In-App Purchase key, as
-  `internal/push` signs for APNs
-- `POST /v1/me/subscription/apple`: the phone sends the signed transaction
-  after a purchase, after a restore, and when the app opens. The server
-  checks it, ties it to the user (its `appAccountToken` must be the user's
-  ID) and answers with the user's access
-- `POST /v1/billing/apple/notifications`: Apple's notifications (subscribed,
-  renewed, failed to renew, in grace period, expired, refunded, revoked),
-  each checked, recorded once and applied. A missed one is caught up by
-  asking the App Store Server API for the subscription's status
-- Access is `none`, `trial`, `active`, `grace` or `expired`, in `GET /v1/me`,
-  with when it ends and what is left of the trial's cap
-- What needs access: sending a voice note or a message
-  (`POST /v1/rooms/{id}/messages`), and the interpreter's work on the server
-  (`POST /v1/jobs`, `POST /v1/speech`), which is now tied to a person and
-  counted, closing the gap ADR 0029 left. Refused with `402` and
-  `subscription_required`, or `429` and `trial_limit_reached`. Nothing of a
-  refused message is kept, as with the daily limits. Reading, the audio, and
-  `POST /v1/messages/{id}/speech` for a message you were sent need no access
-- Limits by access: the trial's `TRIAL_VOICE_MINUTES` (10) and
-  `TRIAL_TEXT_MESSAGES` (50), counted over the whole trial; for subscribers,
-  the daily ones (ADR 0029)
-- One subscription, one account: a subscription tied to another account that
-  still exists is refused, and the phone says why; one whose account was
-  deleted moves to the account that restores it
-- Sandbox purchases count, marked as sandbox: App Review and TestFlight
-  testers buy in the sandbox, at no cost
-- `BILLING=on` switches it on. The hosted server keeps it off until the
-  iPhone build with the paywall reaches TestFlight, so builds already on
-  testers' phones keep working; the server on this Mac keeps it off, for
-  work on Android
+  account, the product, sandbox or production, the newest transaction and the
+  period it paid for, whether that is the free trial, `revoked_at`, and from
+  the renewal information `auto_renew` and the grace period) and
+  `store_notifications` (each of Apple's notifications once, as it came)
+- `internal/billing` checks Apple's signed records with the standard
+  library: the chain to Apple Root CA - G3 (in the program, its SHA-256
+  pinned in a test), Apple's marks on the leaf and the intermediate, the
+  chain as of the signing date, ES256 only, the bundle ID
+- `POST /v1/me/subscription/apple`: the phone's signed transaction, and its
+  renewal information when it has it. A purchase naming another account is
+  refused (`403 not_your_purchase`); a subscription of another live account
+  too (`409 subscription_in_use`); one whose account was deleted moves to
+  the account that restores it
+- `POST /v1/billing/apple/notifications`: Apple's notifications, version 2,
+  with no sign-in. Every kind is handled the same way, by the transaction and
+  renewal information inside; records from either side are applied only when
+  newer than what is kept
+- `GET /v1/me/subscription`, in place of a field in `GET /v1/me`: `required`,
+  `state` (none, trial, active, grace, expired), `until`, `renews`, and in the
+  trial what is left of its cap
+- With `BILLING=on`: sending, and the interpreter's work on the server, need
+  the trial or a subscription (`402 subscription_required`, checked before a
+  recording is stored). In the trial its cap counts from its start, in place
+  of the daily limits (`429 trial_limit_reached`); `TRIAL_VOICE_MINUTES` and
+  `TRIAL_TEXT_MESSAGES`, 10 and 50, proposed, still to confirm. Reading and
+  hearing need nothing. Purchases are recorded with the switch off too
+- Changed from the plan: the interpreter's work is not counted against a cap,
+  as no limit was ever set for it; the monthly budget (18.12) bounds it. Nor
+  does the server ask Apple for each subscription's status when a
+  notification might be missing: the phone reports what StoreKit gives it at
+  every launch and change, and Apple sends notifications again. The App Store
+  Server API client exists, signed with the In-App Purchase key, for
+  `make appstore-check` and later uses
 - ADR 0034
-- Tests: signed records (a good one; the wrong chain, app, signature or
-  environment), each kind of notification, the access rules, the limits by
-  access, the account rules, the switch. A live test against the sandbox,
-  run only with the key
-- Verify: `make server-test`
+- Tests: the verifier against chains made for tests (each way a record can be
+  refused), and once against Apple: `make appstore-check` asked Apple's
+  sandbox for a test notification and the verifier accepted Apple's own
+  signature, which also shows the In-App Purchase key works before the paid
+  agreement. The store (trial to paid to expired, late and older records,
+  the grace period, a refund, one subscription one account, Apple's word
+  first), the service (whose purchase, notifications applied and kept once),
+  the trial's cap in the rooms store, and every answer of the API. Also: the
+  migration on this Mac's database; lint, and the race detector
+- Owner, when this server ships: nothing to set. `BILLING` stays off; Apple's
+  notifications start arriving at the address set in App Store Connect
+- Verify: `make server-test`; `make appstore-check`
 
 **Checkpoint 21.3: the iPhone**
 - `Core/Billing`, on StoreKit 2 (part of the SDK, no new dependency): the

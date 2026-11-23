@@ -131,6 +131,7 @@ internal/push        sending notifications through APNs and FCM
 internal/models      manifest and model file serving
 internal/storage     audio blob storage
 internal/waitlist    the website's waitlist for TestFlight invitations
+internal/billing     subscriptions: Apple's signed records checked, what each person may send, the App Store Server API
 migrations/          plain SQL, embedded in the binary
 ```
 
@@ -261,6 +262,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make sample-job` | upload a test clip to the running server and stream its events |
 | `make voice-check` | one real request to Fish Audio (key from `server/.env`), then plays what it made |
 | `make transcribe-check` | one real transcription from Groq (key from `server/.env`) of whisper.cpp's sample clip |
+| `make appstore-check` | ask Apple's sandbox for a test notification with the In-App Purchase key named in `server/.env`, and check Apple's signature on it (ADR 0034) |
 | `make push-check` | sign in to Apple's and Google's push services with the key files named in `server/.env`, and send to a made-up phone, so nothing arrives (ADR 0026) |
 | `make translate-check` | a few real translations from Azure AI Translator (key from `server/.env`), English to Yoruba among them |
 | `make sample-speech` | ask the running server to speak a sentence, and play the result; start the server with `VOICE_ENGINE=fake make server-run`, since without a voice engine it refuses |

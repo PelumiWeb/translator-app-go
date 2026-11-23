@@ -32,6 +32,9 @@ type createSpeechResponse struct {
 //
 // The job works on its own copy of the voice and deletes it when it ends.
 func (a *API) handleCreateSpeech(w http.ResponseWriter, r *http.Request, user accounts.User, _ string) {
+	if _, ok := a.mayUse(w, r, user); !ok {
+		return
+	}
 	if !a.CanSpeak {
 		// 501 rather than 503: this is not a passing fault, so asking again
 		// later gets the same answer, and the phones know not to retry it.

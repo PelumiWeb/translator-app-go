@@ -12,6 +12,7 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/internal/accounts"
 	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/queue"
+	"github.com/PelumiWeb/translator-app-go/server/internal/rooms"
 )
 
 // The interfaces below list exactly what the handlers use from the rest of
@@ -93,6 +94,14 @@ type API struct {
 
 	// Waitlist keeps the website's sign-ups for invitations (ADR 0030).
 	Waitlist WaitlistStore
+
+	// Billing keeps who has paid (ADR 0034); nil on a server that takes no
+	// purchases. RequireSubscription decides whether sending needs one: off
+	// until the iPhone build with the paywall is out (BILLING=on).
+	Billing             Billing
+	RequireSubscription bool
+	// TrialLimits is the free trial's cap, counted over the whole trial.
+	TrialLimits rooms.Limits
 }
 
 // Handler builds the routes. Since Go 1.22 the standard ServeMux matches on
@@ -135,6 +144,10 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/blocks/{id}", a.signedIn(a.handleUnblock))
 	mux.HandleFunc("GET /v1/me/blocks", a.signedIn(a.handleListBlocked))
 	mux.HandleFunc("POST /v1/reports", a.signedIn(a.handleReport))
+	mux.HandleFunc("GET /v1/me/subscription", a.signedIn(a.handleGetSubscription))
+	mux.HandleFunc("POST /v1/me/subscription/apple", a.signedIn(a.handleApplePurchase))
+	// From Apple, with no sign-in: the payload's signature is the proof.
+	mux.HandleFunc("POST /v1/billing/apple/notifications", a.handleAppleNotification)
 	mux.HandleFunc("GET /v1/models/manifest", a.handleModelManifest)
 	mux.HandleFunc("GET /v1/models/{id}", a.handleModelDownload)
 	// From the website, by people who have no account yet.

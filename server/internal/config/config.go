@@ -93,6 +93,13 @@ type Config struct {
 	// ReportsNotifyHandle is the ID of the owner's account, whose phones are
 	// told of each new report (ADR 0035). Empty for no one.
 	ReportsNotifyHandle string
+
+	// RequireSubscription makes sending need the free trial or a
+	// subscription (BILLING=on, ADR 0034). Purchases are taken and recorded
+	// either way. The trial's cap is counted over the whole trial.
+	RequireSubscription bool
+	TrialVoiceMinutes   int
+	TrialTexts          int
 }
 
 // Load is called once from main. Nothing else in the server reads the
@@ -142,6 +149,10 @@ func Load() Config {
 		DailyTexts:        envInt("DAILY_TEXT_MESSAGES", 100),
 
 		ReportsNotifyHandle: env("REPORTS_NOTIFY_HANDLE", ""),
+
+		RequireSubscription: env("BILLING", "") == "on",
+		TrialVoiceMinutes:   envInt("TRIAL_VOICE_MINUTES", 10),
+		TrialTexts:          envInt("TRIAL_TEXT_MESSAGES", 50),
 	}
 }
 

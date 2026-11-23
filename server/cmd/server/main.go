@@ -21,6 +21,7 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/internal/accounts"
 	"github.com/PelumiWeb/translator-app-go/server/internal/api"
 	"github.com/PelumiWeb/translator-app-go/server/internal/auth"
+	"github.com/PelumiWeb/translator-app-go/server/internal/billing"
 	"github.com/PelumiWeb/translator-app-go/server/internal/config"
 	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider"
@@ -194,6 +195,8 @@ func run(logger *slog.Logger) error {
 	}
 	logger.Info("translation", "engine", translatorName)
 	logger.Info("daily limits", "voice_minutes", cfg.DailyVoiceMinutes, "text_messages", cfg.DailyTexts)
+	logger.Info("billing", "required", cfg.RequireSubscription,
+		"trial_voice_minutes", cfg.TrialVoiceMinutes, "trial_text_messages", cfg.TrialTexts)
 
 	store := queue.NewStore(pool)
 	accountStore := accounts.NewStore(pool)
@@ -313,6 +316,14 @@ func run(logger *slog.Logger) error {
 		Messages:       messages,
 		Reports:        reports,
 		Waitlist:       waitlist.NewStore(pool),
+		// Purchases are taken and recorded even while sending does not need
+		// one, so a subscription bought before BILLING=on is already known.
+		Billing: &billing.Service{
+			Verifier: billing.Verifier{Roots: billing.AppleRoots(), BundleID: cfg.AppleAudience},
+			Store:    billing.NewStore(pool),
+		},
+		RequireSubscription: cfg.RequireSubscription,
+		TrialLimits:         rooms.Limits{VoiceMS: cfg.TrialVoiceMinutes * 60_000, Texts: cfg.TrialTexts},
 	}
 
 	srv := &http.Server{

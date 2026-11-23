@@ -144,6 +144,10 @@ account-delete: ## Delete the account HANDLE=... and everything it said, on requ
 	@test -n "$(HANDLE)" || { echo "HANDLE is required, the account's ID"; exit 2; }
 	deploy/command.sh -account-delete '$(HANDLE)' $(if $(YES),-yes)
 
+.PHONY: appstore-check
+appstore-check: ## Ask Apple's sandbox for a test notification and check its signature (In-App Purchase key from server/.env)
+	cd server && $(SERVER_ENV) go test ./internal/billing -run TestLiveAppleSignature -count=1 -v
+
 .PHONY: server-test
 server-test: ## Run the Go tests (needs `make db-up`)
 	cd server && go test ./...

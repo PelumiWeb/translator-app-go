@@ -35,6 +35,7 @@ type RoomStore interface {
 	Unblock(ctx context.Context, blockerID, blockedID string) error
 	Blocked(ctx context.Context, blockerID string) ([]rooms.BlockedPerson, error)
 	AddReport(ctx context.Context, r rooms.NewReport) (reportID string, err error)
+	SentSince(ctx context.Context, userID string, since time.Time) (voiceMS, texts int, err error)
 }
 
 // RoomChanges tells a user's open streams that something in their rooms changed.
@@ -242,6 +243,11 @@ func (a *API) handleSendMessage(w http.ResponseWriter, r *http.Request, user acc
 		writeError(w, http.StatusBadRequest, "invalid_idempotency_key", "Idempotency-Key must be 1 to 128 printable ASCII characters")
 		return
 	}
+	// Before the upload is read, so a refused note's recording is never stored.
+	trial, ok := a.mayUse(w, r, user)
+	if !ok {
+		return
+	}
 
 	// One endpoint for both kinds, told apart by the body's type: a message
 	// is a message, whatever it carries, and the phones page through one list.
@@ -254,7 +260,7 @@ func (a *API) handleSendMessage(w http.ResponseWriter, r *http.Request, user acc
 	if !ok {
 		return
 	}
-	m.RoomID, m.SenderID, m.IdempotencyKey = roomID, user.ID, idempotencyKey
+	m.RoomID, m.SenderID, m.IdempotencyKey, m.Trial = roomID, user.ID, idempotencyKey, trial
 
 	message, created, err := a.Rooms.AddMessage(r.Context(), m)
 	if (err != nil || !created) && m.AudioKey != "" {
@@ -274,6 +280,9 @@ func (a *API) handleSendMessage(w http.ResponseWriter, r *http.Request, user acc
 		return
 	case errors.Is(err, rooms.ErrTextLimit):
 		writeError(w, http.StatusTooManyRequests, "text_limit_reached", "you have sent as many messages as one day allows")
+		return
+	case errors.Is(err, rooms.ErrTrialLimit):
+		writeError(w, http.StatusTooManyRequests, "trial_limit_reached", "you have sent as much as the free trial allows")
 		return
 	case sendRefused(w, err):
 		return

@@ -34,6 +34,9 @@ var (
 	// Limits allows in the last 24 hours.
 	ErrVoiceLimit = errors.New("rooms: voice note limit reached")
 	ErrTextLimit  = errors.New("rooms: text message limit reached")
+	// ErrTrialLimit means the sender has sent as much as the free trial
+	// allows (ADR 0034).
+	ErrTrialLimit = errors.New("rooms: the free trial's limit reached")
 	// ErrBlocked means another member of the room has blocked the sender;
 	// ErrYouBlocked, that the sender has blocked another member. Either way
 	// nothing can be sent into the room until the block is lifted.
@@ -52,6 +55,15 @@ var (
 type Limits struct {
 	VoiceMS int // the total length of their voice notes
 	Texts   int // the number of their text messages
+}
+
+// Allowance is what one person may send over a window of their own, in place
+// of the daily Limits: the free trial's cap, counted from the trial's start
+// (ADR 0034). A zero field means no limit of that kind.
+type Allowance struct {
+	Since   time.Time
+	VoiceMS int
+	Texts   int
 }
 
 // What a message is, as stored in messages.kind.
@@ -130,6 +142,9 @@ type NewMessage struct {
 	AudioKey       string
 	DurationMS     int
 	IdempotencyKey string // empty for none
+	// Trial, when set, is the free trial's allowance, in place of the daily
+	// limits.
+	Trial *Allowance
 }
 
 // Enqueuer adds the jobs that deliver a message, and those that tell the
@@ -403,7 +418,7 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 		if err := checkBlocks(ctx, tx, m.RoomID, m.SenderID); err != nil {
 			return err
 		}
-		if err := s.withinLimits(ctx, tx, m.SenderID, m.Kind); err != nil {
+		if err := s.withinLimits(ctx, tx, m.SenderID, m.Kind, m.Trial); err != nil {
 			return err
 		}
 
@@ -439,7 +454,7 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 		return notifyMessage(ctx, tx, id)
 	})
 	if errors.Is(err, ErrNoRoom) || errors.Is(err, ErrRoomClosed) || errors.Is(err, ErrVoiceLimit) || errors.Is(err, ErrTextLimit) ||
-		errors.Is(err, ErrBlocked) || errors.Is(err, ErrYouBlocked) {
+		errors.Is(err, ErrTrialLimit) || errors.Is(err, ErrBlocked) || errors.Is(err, ErrYouBlocked) {
 		return Message{}, false, err
 	}
 	if err != nil {
@@ -449,30 +464,48 @@ func (s *Store) AddMessage(ctx context.Context, m NewMessage) (message Message, 
 	return message, created, err
 }
 
-// withinLimits checks what the sender has sent in the last 24 hours,
-// counting the message just added. A rolling day, not a calendar one, so the
-// limit means the same in every time zone.
-func (s *Store) withinLimits(ctx context.Context, tx pgx.Tx, senderID, kind string) error {
-	limit, sum, refusal := s.limits.VoiceMS, "coalesce(sum(duration_ms), 0)", ErrVoiceLimit
+// withinLimits checks what the sender has sent in the last 24 hours, or in
+// the trial when trial is set, counting the message just added. A rolling
+// day, not a calendar one, so the limit means the same in every time zone.
+func (s *Store) withinLimits(ctx context.Context, tx pgx.Tx, senderID, kind string, trial *Allowance) error {
+	voice, texts := s.limits.VoiceMS, s.limits.Texts
+	// now() is when this transaction began, which is the new message's created_at too.
+	window, args := "created_at > now() - interval '24 hours'", []any{senderID, kind}
+	voiceRefusal, textRefusal := ErrVoiceLimit, ErrTextLimit
+	if trial != nil {
+		voice, texts = trial.VoiceMS, trial.Texts
+		window, args = "created_at >= $3", append(args, trial.Since)
+		voiceRefusal, textRefusal = ErrTrialLimit, ErrTrialLimit
+	}
+	limit, sum, refusal := voice, "coalesce(sum(duration_ms), 0)", voiceRefusal
 	if kind == KindText {
-		limit, sum, refusal = s.limits.Texts, "count(*)", ErrTextLimit
+		limit, sum, refusal = texts, "count(*)", textRefusal
 	}
 	if limit == 0 {
 		return nil
 	}
 	var used int
-	// now() is when this transaction began, which is the new message's created_at too.
-	if err := tx.QueryRow(ctx, `
-		SELECT `+sum+` FROM messages
-		WHERE sender_id = $1 AND kind = $2 AND created_at > now() - interval '24 hours'`,
-		senderID, kind,
-	).Scan(&used); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT `+sum+` FROM messages WHERE sender_id = $1 AND kind = $2 AND `+window, args...).Scan(&used); err != nil {
 		return err
 	}
 	if used > limit {
 		return refusal
 	}
 	return nil
+}
+
+// SentSince adds up what userID has sent since a time: the length of their
+// voice notes, and the number of their text messages. It is what the trial's
+// cap counts, for the phone to say what is left.
+func (s *Store) SentSince(ctx context.Context, userID string, since time.Time) (voiceMS, texts int, err error) {
+	err = s.db.QueryRow(ctx, `
+		SELECT coalesce(sum(duration_ms) FILTER (WHERE kind = 'voice'), 0), count(*) FILTER (WHERE kind = 'text')
+		FROM messages WHERE sender_id = $1 AND created_at >= $2`, userID, since,
+	).Scan(&voiceMS, &texts)
+	if err != nil {
+		return 0, 0, fmt.Errorf("adding up what was sent: %w", err)
+	}
+	return voiceMS, texts, nil
 }
 
 // Retry tries again to deliver the renditions of a message that failed. Only
