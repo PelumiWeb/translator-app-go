@@ -229,7 +229,7 @@ final class RoomViewModel {
                 try await player.play(rendition) { length in playingLength = length }
             } catch is CancellationError {
             } catch {
-                problem = "That message couldn't be played just now."
+                problem = String(localized: "That message couldn't be played just now.")
             }
             if playing == message.id { playing = nil }
             played.insert(message.id)
@@ -255,7 +255,7 @@ final class RoomViewModel {
                     upsert(try await client.requestSpeech(messageID: message.id, lang: rendition.lang))
                 } catch {
                     waitingToHear.remove(message.id)
-                    problem = "That message couldn't be spoken just now."
+                    problem = String(localized: "That message couldn't be spoken just now.")
                 }
                 sending[message.id] = nil
             }
@@ -272,7 +272,7 @@ final class RoomViewModel {
             do {
                 upsert(try await client.retry(message.id))
             } catch {
-                problem = "That message couldn't be sent again just now."
+                problem = String(localized: "That message couldn't be sent again just now.")
             }
         }
     }
@@ -324,8 +324,8 @@ final class RoomViewModel {
             }
         } catch {
             return (error as? BackendError)?.status == 0
-                ? "No connection. Check you're online, then send it again."
-                : "The report couldn't be sent just now. Please try again."
+                ? String(localized: "No connection. Check you're online, then send it again.")
+                : String(localized: "The report couldn't be sent just now. Please try again.")
         }
         reporting = nil
         reportSent = true
@@ -342,7 +342,7 @@ final class RoomViewModel {
                 await load(firstTime: false)
             } catch is CancellationError {
             } catch {
-                problem = "That didn't work just now. Please try again."
+                problem = String(localized: "That didn't work just now. Please try again.")
             }
         }
     }
@@ -361,7 +361,7 @@ final class RoomViewModel {
         do {
             try notes.start()
         } catch {
-            problem = "The microphone couldn't be started."
+            problem = String(localized: "The microphone couldn't be started.")
             return
         }
         hint = nil
@@ -477,7 +477,7 @@ final class RoomViewModel {
             if room.unread > 0 { try? await client.markRead(roomID: roomID) }
         } catch is CancellationError {
         } catch let error as BackendError {
-            problem = error.status == 0 ? "No connection. Notes will appear when you're back online." : "This room couldn't be loaded just now."
+            problem = error.status == 0 ? String(localized: "No connection. Notes will appear when you're back online.") : String(localized: "This room couldn't be loaded just now.")
         } catch {}
         loading = false
     }
@@ -523,14 +523,14 @@ final class RoomViewModel {
     /// The daily limits count the last 24 hours, so more can be sent later, not at midnight.
     nonisolated static func refusal(_ code: String?) -> String? {
         switch code {
-        case "room_closed": "This person has left, so the message can't reach them."
-        case "voice_limit_reached": "You've sent as many voice notes as one day allows. You can send more later, or write a message."
-        case "text_limit_reached": "You've sent as many messages as one day allows. You can send more later, or send a voice note."
+        case "room_closed": String(localized: "This person has left, so the message can't reach them.")
+        case "voice_limit_reached": String(localized: "You've sent as many voice notes as one day allows. You can send more later, or write a message.")
+        case "text_limit_reached": String(localized: "You've sent as many messages as one day allows. You can send more later, or send a voice note.")
         // The person blocked gets "cannot_send", and only the failed card: they are not told why.
-        case "you_blocked": "You've blocked this person. Unblock them to send a message."
-        case "subscription_required": "Start your free week, or subscribe, to send. Your note is kept here to send then."
+        case "you_blocked": String(localized: "You've blocked this person. Unblock them to send a message.")
+        case "subscription_required": String(localized: "Start your free week, or subscribe, to send. Your note is kept here to send then.")
         // The cap counts voice notes and messages apart: the other kind may still go.
-        case "trial_limit_reached": "You've sent as much as the free week allows. Your subscription starts when the week ends."
+        case "trial_limit_reached": String(localized: "You've sent as much as the free week allows. Your subscription starts when the week ends.")
         default: nil
         }
     }

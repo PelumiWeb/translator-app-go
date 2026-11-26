@@ -59,14 +59,14 @@ final class ProfileViewModel {
                 try await player.play(try PCMAudio(wav: wav))
             } catch is CancellationError {
             } catch {
-                problem = "Your voice couldn't be played just now."
+                problem = String(localized: "Your voice couldn't be played just now.")
             }
         }
     }
 
     /// Deletes the voice from the server and the phone. The user's messages then use the phone's voice.
     func deleteVoiceConfirmed() {
-        perform("Your voice couldn't be deleted just now. Please try again.") { [self] in
+        perform(String(localized: "Your voice couldn't be deleted just now. Please try again.")) { [self] in
             try await account.deleteVoice()
             try await voice.delete()
             keptVoice = nil
@@ -74,12 +74,12 @@ final class ProfileViewModel {
     }
 
     func signOutTapped() {
-        perform("Signing out didn't work just now. Please try again.") { [account] in await account.signOut() }
+        perform(String(localized: "Signing out didn't work just now. Please try again.")) { [account] in await account.signOut() }
     }
 
     /// Deletes the account and everything with it: the profile, the voice, the messages.
     func deleteAccountConfirmed() {
-        perform("Your account couldn't be deleted just now. Please try again.") { [account] in try await account.deleteAccount() }
+        perform(String(localized: "Your account couldn't be deleted just now. Please try again.")) { [account] in try await account.deleteAccount() }
     }
 
     private func perform(_ failure: String, _ action: @escaping @MainActor () async throws -> Void) {

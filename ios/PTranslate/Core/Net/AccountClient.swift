@@ -16,10 +16,12 @@ final class AccountClient: Sendable {
     }
 
     /// Signs in with the identity token Apple gave the phone. `nonce` is the raw nonce whose SHA-256 was given to
-    /// Apple; the server checks that the token carries that hash.
-    func signInWithApple(identityToken: String, nonce: String, name: String?) async throws -> SignIn {
+    /// Apple; the server checks that the token carries that hash. `authorizationCode` is traded by the server for what
+    /// it needs to end the Apple sign-in when the account is deleted.
+    func signInWithApple(identityToken: String, nonce: String, name: String?, authorizationCode: String? = nil) async throws -> SignIn {
         let response: SignInResponse = try await rest.send(
-            "POST", "/v1/sessions/apple", json: SignInRequest(identityToken: identityToken, nonce: nonce, name: name)
+            "POST", "/v1/sessions/apple",
+            json: SignInRequest(identityToken: identityToken, nonce: nonce, name: name, authorizationCode: authorizationCode)
         )
         return SignIn(token: response.token, profile: response.user, newUser: response.newUser ?? false)
     }
@@ -36,8 +38,13 @@ final class AccountClient: Sendable {
     }
 
     /// Changes the fields given; nil leaves one as it is.
-    func updateProfile(displayName: String? = nil, handle: String? = nil, language: String? = nil) async throws -> Profile {
-        try await rest.send("PATCH", "/v1/me", json: ProfileUpdate(displayName: displayName, handle: handle, language: language))
+    func updateProfile(
+        displayName: String? = nil, handle: String? = nil, language: String? = nil, servicesConsent: String? = nil
+    ) async throws -> Profile {
+        try await rest.send(
+            "PATCH", "/v1/me",
+            json: ProfileUpdate(displayName: displayName, handle: handle, language: language, servicesConsent: servicesConsent)
+        )
     }
 
     func checkHandle(_ handle: String) async throws -> HandleCheck {
@@ -49,10 +56,12 @@ final class AccountClient: Sendable {
         try await rest.get("/v1/users/\(handle)")
     }
 
-    /// Keeps `wav` as the user's voice, with the version of the consent wording they agreed to.
-    func putVoice(_ wav: Data, consentVersion: String) async throws -> KeptVoice {
+    /// Keeps `wav` as the user's voice, with the words read in it and the version of the consent wording they
+    /// agreed to.
+    func putVoice(_ wav: Data, transcript: String, consentVersion: String) async throws -> KeptVoice {
         var form = MultipartForm()
         form.addField("consent", value: consentVersion)
+        form.addField("transcript", value: transcript)
         form.addFile("voice", filename: "voice.wav", contentType: "audio/wav", data: wav)
         var request = await rest.request("/v1/me/voice", method: "PUT")
         request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
@@ -104,10 +113,12 @@ private struct SignInRequest: Encodable {
     let identityToken: String
     let nonce: String
     let name: String?
+    let authorizationCode: String?
 
     enum CodingKeys: String, CodingKey {
         case nonce, name
         case identityToken = "identity_token"
+        case authorizationCode = "authorization_code"
     }
 }
 
@@ -133,9 +144,11 @@ private struct ProfileUpdate: Encodable {
     let displayName: String?
     let handle: String?
     let language: String?
+    let servicesConsent: String?
 
     enum CodingKeys: String, CodingKey {
         case handle, language
         case displayName = "display_name"
+        case servicesConsent = "services_consent"
     }
 }

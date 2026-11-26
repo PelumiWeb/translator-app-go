@@ -19,7 +19,7 @@ final class EngineAudioRecorder: AudioRecorder {
             try session.setCategory(.record, mode: .measurement)
             try session.setActive(true)
         } catch {
-            throw RecorderError(message: "Could not open the microphone: \(error.localizedDescription)")
+            throw RecorderError(message: String(localized: "Could not open the microphone: \(error.localizedDescription)"))
         }
 
         let engine = AVAudioEngine()
@@ -27,7 +27,7 @@ final class EngineAudioRecorder: AudioRecorder {
         let hardwareFormat = input.outputFormat(forBus: 0)
         guard hardwareFormat.sampleRate > 0, hardwareFormat.channelCount > 0 else {
             try? session.setActive(false)
-            throw RecorderError(message: "This device has no microphone to record from")
+            throw RecorderError(message: String(localized: "This device has no microphone to record from"))
         }
 
         let maxSamples = Int(maxDuration / .seconds(1) * Double(PCMAudio.standardSampleRate))
@@ -43,7 +43,7 @@ final class EngineAudioRecorder: AudioRecorder {
         } catch {
             input.removeTap(onBus: 0)
             try? session.setActive(false)
-            throw RecorderError(message: "Could not start recording: \(error.localizedDescription)")
+            throw RecorderError(message: String(localized: "Could not start recording: \(error.localizedDescription)"))
         }
         return EngineRecording(engine: engine, capture: capture)
     }

@@ -67,10 +67,10 @@ private struct PaywallHeader: View {
 extension Subscriptions.Problem {
     var words: String {
         switch self {
-        case .inUse: "This Apple account's subscription belongs to another \(Brand.name) account. Sign in to that one, or use another Apple account."
-        case .notYours: "That purchase was made for another \(Brand.name) account."
-        case .unchecked: "Your purchase couldn't be checked with Apple just now. It will be tried again."
-        case .offline: "No connection. Your purchase is safe, and will reach \(Brand.name) when you're back online."
+        case .inUse: String(localized: "This Apple account's subscription belongs to another \(Brand.name) account. Sign in to that one, or use another Apple account.")
+        case .notYours: String(localized: "That purchase was made for another \(Brand.name) account.")
+        case .unchecked: String(localized: "Your purchase couldn't be checked with Apple just now. It will be tried again.")
+        case .offline: String(localized: "No connection. Your purchase is safe, and will reach \(Brand.name) when you're back online.")
         }
     }
 }
@@ -104,9 +104,9 @@ private struct PaywallPresentation: ViewModifier {
 extension Subscriptions.Outcome {
     var title: String {
         switch self {
-        case .started(let trial): trial ? "Your free week has started" : "You're subscribed"
-        case .pending: "Waiting for approval"
-        case .problem, .failed: "That didn't go through"
+        case .started(let trial): trial ? String(localized: "Your free week has started") : String(localized: "You're subscribed")
+        case .pending: String(localized: "Waiting for approval")
+        case .problem, .failed: String(localized: "That didn't go through")
         }
     }
 
@@ -114,11 +114,11 @@ extension Subscriptions.Outcome {
         switch self {
         case .started(let trial):
             trial
-                ? "Send voice notes and messages in your voice. Unless you cancel, it becomes the monthly subscription when the week ends."
-                : "Thank you. Send voice notes and messages in your voice, to anyone."
-        case .pending: "Your purchase is waiting for someone to approve it. It starts as soon as they do."
+                ? String(localized: "Send voice notes and messages in your voice. Unless you cancel, it becomes the monthly subscription when the week ends.")
+                : String(localized: "Thank you. Send voice notes and messages in your voice, to anyone.")
+        case .pending: String(localized: "Your purchase is waiting for someone to approve it. It starts as soon as they do.")
         case .problem(let problem): problem.words
-        case .failed: "The purchase couldn't be completed, and nothing was charged. Please try again."
+        case .failed: String(localized: "The purchase couldn't be completed, and nothing was charged. Please try again.")
         }
     }
 }
@@ -147,12 +147,12 @@ struct LockedInterpreter: View {
 func planLine(_ standing: Standing, now: Date = .now, locale: Locale = .current) -> String {
     let day = { (date: Date) in date.formatted(Date.FormatStyle(locale: locale).day().month(.abbreviated)) }
     switch standing.state {
-    case .none: return "Not subscribed"
-    case .trial: return standing.until.map { "Free week · until \(day($0))" } ?? "Free week"
+    case .none: return String(localized: "Not subscribed")
+    case .trial: return standing.until.map { String(localized: "Free week · until \(day($0))") } ?? String(localized: "Free week")
     case .active:
-        guard let until = standing.until else { return "Subscribed" }
-        return standing.renews ? "Subscribed · renews \(day(until))" : "Subscribed · ends \(day(until))"
-    case .grace: return "Payment failed · Apple is retrying"
-    case .expired: return "Ended"
+        guard let until = standing.until else { return String(localized: "Subscribed") }
+        return standing.renews ? String(localized: "Subscribed · renews \(day(until))") : String(localized: "Subscribed · ends \(day(until))")
+    case .grace: return String(localized: "Payment failed · Apple is retrying")
+    case .expired: return String(localized: "Ended")
     }
 }

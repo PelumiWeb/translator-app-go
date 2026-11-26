@@ -46,7 +46,7 @@ struct AddSomeoneSheet: View {
                         tab = .byID
                         viewModel.lookupChanged(handle)
                     } else {
-                        scanProblem = "That code isn't a \(Brand.name) ID. Ask them to open Add someone, then QR code."
+                        scanProblem = String(localized: "That code isn't a \(Brand.name) ID. Ask them to open Add someone, then QR code.")
                     }
                 } onCancel: {
                     scanning = false
@@ -91,7 +91,7 @@ struct AddSomeoneSheet: View {
                 if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
                     scanning = true
                 } else {
-                    scanProblem = "The camera can't scan here. Allow camera access in Settings, or add them by ID."
+                    scanProblem = String(localized: "The camera can't scan here. Allow camera access in Settings, or add them by ID.")
                 }
             } label: {
                 Label("Scan their code", systemImage: "qrcode.viewfinder")

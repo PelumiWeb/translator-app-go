@@ -30,7 +30,7 @@ struct RoomScreen: View {
                                     // Press and hold one of theirs to report it.
                                     card(message).contextMenu {
                                         Button { viewModel.reportTapped(message) } label: {
-                                            Label(message.isText ? "Report this message" : "Report this voice note", systemImage: "flag")
+                                            Label(message.isText ? String(localized: "Report this message") : String(localized: "Report this voice note"), systemImage: "flag")
                                         }
                                     }
                                     Spacer(minLength: 40)
@@ -77,7 +77,7 @@ struct RoomScreen: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 0) {
-                    Text(other?.shownName ?? (viewModel.room == nil ? "" : "Deleted account")).font(.pearlTitle).foregroundStyle(Palette.fg)
+                    Text(other?.shownName ?? (viewModel.room == nil ? "" : String(localized: "Deleted account"))).font(.pearlTitle).foregroundStyle(Palette.fg)
                     if let language = other?.lang {
                         Text("hears \(language.ownName)").font(.pearlMeta).foregroundStyle(Palette.them)
                     }
@@ -106,13 +106,13 @@ struct RoomScreen: View {
                 }
             }
         }
-        .confirmationDialog("Block \(other?.shownName ?? "them")?", isPresented: $confirmingBlock, titleVisibility: .visible) {
+        .confirmationDialog("Block \(other?.shownName ?? String(localized: "Someone"))?", isPresented: $confirmingBlock, titleVisibility: .visible) {
             Button("Block", role: .destructive, action: viewModel.blockConfirmed)
         } message: {
             Text("Neither of you will be able to send messages here until you unblock them. They won't be told.")
         }
         .sheet(item: $viewModel.reporting) { target in
-            ReportSheet(target: target, name: other?.shownName ?? "them") { reason, note, alsoBlock in
+            ReportSheet(target: target, name: other?.shownName ?? String(localized: "Someone")) { reason, note, alsoBlock in
                 await viewModel.sendReport(reason: reason, note: note, alsoBlock: alsoBlock)
             }
         }
@@ -176,8 +176,12 @@ struct RoomScreen: View {
     }
 
     private func emptyText(_ other: Profile?) -> String {
-        guard let other else { return "No one else is in this room." }
-        return "Say something to \(other.displayName.isEmpty ? "them" : other.displayName), or write it. They'll get it in \(other.lang?.localName ?? "their language"), in your voice."
+        guard let other else { return String(localized: "No one else is in this room.") }
+        let language = other.lang?.localName ?? String(localized: "their language")
+        if other.displayName.isEmpty {
+            return String(localized: "Say something, or write it. They'll get it in \(language), in your voice.")
+        }
+        return String(localized: "Say something to \(other.displayName), or write it. They'll get it in \(language), in your voice.")
     }
 
     @ViewBuilder
@@ -197,14 +201,14 @@ struct RoomScreen: View {
                 Banner(
                     systemImage: "waveform",
                     title: "Start your free week to send",
-                    message: "Reading and hearing what \(other?.shownName ?? "they") sends you is always free.",
+                    message: "Reading and hearing what \(other?.shownName ?? String(localized: "Someone")) sends you is always free.",
                     action: "See the plan",
                     onAction: { paywall = true }
                 )
             case _ where viewModel.youBlocked:
                 Banner(
                     systemImage: "hand.raised",
-                    title: "You blocked \(other?.shownName ?? "them")",
+                    title: "You blocked \(other?.shownName ?? String(localized: "Someone"))",
                     message: "Neither of you can send messages here. They haven't been told.",
                     action: "Unblock",
                     onAction: viewModel.unblockTapped
@@ -262,10 +266,10 @@ private extension RoomViewModel.Hint {
     /// The design's words for each recording that was not sent. No blame, and what to try next.
     var words: String {
         switch self {
-        case .tooShort: "That was very short. Tap the mic, say something, then send."
-        case .silent: "We didn't hear anything. Check nothing is covering the microphone, then try again."
-        case .noSpeech: "No words came through. Try again, a little closer to the phone."
-        case .unclear: "We couldn't quite make that out. Please say it again."
+        case .tooShort: String(localized: "That was very short. Tap the mic, say something, then send.")
+        case .silent: String(localized: "We didn't hear anything. Check nothing is covering the microphone, then try again.")
+        case .noSpeech: String(localized: "No words came through. Try again, a little closer to the phone.")
+        case .unclear: String(localized: "We couldn't quite make that out. Please say it again.")
         }
     }
 }
@@ -299,7 +303,7 @@ private struct TextComposer: View {
 /// A round button in the colour that means "you".
 private struct YouButton: View {
     let systemImage: String
-    let label: String
+    let label: LocalizedStringKey
     let action: () -> Void
 
     var body: some View {
@@ -331,7 +335,7 @@ private struct RecordingComposer: View {
             TimelineView(.animation(minimumInterval: 0.1, paused: paused)) { context in
                 let elapsed = notes.elapsed
                 let left = max(RoomViewModel.maxNote - elapsed, .zero)
-                let time = elapsed >= RoomViewModel.countdownFrom ? "\(Int((left / .seconds(1)).rounded(.up))) s left" : clock(elapsed)
+                let time = elapsed >= RoomViewModel.countdownFrom ? String(localized: "\(Int((left / .seconds(1)).rounded(.up))) s left") : clock(elapsed)
                 // The dots move while recording and rest while paused. They do not yet follow the microphone's level.
                 let phase = context.date.timeIntervalSinceReferenceDate * 4.5
                 HStack(spacing: 12) {
@@ -339,10 +343,10 @@ private struct RecordingComposer: View {
                         levels: (0..<16).map { paused ? 0.3 : Float(0.3 + 0.7 * (sin(phase + Double($0) * 0.9) + 1) / 2) },
                         color: Palette.fg.opacity(paused ? 0.4 : 1)
                     )
-                    Text(paused ? "Paused · \(time)" : time).font(.pearlMeta).monospacedDigit().foregroundStyle(Palette.fg)
+                    (paused ? Text("Paused · \(time)") : Text(verbatim: time)).font(.pearlMeta).monospacedDigit().foregroundStyle(Palette.fg)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(paused ? "Paused, \(time)" : "Recording, \(time)")
+                .accessibilityLabel(paused ? Text("Paused, \(time)") : Text("Recording, \(time)"))
             }
             HStack(alignment: .bottom) {
                 ComposerControl(systemImage: "xmark", label: "Cancel", action: onCancel)
@@ -379,7 +383,7 @@ private struct ReviewComposer: View {
                         .background(Palette.you, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(playing ? "Stop" : "Listen to your note")
+                .accessibilityLabel(playing ? Text("Stop") : Text("Listen to your note"))
                 DotWaveform(levels: audio?.levels(22) ?? Array(repeating: 0.3, count: 22), color: Palette.you)
                 Text(clock(audio?.duration ?? .zero)).font(.pearlMeta).monospacedDigit().foregroundStyle(Palette.fg2)
             }
@@ -397,7 +401,7 @@ private struct ReviewComposer: View {
 /// An outlined round control with its name under it.
 private struct ComposerControl: View {
     let systemImage: String
-    let label: String
+    let label: LocalizedStringKey
     let action: () -> Void
 
     var body: some View {

@@ -12,7 +12,7 @@ struct BackendClientTests {
         let client = BackendClient(baseURL: server.baseURL, session: server.session, token: { "tok" })
 
         _ = try await client.createJob(wav: Data([1, 2, 3]), sourceLanguage: Language("en"), idempotencyKey: "k1")
-        _ = try await client.createSpeech(voiceWAV: Data([1, 2, 3]), text: "hola", language: Language("es"), idempotencyKey: "k2")
+        _ = try await client.createSpeech(text: "hola", language: Language("es"), idempotencyKey: "k2")
 
         #expect(server.requests.map { $0.header("Authorization") } == ["Bearer tok", "Bearer tok"])
     }

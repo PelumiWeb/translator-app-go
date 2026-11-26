@@ -37,10 +37,10 @@ enum VoiceSampleRules {
     /// What is wrong with the recording, in words for the user, or nil if it will do.
     static func problem(with audio: PCMAudio) -> String? {
         if audio.isSilent {
-            return "Nothing was heard. Check the microphone and try again"
+            return String(localized: "Nothing was heard. Check the microphone and try again")
         }
         if audio.duration < minimum {
-            return "That was only \(audio.duration.components.seconds) seconds. About 20 are needed: please read the whole passage"
+            return String(localized: "That was only \(audio.duration.components.seconds) seconds. About 20 are needed: please read the whole passage")
         }
         return nil
     }

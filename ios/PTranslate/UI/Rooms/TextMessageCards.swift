@@ -64,7 +64,7 @@ struct MyTextCard: View {
         .background(Palette.you, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func status(_ text: String) -> some View {
+    private func status(_ text: LocalizedStringKey) -> some View {
         Text(text).font(.custom("IBMPlexSans-Medm", size: 13, relativeTo: .footnote)).foregroundStyle(Palette.onYou)
     }
 }
@@ -124,9 +124,9 @@ struct TheirTextCard: View {
 
     private func label(_ state: Listening, phoneVoice: Bool) -> String {
         switch state {
-        case .playing: phoneVoice ? "Spoken by your phone's voice" : "Playing in their voice"
-        case .preparing: "Preparing their voice…"
-        case .idle: phoneVoice ? "Listen · your phone's voice" : "Listen in their voice"
+        case .playing: phoneVoice ? String(localized: "Spoken by your phone's voice") : String(localized: "Playing in their voice")
+        case .preparing: String(localized: "Preparing their voice…")
+        case .idle: phoneVoice ? String(localized: "Listen · your phone's voice") : String(localized: "Listen in their voice")
         }
     }
 }

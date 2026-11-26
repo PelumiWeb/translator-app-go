@@ -195,7 +195,7 @@ final class TranslateViewModel {
 
     private func startRecording() async {
         guard await requestMicrophone() else {
-            error = "Microphone permission is needed to record"
+            error = String(localized: "Microphone permission is needed to record")
             return
         }
         // A second tap while iOS was asking for permission has already started one.
@@ -238,7 +238,7 @@ final class TranslateViewModel {
 
         let audio = finished.stop()
         guard audio.duration >= Self.minRecording else {
-            finish(error: "That was too short. Hold on a little longer")
+            finish(error: String(localized: "That was too short. Hold on a little longer"))
             return
         }
 

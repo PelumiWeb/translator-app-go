@@ -10,7 +10,7 @@ func addLink(_ handle: String) -> URL {
 
 /// What goes with the link when someone shares their ID.
 func shareMessage(_ handle: String) -> String {
-    "Talk to me on \(Brand.name), in your own language: my ID is @\(handle)"
+    String(localized: "Talk to me on \(Brand.name), in your own language: my ID is @\(handle)")
 }
 
 /// The ID in a scanned code or opened link: shinar://add/<id>. Anything else is not ours.
@@ -26,7 +26,7 @@ func roomTime(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> 
     let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
     switch days {
     case 0: return date.formatted(date: .omitted, time: .shortened)
-    case 1: return "Yesterday"
+    case 1: return String(localized: "Yesterday")
     case 2...6: return date.formatted(.dateTime.weekday(.abbreviated))
     default: return date.formatted(.dateTime.day().month(.abbreviated))
     }
@@ -38,8 +38,8 @@ func dayHeading(_ date: Date, now: Date = .now, calendar: Calendar = .current, l
     let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
     var style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
     switch days {
-    case 0: return "Today"
-    case 1: return "Yesterday"
+    case 0: return String(localized: "Today")
+    case 1: return String(localized: "Yesterday")
     case 2...6: style = style.weekday(.wide)
     default:
         style = style.day().month(.wide)
@@ -64,8 +64,8 @@ extension Message {
 
     /// A room's last message, as one line of the list.
     func preview(myLanguage: String?) -> String {
-        if mine { return "You: \(transcript)" }
-        return words(for: myLanguage) ?? (isText ? "Message" : "Voice note · \(clock(duration))")
+        if mine { return String(localized: "You: \(transcript)") }
+        return words(for: myLanguage) ?? (isText ? String(localized: "Message") : String(localized: "Voice note · \(clock(duration))"))
     }
 }
 
@@ -73,6 +73,6 @@ extension Profile {
     /// How a person is named on screen.
     var shownName: String {
         if !displayName.isEmpty { return displayName }
-        return handle.isEmpty ? "Someone" : "@\(handle)"
+        return handle.isEmpty ? String(localized: "Someone") : "@\(handle)"
     }
 }

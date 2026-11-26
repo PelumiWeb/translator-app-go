@@ -36,16 +36,13 @@ struct RemoteSpeechSynthesizerTests {
     private let server = StubServer()
     private let speaker = Speaker()
 
-    /// What the user recorded at onboarding.
-    private let sample = PCMAudio(samples: (0..<16_000).map { Int16($0 % 100) }).wavData()
-
     /// What the server makes from it.
     private let spoken = PCMAudio(samples: (0..<8_000).map { Int16($0 % 50) }, sampleRate: 22_050)
 
-    private func synthesizer(sample: Data?) -> RemoteSpeechSynthesizer {
+    private func synthesizer(hasVoice: Bool) -> RemoteSpeechSynthesizer {
         RemoteSpeechSynthesizer(
             backend: BackendClient(baseURL: server.baseURL, session: server.session),
-            voiceSample: { sample },
+            hasVoice: { hasVoice },
             play: { [speaker] in speaker.play($0) },
             stopPlaying: { [speaker] in speaker.stop() },
             maxAttempts: 3,
@@ -53,7 +50,7 @@ struct RemoteSpeechSynthesizerTests {
         )
     }
 
-    private var synthesizer: RemoteSpeechSynthesizer { synthesizer(sample: sample) }
+    private var synthesizer: RemoteSpeechSynthesizer { synthesizer(hasVoice: true) }
 
     private func enqueueSpeechAccepted() {
         server.enqueue(.json(
@@ -74,7 +71,7 @@ struct RemoteSpeechSynthesizerTests {
         try await synthesizer.speak("buenos días", language: Language("es"), onStart: { [speaker] in speaker.started(in: $0) })
     }
 
-    @Test func sendsTheVoiceSampleAndTheTextThenPlaysWhatTheServerMade() async throws {
+    @Test func asksForTheTextInTheKeptVoiceThenPlaysWhatTheServerMade() async throws {
         enqueueSpeechAccepted()
         server.enqueue(.events(sse(1, "queued") + sse(2, "processing") + sse(3, "done")))
         enqueueAudio()
@@ -88,7 +85,7 @@ struct RemoteSpeechSynthesizerTests {
         let form = upload.bodyText
         #expect(form.contains(#"name="text""#) && form.contains("\r\n\r\nbuenos días\r\n"), "text field")
         #expect(form.contains(#"name="lang""#) && form.contains("\r\n\r\nes\r\n"), "lang field")
-        #expect(form.contains(#"name="voice"; filename="voice.wav""#), "voice part")
+        #expect(!form.contains(#"name="voice""#), "no voice part: the server speaks in the voice it keeps, whose words it knows")
         #expect(server.requests[1].path == "/v1/jobs/job-1/events")
         #expect(server.requests[2].path == "/v1/jobs/job-1/audio")
 
@@ -160,7 +157,7 @@ struct RemoteSpeechSynthesizerTests {
 
     @Test func withNoVoiceRecordedNothingIsSent() async {
         await #expect(throws: SpeechError(message: "No voice has been recorded")) {
-            try await speak(with: synthesizer(sample: nil))
+            try await speak(with: synthesizer(hasVoice: false))
         }
         #expect(server.requestCount == 0)
     }

@@ -59,7 +59,8 @@ struct MyNoteCard: View {
                 .font(.pearlMeta).foregroundStyle(Palette.onYou.opacity(0.7))
             case (.ready?, let voice):
                 Label {
-                    Text((voice == .original ? "Delivered" : "Delivered in your voice") + " · " + message.createdAt.formatted(date: .omitted, time: .shortened))
+                    let time = message.createdAt.formatted(date: .omitted, time: .shortened)
+                    voice == .original ? Text("Delivered · \(time)") : Text("Delivered in your voice · \(time)")
                 } icon: {
                     Image(systemName: "checkmark")
                 }
@@ -72,7 +73,7 @@ struct MyNoteCard: View {
         .background(Palette.you, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func status(_ text: String) -> some View {
+    private func status(_ text: LocalizedStringKey) -> some View {
         Text(text).font(.custom("IBMPlexSans-Medm", size: 13, relativeTo: .footnote)).foregroundStyle(Palette.onYou)
     }
 }
@@ -116,7 +117,7 @@ struct PendingNoteCard: View {
         .background(Palette.you, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func status(_ text: String) -> some View {
+    private func status(_ text: LocalizedStringKey) -> some View {
         Text(text).font(.custom("IBMPlexSans-Medm", size: 13, relativeTo: .footnote)).foregroundStyle(Palette.onYou)
     }
 }
@@ -234,7 +235,7 @@ private struct PlayRow: View {
     let durationColor: Color
     var outline = false
     var showsLength = true
-    let label: String
+    let label: LocalizedStringKey
     let onPlay: () -> Void
 
     @State private var started: Date?

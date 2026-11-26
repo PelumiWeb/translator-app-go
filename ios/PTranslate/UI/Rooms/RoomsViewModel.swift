@@ -66,7 +66,7 @@ final class RoomsViewModel {
             problem = nil
         } catch is CancellationError {
         } catch let error as BackendError {
-            problem = error.status == 0 ? "No connection. Your rooms will appear when you're back online." : "Your rooms couldn't be loaded just now."
+            problem = error.status == 0 ? String(localized: "No connection. Your rooms will appear when you're back online.") : String(localized: "Your rooms couldn't be loaded just now.")
         } catch {}
         loading = false
     }
@@ -86,15 +86,15 @@ final class RoomsViewModel {
                 try await Task.sleep(for: lookupDelay)
                 let result: Lookup
                 if handle == account.profile?.handle {
-                    result = .notFound("That's your own ID.")
+                    result = .notFound(String(localized: "That's your own ID."))
                 } else {
                     do {
                         result = .found(try await account.findUser(handle))
                     } catch let error as BackendError {
                         result = .notFound(
-                            error.code == "user_not_found" ? "No one has the ID @\(handle) yet. Check the spelling with them."
-                                : error.status == 0 ? "No connection, so this ID couldn't be looked up."
-                                : "This ID couldn't be looked up just now."
+                            error.code == "user_not_found" ? String(localized: "No one has the ID @\(handle) yet. Check the spelling with them.")
+                                : error.status == 0 ? String(localized: "No connection, so this ID couldn't be looked up.")
+                                : String(localized: "This ID couldn't be looked up just now.")
                         )
                     }
                 }
@@ -117,7 +117,7 @@ final class RoomsViewModel {
                 opened = room
                 await load()
             } catch {
-                lookup = .notFound("The room couldn't be opened just now. Please try again.")
+                lookup = .notFound(String(localized: "The room couldn't be opened just now. Please try again."))
             }
         }
     }

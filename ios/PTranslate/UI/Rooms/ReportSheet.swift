@@ -86,11 +86,13 @@ struct ReportSheet: View {
     }
 
     private var footer: String {
-        let kept = switch target {
-        case .message: "We keep the message you report with your report until we've looked into it, even if they delete their account. "
-        case .person: ""
+        let looked = String(localized: "We look at every report within a day. \(name) isn't told who reported them.")
+        return switch target {
+        case .message:
+            String(localized: "We keep the message you report with your report until we've looked into it, even if they delete their account.")
+                + " " + looked
+        case .person: looked
         }
-        return kept + "We look at every report within a day. \(name) isn't told who reported them."
     }
 
     private func send() {
@@ -103,7 +105,7 @@ struct ReportSheet: View {
         }
     }
 
-    private func sectionHeader(_ text: String) -> some View {
+    private func sectionHeader(_ text: LocalizedStringKey) -> some View {
         Text(text).font(.pearlMeta).foregroundStyle(Palette.fg2).textCase(nil)
     }
 }
@@ -112,13 +114,13 @@ extension ReportReason {
     /// How each reason reads on the sheet.
     var words: String {
         switch self {
-        case .spam: "Spam or a scam"
-        case .harassment: "Harassment or bullying"
-        case .hate: "Hate"
-        case .sexual: "Sexual content"
-        case .violence: "Threats or violence"
-        case .selfHarm: "Someone may be at risk"
-        case .other: "Something else"
+        case .spam: String(localized: "Spam or a scam")
+        case .harassment: String(localized: "Harassment or bullying")
+        case .hate: String(localized: "Hate")
+        case .sexual: String(localized: "Sexual content")
+        case .violence: String(localized: "Threats or violence")
+        case .selfHarm: String(localized: "Someone may be at risk")
+        case .other: String(localized: "Something else")
         }
     }
 }

@@ -5,6 +5,10 @@ import Observation
 /// what each person agreed to. Change it whenever the wording changes.
 let voiceConsentVersion = "2026-10-31"
 
+/// The wording of the services step the user agrees to: who helps carry their words, and what each gets
+/// (Guideline 5.1.2(i)). A new version, with new wording, asks everyone again.
+let servicesConsentVersion = "2026-11-23"
+
 /// How far the user has come through signing up on this phone.
 enum OnboardingStep: String, Sendable {
     case name, handle, language, voice, done
@@ -56,8 +60,8 @@ final class Account {
     /// Signs in with the identity token Apple gave the phone; `nonce` is the raw nonce whose hash Apple put in it.
     /// Apple tells the app the person's name only the first time, so it is passed on when there is one. A new
     /// account starts signing up from its name; one already set up on another phone goes straight in.
-    func signInWithApple(identityToken: String, nonce: String, name: String?) async throws {
-        signedIn(try await client.signInWithApple(identityToken: identityToken, nonce: nonce, name: name))
+    func signInWithApple(identityToken: String, nonce: String, name: String?, authorizationCode: String? = nil) async throws {
+        signedIn(try await client.signInWithApple(identityToken: identityToken, nonce: nonce, name: name, authorizationCode: authorizationCode))
     }
 
     /// Signs in to a test account, with the code the server holds for its address. Otherwise as with Apple.
@@ -69,6 +73,17 @@ final class Account {
     private func signedIn(_ signIn: SignIn) {
         keep(Session(token: signIn.token, profile: signIn.profile))
         move(to: signIn.newUser || !signIn.profile.isComplete ? .name : .done)
+    }
+
+    /// The user has not yet agreed to this version of the services step: the app asks before anything goes to them.
+    var needsServicesConsent: Bool {
+        guard let profile else { return false }
+        return profile.servicesConsent != servicesConsentVersion
+    }
+
+    /// Records that the user agreed to the services step as it now reads.
+    func agreeToServices() async throws {
+        update(try await client.updateProfile(servicesConsent: servicesConsentVersion))
     }
 
     /// Fetches the profile again, as it is on the server.
@@ -97,8 +112,9 @@ final class Account {
         try await client.voiceAudio()
     }
 
-    func keepVoice(_ wav: Data) async throws -> KeptVoice {
-        try await client.putVoice(wav, consentVersion: voiceConsentVersion)
+    /// Keeps `wav` as the user's voice, with `transcript`, the words read in it.
+    func keepVoice(_ wav: Data, transcript: String) async throws -> KeptVoice {
+        try await client.putVoice(wav, transcript: transcript, consentVersion: voiceConsentVersion)
     }
 
     func deleteVoice() async throws {

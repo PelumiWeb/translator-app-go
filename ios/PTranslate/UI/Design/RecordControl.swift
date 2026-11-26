@@ -24,7 +24,7 @@ enum RecordControlState: Equatable {
 struct RecordControl: View {
     let state: RecordControlState
     /// What a tap does now, for VoiceOver ("Start recording").
-    let label: String
+    let label: LocalizedStringKey
     /// The state in words, for VoiceOver ("0:12").
     var value: String?
     var enabled = true
@@ -58,7 +58,7 @@ struct RecordControl: View {
         }
         .frame(width: area, height: area)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(label)
+        .accessibilityLabel(Text(label))
         .accessibilityValue(value ?? "")
         .accessibilityAddTraits(.isButton)
     }

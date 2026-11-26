@@ -1,3 +1,5 @@
+import Foundation
+
 /// Runs `call` until it succeeds, waiting `retryDelay` between tries. Gives up at once when the server refused the
 /// request, since the same request gets the same answer, and after `maxAttempts` tries in all. Throws the last
 /// failure.
@@ -67,7 +69,7 @@ extension BackendClient {
             }
             failures += 1
             if failures >= maxAttempts {
-                throw BackendError(message: "The connection to the server was lost", retryable: true)
+                throw BackendError(message: String(localized: "The connection to the server was lost"), retryable: true)
             }
             onReconnecting()
             try await Task.sleep(for: retryDelay(failures))

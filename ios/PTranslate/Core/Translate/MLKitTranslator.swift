@@ -35,7 +35,7 @@ struct MLKitTranslator: Translator {
     private static func pair(_ source: Language, _ target: Language) throws(TranslationError) -> (String, String) {
         let supported = Set(TranslateLanguage.allLanguages().map(\.rawValue))
         for language in [source, target] where !supported.contains(language.tag) {
-            throw TranslationError(message: "Translation does not support \(language.tag)")
+            throw TranslationError(message: String(localized: "Translation does not support \(language.tag)"))
         }
         return (source.tag, target.tag)
     }
@@ -54,7 +54,7 @@ struct MLKitTranslator: Translator {
         do {
             try await client(source, target).downloadModelIfNeeded(with: conditions)
         } catch {
-            throw TranslationError(message: "Could not download the language pack. Check the connection")
+            throw TranslationError(message: String(localized: "Could not download the language pack. Check the connection"))
         }
     }
 
@@ -63,7 +63,7 @@ struct MLKitTranslator: Translator {
         do {
             return try await client(source, target).translate(text)
         } catch {
-            throw TranslationError(message: "Translation failed")
+            throw TranslationError(message: String(localized: "Translation failed"))
         }
     }
 

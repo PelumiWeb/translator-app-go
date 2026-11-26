@@ -48,7 +48,7 @@ struct LanguageChips: View {
 
 /// A searchable list of languages, in a sheet. Each shows its own name, and the phone's name for it.
 struct LanguagePicker: View {
-    let title: String
+    let title: LocalizedStringKey
     let options: [Language]
     let selected: Language
     let onSelect: (Language) -> Void

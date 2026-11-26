@@ -1,17 +1,5 @@
 import SwiftUI
 
-/// About twenty seconds when read aloud at an ordinary pace. Varied sounds and a natural rhythm give a voice-cloning
-/// engine more to work with than a list of words would. Split into the lines the teleprompter shows; joined, it must
-/// stay word for word the same as on Android and on the server (`provider.OnboardingPassage`), which tells the voice
-/// engine what was said.
-private let passageLines = [
-    "When I travel, I like to talk with the people I meet",
-    "about their food, their music, and the places they love.",
-    "A good conversation makes the world feel smaller.",
-    "I am recording this so that when my words are translated,",
-    "they can still be spoken in my own voice.",
-]
-
 /// Where the user records the sample of their voice that their words are spoken in, and agrees to it being kept.
 /// During sign-up, `step` numbers it and `onBack` goes to the step before.
 struct VoiceSetupScreen: View {
@@ -25,6 +13,7 @@ struct VoiceSetupScreen: View {
             step: step,
             onBack: onBack,
             keeping: viewModel.keeping,
+            passage: viewModel.passage,
             stage: viewModel.stage,
             recordingStarted: viewModel.recordingStarted,
             recorded: viewModel.recorded,
@@ -65,6 +54,7 @@ private struct VoiceSetupContent: View {
     var step: Int?
     var onBack: (() -> Void)?
     var keeping = false
+    var passage = VoicePassage.english
     let stage: VoiceSetupStage
     let recordingStarted: Date?
     let recorded: Duration
@@ -117,15 +107,13 @@ private struct VoiceSetupContent: View {
     private var intro: some View {
         Text("Your voice")
             .font(.pearlLabel)
-        Text(saved == nil ? "Be heard in your own voice" : "Your voice is recorded")
+        (saved == nil ? Text("Be heard in your own voice") : Text("Your voice is recorded"))
             .font(.pearlTitle)
-        Text(
-            saved.map { "\($0.components.seconds) seconds. Record a new one, or keep the one you have." }
-                ?? "Read the lines below aloud, at your normal pace. About 20 seconds. You'll hear it back before anything is kept."
-        )
+        (saved.map { Text("\($0.components.seconds) seconds. Record a new one, or keep the one you have.") }
+            ?? Text("Read the lines below aloud, at your normal pace. About 20 seconds. You'll hear it back before anything is kept."))
         .font(.pearlBody)
         .foregroundStyle(Palette.fg2)
-        Teleprompter(current: 0)
+        Teleprompter(lines: passage, current: 0)
             .padding(.vertical, 16)
         RecordControl(state: .idle, label: saved == nil ? "Start recording" : "Record a new one", action: actions.record)
         LinkButton(saved == nil ? "Not now, use the phone's voice" : "Keep the one I have", action: actions.skip)
@@ -143,14 +131,12 @@ private struct VoiceSetupContent: View {
                     .font(.pearlTimer)
                     .tracking(-0.9)
                     .monospacedDigit()
-                Text(
-                    elapsed < VoiceSampleRules.minimum ? "Keep going. A few more seconds."
-                        : elapsed < VoiceSampleRules.target ? "Keep going. Read to the end."
-                        : "That's enough. Tap to stop."
-                )
+                (elapsed < VoiceSampleRules.minimum ? Text("Keep going. A few more seconds.")
+                    : elapsed < VoiceSampleRules.target ? Text("Keep going. Read to the end.")
+                    : Text("That's enough. Tap to stop."))
                 .font(.pearlSmall)
                 .foregroundStyle(Palette.fg2)
-                Teleprompter(current: lineAt(elapsed))
+                Teleprompter(lines: passage, current: lineAt(elapsed, in: passage))
                     .padding(.vertical, 24)
                 RecordControl(state: .recording, label: "Stop recording", value: clock(elapsed), action: actions.record)
             }
@@ -164,7 +150,7 @@ private struct VoiceSetupContent: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text(problem == nil ? "That's your voice. Keep it?" : "Let's try that again.")
+                    (problem == nil ? Text("That's your voice. Keep it?") : Text("Let's try that again."))
                         .font(.pearlScreenTitle)
                         .accessibilityAddTraits(.isHeader)
                     // While it plays, the played part of the waveform fills in.
@@ -207,7 +193,7 @@ private struct VoiceSetupContent: View {
             }
             VStack(spacing: 10) {
                 if problem == nil {
-                    Button(keeping ? "Keeping…" : "Keep my voice", action: actions.use)
+                    Button(action: actions.use) { keeping ? Text("Keeping…") : Text("Keep my voice") }
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(keeping)
                     Button("Record again", action: actions.record)
@@ -225,8 +211,8 @@ private struct VoiceSetupContent: View {
 }
 
 private struct ConsentBlock: View {
-    let title: String
-    let text: String
+    let title: LocalizedStringKey
+    let text: LocalizedStringKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -238,19 +224,20 @@ private struct ConsentBlock: View {
 
 /// The passage as a teleprompter: the line to read now, large, between the line just read and the one coming next.
 private struct Teleprompter: View {
+    let lines: [String]
     let current: Int
 
     var body: some View {
         VStack(spacing: 14) {
-            Text(current > 0 ? passageLines[current - 1] : " ")
+            Text(current > 0 ? lines[current - 1] : " ")
                 .font(.pearlPassageOther)
                 .foregroundStyle(Palette.fg4)
                 .frame(minHeight: 44, alignment: .bottom)
-            Text(passageLines[current])
+            Text(lines[current])
                 .font(.pearlPassageCurrent)
                 .tracking(-0.25)
                 .foregroundStyle(Palette.fg)
-            Text(current + 1 < passageLines.count ? passageLines[current + 1] : " ")
+            Text(current + 1 < lines.count ? lines[current + 1] : " ")
                 .font(.pearlPassageOther)
                 .foregroundStyle(Palette.fg3)
                 .frame(minHeight: 44, alignment: .top)
@@ -263,15 +250,15 @@ private struct Teleprompter: View {
 
 /// Which line the reader has probably reached: the passage is paced to take the target time, each line its share by
 /// length. There is no listening for the words; a reader ahead or behind still has the lines around it.
-private func lineAt(_ elapsed: Duration) -> Int {
-    let total = passageLines.reduce(0) { $0 + $1.count }
+private func lineAt(_ elapsed: Duration, in lines: [String]) -> Int {
+    let total = lines.reduce(0) { $0 + $1.count }
     let reached = elapsed / VoiceSampleRules.target * Double(total)
     var end = 0
-    for (index, line) in passageLines.enumerated() {
+    for (index, line) in lines.enumerated() {
         end += line.count
         if reached < Double(end) { return index }
     }
-    return passageLines.count - 1
+    return lines.count - 1
 }
 
 private extension VoiceSetupActions {
@@ -281,6 +268,15 @@ private extension VoiceSetupActions {
 
 #Preview("Recording") {
     VoiceSetupContent(
+        stage: .recording, recordingStarted: .now.addingTimeInterval(-12), recorded: .zero, levels: [], problem: nil,
+        playing: false, saved: nil, error: nil, actions: .inert
+    )
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Recording, in Yoruba") {
+    VoiceSetupContent(
+        passage: VoicePassage.lines(for: Language("yo")),
         stage: .recording, recordingStarted: .now.addingTimeInterval(-12), recorded: .zero, levels: [], problem: nil,
         playing: false, saved: nil, error: nil, actions: .inert
     )

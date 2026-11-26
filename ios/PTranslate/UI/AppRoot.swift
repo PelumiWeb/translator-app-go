@@ -14,7 +14,11 @@ struct AppRoot: View {
     var body: some View {
         let account = container.account
         Group {
-            if account.session != nil && account.step == .done {
+            if account.session != nil && account.step == .done && account.needsServicesConsent {
+                // Before anything goes to the services that help: after signing up, and once for everyone who
+                // signed up before the step was there.
+                ServicesScreen(account: account)
+            } else if account.session != nil && account.step == .done {
                 MainTabs(container: container, translate: translate, voiceSetup: voiceSetup, addHandle: $addHandle)
             } else {
                 // A new view, and so a new view model with fresh fields, for each person who signs in.

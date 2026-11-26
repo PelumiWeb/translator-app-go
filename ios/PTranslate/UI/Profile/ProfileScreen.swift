@@ -35,7 +35,7 @@ struct ProfileScreen: View {
                                 .font(.system(size: 15)).foregroundStyle(Palette.onYou)
                                 .frame(width: 44, height: 44).background(Palette.you, in: Circle())
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(viewModel.playingVoice ? "Playing your voice" : "Play your voice").font(.pearlLead)
+                                (viewModel.playingVoice ? Text("Playing your voice") : Text("Play your voice")).font(.pearlLead)
                                 Text(voiceDetail).font(.pearlSmall).foregroundStyle(Palette.fg2)
                             }
                         }
@@ -72,9 +72,9 @@ struct ProfileScreen: View {
                     if standing.subscribed {
                         Button("Manage subscription") { managing = true }
                     } else {
-                        Button(standing.state == .none ? "Start your free week" : "Subscribe") { paywall = true }
+                        Button { paywall = true } label: { standing.state == .none ? Text("Start your free week") : Text("Subscribe") }
                     }
-                    Button(restoring ? "Restoring…" : "Restore purchases") {
+                    Button {
                         restoring = true
                         Task {
                             // Asks Apple for this Apple account's purchases again, then hands them to the server.
@@ -82,6 +82,8 @@ struct ProfileScreen: View {
                             await subscriptions.sync()
                             restoring = false
                         }
+                    } label: {
+                        restoring ? Text("Restoring…") : Text("Restore purchases")
                     }
                     .disabled(restoring)
                     if let problem = subscriptions.problem {
@@ -160,16 +162,15 @@ struct ProfileScreen: View {
 
     /// Apple asks apps to say that deleting an account does not cancel a subscription, and how to cancel it.
     private var deleteWarning: String {
-        let everything = "Everything goes: your profile, your voice, and everything you said in your rooms. This can't be undone."
+        let everything = String(localized: "Everything goes: your profile, your voice, and everything you said in your rooms. This can't be undone.")
         guard subscriptions.standing?.subscribed == true else { return everything }
-        return everything + " Your subscription is not cancelled with it: Apple keeps charging until you cancel it, "
-            + "under Manage subscription above, or in Settings, under your name, then Subscriptions."
+        return everything + " " + String(localized: "Your subscription is not cancelled with it: Apple keeps charging until you cancel it, under Manage subscription above, or in Settings, under your name, then Subscriptions.")
     }
 
     private var voiceDetail: String {
         let parts = [
             viewModel.voiceLength.map(clock),
-            viewModel.keptVoice.map { "recorded \($0.consentedAt.formatted(.dateTime.day().month(.abbreviated)))" },
+            viewModel.keptVoice.map { String(localized: "recorded \($0.consentedAt.formatted(.dateTime.day().month(.abbreviated)))") },
         ]
         return parts.compactMap { $0 }.joined(separator: " · ")
     }
@@ -184,11 +185,11 @@ struct ProfileScreen: View {
         .listRowBackground(Color.clear)
     }
 
-    private func header(_ title: String) -> some View {
+    private func header(_ title: LocalizedStringKey) -> some View {
         Text(title).font(.pearlLabel).foregroundStyle(Palette.fg2).textCase(nil)
     }
 
-    private func row(_ title: String, value: String?, to destination: ProfileDestination) -> some View {
+    private func row(_ title: LocalizedStringKey, value: String?, to destination: ProfileDestination) -> some View {
         NavigationLink(value: destination) {
             LabeledContent(title, value: value ?? "")
         }
@@ -198,9 +199,9 @@ struct ProfileScreen: View {
 private extension TranscriptionRoute {
     var shortLabel: String {
         switch self {
-        case .automatic: "Automatic"
-        case .onDevice: "This device"
-        case .cloud: "Server"
+        case .automatic: String(localized: "Automatic")
+        case .onDevice: String(localized: "This device")
+        case .cloud: String(localized: "Server")
         }
     }
 }
@@ -210,14 +211,14 @@ private extension TranslateViewModel {
         switch model {
         case .ready(let file):
             let bytes = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-            return "Ready · \(bytes / (1024 * 1024)) MB on this phone"
-        case .downloading, .verifying: return "Downloading"
-        case .missing, .failed: return "Not on this phone"
+            return String(localized: "Ready · \(bytes / (1024 * 1024)) MB on this phone")
+        case .downloading, .verifying: return String(localized: "Downloading")
+        case .missing, .failed: return String(localized: "Not on this phone")
         }
     }
 
     var speedSummary: String {
-        guard deviceSpeed != nil else { return "Not measured" }
-        return deviceTooSlow ? "Slow" : "Fast"
+        guard deviceSpeed != nil else { return String(localized: "Not measured") }
+        return deviceTooSlow ? String(localized: "Slow") : String(localized: "Fast")
     }
 }

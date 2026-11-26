@@ -103,18 +103,17 @@ final class BackendClient: Sendable {
         do {
             return try JSONDecoder().decode(CreateJobResponse.self, from: body).id
         } catch {
-            throw BackendError(message: "The server sent an unreadable response", retryable: false)
+            throw BackendError(message: String(localized: "The server sent an unreadable response"), retryable: false)
         }
     }
 
-    /// Asks for `text` to be spoken in `language`, in the voice heard in `voiceWAV`. The server queues it like a
-    /// transcription: follow `jobEvents` until it is done, then fetch `speechAudio`. `idempotencyKey` works as for
-    /// `createJob`.
-    func createSpeech(voiceWAV: Data, text: String, language: Language, idempotencyKey: String) async throws -> SpeechJob {
+    /// Asks for `text` to be spoken in `language`, in the voice the server keeps for the signed-in user, with the
+    /// words read in it. The server queues it like a transcription: follow `jobEvents` until it is done, then fetch
+    /// `speechAudio`. `idempotencyKey` works as for `createJob`.
+    func createSpeech(text: String, language: Language, idempotencyKey: String) async throws -> SpeechJob {
         var form = MultipartForm()
         form.addField("text", value: text)
         form.addField("lang", value: language.tag)
-        form.addFile("voice", filename: "voice.wav", contentType: "audio/wav", data: voiceWAV)
 
         var request = URLRequest(url: url("/v1/speech"))
         request.httpMethod = "POST"
@@ -131,7 +130,7 @@ final class BackendClient: Sendable {
             let created = try JSONDecoder().decode(CreateSpeechResponse.self, from: body)
             return SpeechJob(id: created.id, audioURL: created.audioURL)
         } catch {
-            throw BackendError(message: "The server sent an unreadable response", retryable: false)
+            throw BackendError(message: String(localized: "The server sent an unreadable response"), retryable: false)
         }
     }
 
@@ -180,11 +179,11 @@ final class BackendClient: Sendable {
         do {
             (bytes, response) = try await session.bytes(for: request)
         } catch {
-            throw Self.connectionError(error, "Could not reach the server")
+            throw Self.connectionError(error, String(localized: "Could not reach the server"))
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 || status == 206 else {
-            throw BackendError(message: "The server answered \(status)", retryable: status >= 500)
+            throw BackendError(message: String(localized: "The server answered \(status)"), retryable: status >= 500)
         }
         return ModelDownload(partial: status == 206, bytes: bytes)
     }
@@ -206,12 +205,12 @@ final class BackendClient: Sendable {
         do {
             (bytes, response) = try await session.bytes(for: request)
         } catch {
-            throw Self.connectionError(error, "Could not reach the server")
+            throw Self.connectionError(error, String(localized: "Could not reach the server"))
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             // The server answered and said no, e.g. 404 for an unknown job.
-            throw BackendError(message: "The server answered \(status)", retryable: status >= 500)
+            throw BackendError(message: String(localized: "The server answered \(status)"), retryable: status >= 500)
         }
         return JobEvents(bytes: bytes)
     }
@@ -222,7 +221,7 @@ final class BackendClient: Sendable {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw Self.connectionError(error, "Could not reach the server")
+            throw Self.connectionError(error, String(localized: "Could not reach the server"))
         }
         guard let http = response as? HTTPURLResponse else {
             throw BackendError(message: "The server's answer was not HTTP", retryable: false)
@@ -247,7 +246,7 @@ final class BackendClient: Sendable {
     static func refusal(_ body: Data, _ response: HTTPURLResponse) -> BackendError {
         let detail = try? JSONDecoder().decode(ErrorResponse.self, from: body).error
         return BackendError(
-            message: detail?.message ?? "The server answered \(response.statusCode)",
+            message: detail?.message ?? String(localized: "The server answered \(response.statusCode)"),
             retryable: response.statusCode >= 500 && response.statusCode != 501,
             status: response.statusCode,
             code: detail?.code

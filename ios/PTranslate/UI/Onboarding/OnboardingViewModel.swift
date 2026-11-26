@@ -58,8 +58,10 @@ final class OnboardingViewModel {
     }
 
     /// Signs in with the identity token Apple gave the phone, for the nonce whose hash Apple was given.
-    func signIn(identityToken: String, nonce: Nonce, name: String?) async {
-        await signIn { [account] in try await account.signInWithApple(identityToken: identityToken, nonce: nonce.raw, name: name) }
+    func signIn(identityToken: String, nonce: Nonce, name: String?, authorizationCode: String? = nil) async {
+        await signIn { [account] in
+            try await account.signInWithApple(identityToken: identityToken, nonce: nonce.raw, name: name, authorizationCode: authorizationCode)
+        }
     }
 
     /// Signs in to a test account: an address and the code the server holds for it.
@@ -81,21 +83,21 @@ final class OnboardingViewModel {
             if account.step == .done { await restoreVoice() }
         } catch let error as BackendError {
             signInProblem = switch true {
-            case error.status == 0: "No connection. Check you're online, then try again."
-            case error.code == "invalid_token": "That sign-in couldn't be checked. Please try again."
-            case error.code == "invalid_code": "That email and code don't match. Check them, then try again."
-            case error.code == "account_suspended": "This account has been suspended. If you think that's a mistake, write to us from the help page."
-            case error.status == 501: "That way of signing in isn't set up on the server yet."
-            default: "Sign-in didn't work just now. Please try again."
+            case error.status == 0: String(localized: "No connection. Check you're online, then try again.")
+            case error.code == "invalid_token": String(localized: "That sign-in couldn't be checked. Please try again.")
+            case error.code == "invalid_code": String(localized: "That email and code don't match. Check them, then try again.")
+            case error.code == "account_suspended": String(localized: "This account has been suspended. If you think that's a mistake, write to us from the help page.")
+            case error.status == 501: String(localized: "That way of signing in isn't set up on the server yet.")
+            default: String(localized: "Sign-in didn't work just now. Please try again.")
             }
         } catch {
-            signInProblem = "Sign-in didn't work just now. Please try again."
+            signInProblem = String(localized: "Sign-in didn't work just now. Please try again.")
         }
     }
 
     /// Apple's sheet did not finish: `cancelled` when the person closed it.
     func signInFailed(cancelled: Bool) {
-        signInProblem = cancelled ? "Sign-in was cancelled. Try again when you're ready." : "Sign in with Apple didn't finish. Please try again."
+        signInProblem = cancelled ? String(localized: "Sign-in was cancelled. Try again when you're ready.") : String(localized: "Sign in with Apple didn't finish. Please try again.")
     }
 
     func nameContinue() {
@@ -133,7 +135,7 @@ final class OnboardingViewModel {
                 // A newer keystroke took over.
             } catch let error as BackendError {
                 guard let self, self.handle == typed else { return }
-                self.handleState = .unchecked(error.status == 0 ? "No connection, so this ID could not be checked." : "This ID could not be checked just now.")
+                self.handleState = .unchecked(error.status == 0 ? String(localized: "No connection, so this ID could not be checked.") : String(localized: "This ID could not be checked just now."))
             } catch {}
         }
     }
@@ -180,9 +182,9 @@ final class OnboardingViewModel {
                 if editing { saved = true } else { account.move(to: next) }
             } catch is StayHere {
             } catch let error as BackendError {
-                problem = error.status == 0 ? "No connection. Check you're online, then try again." : "That could not be saved just now. Please try again."
+                problem = error.status == 0 ? String(localized: "No connection. Check you're online, then try again.") : String(localized: "That could not be saved just now. Please try again.")
             } catch {
-                problem = "That could not be saved just now. Please try again."
+                problem = String(localized: "That could not be saved just now. Please try again.")
             }
         }
     }

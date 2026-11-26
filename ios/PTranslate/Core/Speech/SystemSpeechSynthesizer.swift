@@ -26,7 +26,7 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthe
 
     func speak(_ text: String, language: Language, onStart: @escaping @Sendable (SpeechVoice) -> Void) async throws(SpeechError) {
         guard let voice = Self.voice(for: language) else {
-            throw SpeechError(message: "This iPhone has no voice for \(Self.name(of: language))")
+            throw SpeechError(message: String(localized: "This iPhone has no voice for \(Self.name(of: language))"))
         }
         // One utterance at a time: a new one replaces whatever is still being said.
         stop()
@@ -37,7 +37,7 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSynthe
             try session.setCategory(.playback, mode: .spokenAudio)
             try session.setActive(true)
         } catch {
-            throw SpeechError(message: "Could not play the translation: \(error.localizedDescription)")
+            throw SpeechError(message: String(localized: "Could not play the translation: \(error.localizedDescription)"))
         }
         defer { try? session.setActive(false, options: .notifyOthersOnDeactivation) }
 

@@ -169,7 +169,7 @@ final class AppContainer {
         let synthesizer = FallbackSpeechSynthesizer(
             preferred: RemoteSpeechSynthesizer(
                 backend: backend,
-                voiceSample: { @MainActor in try await voice.loadWAV() },
+                hasVoice: { @MainActor in voice.state.duration != nil },
                 play: { @MainActor audio in try await player.play(audio) },
                 stopPlaying: { @MainActor in player.stop() }
             ),

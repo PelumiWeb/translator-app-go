@@ -109,7 +109,9 @@ struct SignInScreen: View {
             // Apple gives the name at the first sign-in only, and never puts it in the token.
             let name = credential.fullName.map { $0.formatted() }.flatMap { $0.isEmpty ? nil : $0 }
             let nonce = nonce
-            Task { await viewModel.signIn(identityToken: token, nonce: nonce, name: name) }
+            // Traded on the server for what it needs to end the Apple sign-in when the account is deleted.
+            let code = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+            Task { await viewModel.signIn(identityToken: token, nonce: nonce, name: name, authorizationCode: code) }
         case .failure(let error):
             viewModel.signInFailed(cancelled: (error as? ASAuthorizationError)?.code == .canceled)
         }
@@ -120,9 +122,9 @@ struct SignInScreen: View {
 /// when editing from the profile, the header is a back button alone.
 private struct StepFrame<Content: View>: View {
     let step: Int?
-    let title: String
-    var subtitle: String?
-    let button: String
+    let title: LocalizedStringKey
+    var subtitle: LocalizedStringKey?
+    let button: LocalizedStringKey
     let buttonEnabled: Bool
     let saving: Bool
     let problem: String?
@@ -167,7 +169,7 @@ private struct StepFrame<Content: View>: View {
 struct NameScreen: View {
     @Bindable var viewModel: OnboardingViewModel
     var step: Int? = 1
-    var button = "Continue"
+    var button: LocalizedStringKey = "Continue"
     let onBack: () -> Void
 
     var body: some View {
@@ -189,7 +191,7 @@ struct NameScreen: View {
 struct HandleScreen: View {
     let viewModel: OnboardingViewModel
     var step: Int? = 2
-    var button = "Continue"
+    var button: LocalizedStringKey = "Continue"
     let onBack: () -> Void
 
     var body: some View {
@@ -241,7 +243,7 @@ struct LanguageScreen: View {
     @Bindable var viewModel: OnboardingViewModel
     let phoneLanguage: Language?
     var step: Int? = 3
-    var button: String?
+    var button: LocalizedStringKey?
     let onBack: () -> Void
 
     @State private var query = ""
@@ -250,7 +252,7 @@ struct LanguageScreen: View {
     var body: some View {
         StepFrame(
             step: step, title: "Which language do you speak?",
-            button: button ?? viewModel.language.map { "Continue in \($0.ownName)" } ?? "Continue",
+            button: button ?? viewModel.language.map { language -> LocalizedStringKey in "Continue in \(language.ownName)" } ?? "Continue",
             buttonEnabled: viewModel.language != nil,
             saving: viewModel.saving, problem: viewModel.problem, onBack: onBack, onContinue: viewModel.languageContinue
         ) {
@@ -261,8 +263,10 @@ struct LanguageScreen: View {
                         row(phoneLanguage, detail: Locale.current.region.flatMap { Locale.current.localizedString(forRegionCode: $0.identifier) })
                     }
                 }
-                Section(query.isEmpty && phoneLanguage != nil ? "All languages" : "") {
+                Section {
                     ForEach(shown, id: \.tag) { row($0, detail: nil) }
+                } header: {
+                    if query.isEmpty && phoneLanguage != nil { Text("All languages") }
                 }
             }
             .listStyle(.insetGrouped)

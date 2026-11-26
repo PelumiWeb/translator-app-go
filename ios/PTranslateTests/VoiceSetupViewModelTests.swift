@@ -57,6 +57,30 @@ struct VoiceSetupViewModelTests {
         #expect(!preference.skipped)
     }
 
+    @Test func someoneWhoSpeaksSpanishReadsAndKeepsTheSpanishPassage() async throws {
+        let server = StubServer()
+        server.enqueue(.json(status: 200, body: #"{"consent_version":"2026-10-31","consented_at":"2026-11-26T10:00:00Z"}"#))
+        let session = Session(token: "tok", profile: Profile(id: "u1", displayName: "Rosa", handle: "rosa", language: "es"))
+        let viewModel = VoiceSetupViewModel(
+            recorder: recorder,
+            player: player,
+            samples: store,
+            preference: preference,
+            account: testAccount(server: server, store: MemorySessionStore(session)),
+            requestMicrophone: { true }
+        )
+        #expect(viewModel.passage == VoicePassage.lines(for: Language("es")))
+
+        await recordAndStop(viewModel)
+        viewModel.useTapped()
+        await viewModel.work?.value
+
+        let upload = try #require(server.requests.first)
+        #expect(upload.path == "/v1/me/voice")
+        #expect(upload.bodyText.contains(#"name="transcript""# + "\r\n\r\n" + VoicePassage.text(for: Language("es")) + "\r\n"))
+        #expect(store.saved == recorder.audio)
+    }
+
     @Test func aRecordingThatIsTooShortCannotBeKept() async {
         recorder.audio = speech(seconds: 4)
         let viewModel = makeViewModel()

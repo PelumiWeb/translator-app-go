@@ -73,7 +73,7 @@ final class ModelManager: ModelInstaller {
         do {
             return try await task.value
         } catch {
-            throw error as? ModelError ?? ModelError(message: "The model could not be installed")
+            throw error as? ModelError ?? ModelError(message: String(localized: "The model could not be installed"))
         }
     }
 
@@ -107,7 +107,7 @@ final class ModelManager: ModelInstaller {
             throw fail(error.message)
         } catch {
             // A dropped connection mid-download lands here. The partial file stays, so the next call resumes.
-            throw fail("The download was interrupted")
+            throw fail(String(localized: "The download was interrupted"))
         }
     }
 
@@ -176,7 +176,7 @@ final class ModelManager: ModelInstaller {
             // Nothing in a corrupt file can be trusted, so none of it is kept for a resume.
             try? FileManager.default.removeItem(at: files.partial)
             try? FileManager.default.removeItem(at: files.partialSHA)
-            throw ModelError(message: "The downloaded model is corrupt (checksum mismatch)")
+            throw ModelError(message: String(localized: "The downloaded model is corrupt (checksum mismatch)"))
         }
     }
 }
@@ -220,7 +220,7 @@ private struct ModelFiles: Sendable {
         do {
             try FileManager.default.moveItem(at: partial, to: installed)
         } catch {
-            throw ModelError(message: "Could not save the model")
+            throw ModelError(message: String(localized: "Could not save the model"))
         }
         try? FileManager.default.removeItem(at: partialSHA)
     }

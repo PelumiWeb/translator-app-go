@@ -24,7 +24,7 @@ actor WhisperTranscriber: Transcriber {
             // from words the model did not catch.
             if audio.isSilent {
                 let level = Int(audio.levelDB.rounded())
-                throw TranscriptionError.silentAudio("The recording was silent (\(level) dB). Check the microphone")
+                throw TranscriptionError.silentAudio(String(localized: "The recording was silent (\(level) dB). Check the microphone"))
             }
 
             events.yield(.stageChanged(.processing))
@@ -35,11 +35,11 @@ actor WhisperTranscriber: Transcriber {
             // no-speech estimate.
             let noSpeech = (result.noSpeechProbability ?? 0) > Self.noSpeechThreshold
             if noSpeech || result.text.isEmpty || isOnlySoundLabels(result.text) {
-                throw TranscriptionError.noSpeech("No speech was recognised")
+                throw TranscriptionError.noSpeech(String(localized: "No speech was recognised"))
             }
             // The third: Whisper stuck in a loop. Its confidence is high for such output, so the text is checked.
             if looksLikeRepetitionLoop(result.text) {
-                throw TranscriptionError.garbled("The speech could not be made out. Please try again")
+                throw TranscriptionError.garbled(String(localized: "The speech could not be made out. Please try again"))
             }
             events.yield(.final(Transcript(text: result.text, confidence: result.meanTokenProbability, source: .onDevice)))
         }
@@ -65,7 +65,7 @@ actor WhisperTranscriber: Transcriber {
             return context
         }
         guard let file = await modelFile(), FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) else {
-            throw TranscriptionError.failed("The on-device model is not installed")
+            throw TranscriptionError.failed(String(localized: "The on-device model is not installed"))
         }
         let loaded = try await WhisperContext.load(file)
         context = loaded

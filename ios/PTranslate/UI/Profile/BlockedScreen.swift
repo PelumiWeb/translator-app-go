@@ -21,7 +21,7 @@ final class BlockedViewModel {
             problem = nil
         } catch is CancellationError {
         } catch {
-            problem = "This list couldn't be loaded just now."
+            problem = String(localized: "This list couldn't be loaded just now.")
         }
         loading = false
     }
@@ -32,7 +32,7 @@ final class BlockedViewModel {
             people.removeAll { $0.id == person.id }
             problem = nil
         } catch {
-            problem = "\(person.profile.shownName) couldn't be unblocked just now."
+            problem = String(localized: "\(person.profile.shownName) couldn't be unblocked just now.")
         }
     }
 }

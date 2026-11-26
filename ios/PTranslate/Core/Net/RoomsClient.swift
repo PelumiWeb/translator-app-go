@@ -114,11 +114,11 @@ final class RoomsClient: Sendable {
         do {
             (bytes, response) = try await rest.session.bytes(for: request)
         } catch {
-            throw BackendClient.connectionError(error, "Could not reach the server")
+            throw BackendClient.connectionError(error, String(localized: "Could not reach the server"))
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            throw BackendError(message: "The server answered \(status)", retryable: status >= 500, status: status)
+            throw BackendError(message: String(localized: "The server answered \(status)"), retryable: status >= 500, status: status)
         }
         return RoomChanges(bytes: bytes)
     }

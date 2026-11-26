@@ -13,7 +13,7 @@ final class EngineAudioPlayer: AudioPlayer {
             let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(audio.samples.count)),
             let channel = buffer.floatChannelData?[0]
         else {
-            throw PlayerError(message: "The recording could not be prepared for playback")
+            throw PlayerError(message: String(localized: "The recording could not be prepared for playback"))
         }
         buffer.frameLength = buffer.frameCapacity
         for (index, sample) in audio.samples.enumerated() {
@@ -33,7 +33,7 @@ final class EngineAudioPlayer: AudioPlayer {
             try engine.start()
         } catch {
             try? session.setActive(false)
-            throw PlayerError(message: "Could not play the recording: \(error.localizedDescription)")
+            throw PlayerError(message: String(localized: "Could not play the recording: \(error.localizedDescription)"))
         }
 
         current = node

@@ -9,6 +9,8 @@ struct Profile: Codable, Equatable, Sendable {
     var handle: String = ""
     /// The language they speak, as a tag such as "es"; empty until chosen.
     var language: String = ""
+    /// For the signed-in user, the version of the services step they agreed to; empty until then, and for others.
+    var servicesConsent: String = ""
 
     /// Signed up far enough to talk to people: an ID to be found by and a language to hear in.
     var isComplete: Bool { !handle.isEmpty && !language.isEmpty }
@@ -18,13 +20,15 @@ struct Profile: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, handle, language
         case displayName = "display_name"
+        case servicesConsent = "services_consent"
     }
 
-    init(id: String, displayName: String = "", handle: String = "", language: String = "") {
+    init(id: String, displayName: String = "", handle: String = "", language: String = "", servicesConsent: String = "") {
         self.id = id
         self.displayName = displayName
         self.handle = handle
         self.language = language
+        self.servicesConsent = servicesConsent
     }
 
     init(from decoder: any Decoder) throws {
@@ -33,6 +37,7 @@ struct Profile: Codable, Equatable, Sendable {
         displayName = try container.decodeIfPresent(String.self, forKey: .displayName) ?? ""
         handle = try container.decodeIfPresent(String.self, forKey: .handle) ?? ""
         language = try container.decodeIfPresent(String.self, forKey: .language) ?? ""
+        servicesConsent = try container.decodeIfPresent(String.self, forKey: .servicesConsent) ?? ""
     }
 }
 
@@ -92,10 +97,10 @@ enum Handles {
     static func problem(with handle: String) -> String? {
         let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789._")
         if handle.contains(where: { !allowed.contains($0) }) {
-            return "Only letters, numbers, dots and underscores."
+            return String(localized: "Only letters, numbers, dots and underscores.")
         }
-        if handle.count < min { return "At least \(min) characters." }
-        if handle.count > max { return "At most \(max) characters." }
+        if handle.count < min { return String(localized: "At least \(min) characters.") }
+        if handle.count > max { return String(localized: "At most \(max) characters.") }
         return nil
     }
 

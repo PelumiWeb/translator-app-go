@@ -19,9 +19,9 @@ struct SecondaryButtonStyle: ButtonStyle {
 /// The design's text field: raised petrol, rounded, large text, outlined in warm white while it has focus. `prefix`
 /// is shown dim before the text, as the "@" of an ID.
 struct PearlTextField<Trailing: View>: View {
-    let label: String
+    let label: LocalizedStringKey
     @Binding var text: String
-    var placeholder = ""
+    var placeholder: LocalizedStringKey = ""
     var prefix: String?
     var compact = false
     var systemImage: String?
@@ -52,12 +52,12 @@ struct PearlTextField<Trailing: View>: View {
                 RoundedRectangle(cornerRadius: 12).stroke(Palette.fg, lineWidth: 1.5)
             }
         }
-        .accessibilityLabel(label)
+        .accessibilityLabel(Text(label))
     }
 }
 
 extension PearlTextField where Trailing == EmptyView {
-    init(label: String, text: Binding<String>, placeholder: String = "", prefix: String? = nil, compact: Bool = false, systemImage: String? = nil) {
+    init(label: LocalizedStringKey, text: Binding<String>, placeholder: LocalizedStringKey = "", prefix: String? = nil, compact: Bool = false, systemImage: String? = nil) {
         self.init(label: label, text: text, placeholder: placeholder, prefix: prefix, compact: compact, systemImage: systemImage) { EmptyView() }
     }
 }
@@ -128,7 +128,7 @@ struct Avatar: View {
 
 /// For a problem that fixes itself: a capsule at the top with a spinner.
 struct Toast: View {
-    let text: String
+    let text: LocalizedStringKey
 
     var body: some View {
         HStack(spacing: 10) {
@@ -146,9 +146,9 @@ struct Toast: View {
 /// For something the person must do: an icon, a title, a line, and the action.
 struct Banner: View {
     let systemImage: String
-    let title: String
-    let message: String
-    let action: String
+    let title: LocalizedStringKey
+    let message: LocalizedStringKey
+    let action: LocalizedStringKey
     let onAction: () -> Void
 
     var body: some View {
@@ -168,7 +168,8 @@ struct Banner: View {
     }
 }
 
-/// For a recording that did not work: a line above the mic, with what to try.
+/// For a recording that did not work: a line above the mic, with what to try. The text comes already in the person's
+/// language.
 struct Hint: View {
     let text: String
     var systemImage = "arrow.counterclockwise"

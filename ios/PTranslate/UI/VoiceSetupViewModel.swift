@@ -40,6 +40,9 @@ final class VoiceSetupViewModel {
     /// Length of the recording already saved on this phone, if there is one.
     var saved: Duration? { samples.state.duration }
 
+    /// What to read aloud: in the language the user speaks, chosen at the step before.
+    var passage: [String] { VoicePassage.lines(for: account?.profile?.lang) }
+
     /// The work the last action started, the timer that ends a recording, and the playback. Tests wait on them.
     @ObservationIgnored private(set) var work: Task<Void, Never>?
     @ObservationIgnored private(set) var autoStop: Task<Void, Never>?
@@ -118,16 +121,16 @@ final class VoiceSetupViewModel {
             defer { keeping = false }
             do {
                 if let account, account.session != nil {
-                    _ = try await account.keepVoice(audio.wavData())
+                    _ = try await account.keepVoice(audio.wavData(), transcript: VoicePassage.text(for: account.profile?.lang))
                 }
                 try await samples.save(audio)
             } catch let failure as BackendError {
                 self.error = failure.status == 0
-                    ? "No connection, so your voice couldn't be kept. Check you're online, then try again."
-                    : "Your voice couldn't be kept just now. Please try again."
+                    ? String(localized: "No connection, so your voice couldn't be kept. Check you're online, then try again.")
+                    : String(localized: "Your voice couldn't be kept just now. Please try again.")
                 return
             } catch {
-                self.error = "The recording could not be saved"
+                self.error = String(localized: "The recording could not be saved")
                 return
             }
             preference.skipped = false
@@ -157,7 +160,7 @@ final class VoiceSetupViewModel {
                 }
                 try await samples.delete()
             } catch {
-                self.error = "The recording could not be deleted"
+                self.error = String(localized: "The recording could not be deleted")
                 return
             }
             preference.skipped = true
@@ -179,7 +182,7 @@ final class VoiceSetupViewModel {
     private func startRecording() async {
         stopPlayback()
         guard await requestMicrophone() else {
-            error = "Microphone permission is needed to record your voice"
+            error = String(localized: "Microphone permission is needed to record your voice")
             return
         }
         // A second tap while iOS was asking for permission has already started one.

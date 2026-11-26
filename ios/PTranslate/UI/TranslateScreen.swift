@@ -198,7 +198,7 @@ private struct InterpreterContent: View {
         }
     }
 
-    private var controlLabel: String {
+    private var controlLabel: LocalizedStringKey {
         switch state.stage {
         case .recording: "Stop recording"
         case .speaking: "Stop speaking"
@@ -213,23 +213,23 @@ private struct InterpreterContent: View {
         let source = state.source.ownName
         let target = state.target.ownName
         switch state.stage {
-        case .idle: return ("Tap to speak", "You speak \(source). They hear \(target).")
-        case .recording: return ("Listening · \(clock(elapsed))", "Tap to stop when you are done")
-        case .preparingAudio, .transcribing: return ("Writing down what you said…", "Usually a second or two")
-        case .uploading: return ("Writing down what you said…", "Sending it to the server")
-        case .queued: return ("Writing down what you said…", "Waiting for the server")
-        case .reconnecting: return ("Writing down what you said…", "Connection lost. Reconnecting")
-        case .downloadingLanguage: return ("Getting \(target) ready…", "Only the first time")
-        case .translating: return ("Translating into \(target)…", nil)
-        case .preparingSpeech: return (hasOwnVoice ? "Preparing your voice…" : "Preparing speech…", "Usually a few seconds")
-        case .speaking(.own): return ("Speaking in your voice", "Tap to stop")
+        case .idle: return (String(localized: "Tap to speak"), String(localized: "You speak \(source). They hear \(target)."))
+        case .recording: return (String(localized: "Listening · \(clock(elapsed))"), String(localized: "Tap to stop when you are done"))
+        case .preparingAudio, .transcribing: return (String(localized: "Writing down what you said…"), String(localized: "Usually a second or two"))
+        case .uploading: return (String(localized: "Writing down what you said…"), String(localized: "Sending it to the server"))
+        case .queued: return (String(localized: "Writing down what you said…"), String(localized: "Waiting for the server"))
+        case .reconnecting: return (String(localized: "Writing down what you said…"), String(localized: "Connection lost. Reconnecting"))
+        case .downloadingLanguage: return (String(localized: "Getting \(target) ready…"), String(localized: "Only the first time"))
+        case .translating: return (String(localized: "Translating into \(target)…"), nil)
+        case .preparingSpeech: return (hasOwnVoice ? String(localized: "Preparing your voice…") : String(localized: "Preparing speech…"), String(localized: "Usually a few seconds"))
+        case .speaking(.own): return (String(localized: "Speaking in your voice"), String(localized: "Tap to stop"))
         case .speaking(.phone):
             return (
-                "Speaking in the phone's voice",
-                hasOwnVoice ? "Your voice could not be made this time" : "Record your voice in Settings to hear yourself"
+                String(localized: "Speaking in the phone's voice"),
+                hasOwnVoice ? String(localized: "Your voice could not be made this time") : String(localized: "Record your voice in Settings to hear yourself")
             )
-        case .done: return ("Tap to speak again", "You speak \(source). They hear \(target).")
-        case .failed: return ("Tap to try again", nil)
+        case .done: return (String(localized: "Tap to speak again"), String(localized: "You speak \(source). They hear \(target)."))
+        case .failed: return (String(localized: "Tap to try again"), nil)
         }
     }
 }

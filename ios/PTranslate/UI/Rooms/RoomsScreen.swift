@@ -77,7 +77,7 @@ private struct RoomRow: View {
     let myLanguage: String?
 
     var body: some View {
-        let name = room.other?.shownName ?? "Deleted account"
+        let name = room.other?.shownName ?? String(localized: "Deleted account")
         HStack(alignment: .top, spacing: 14) {
             Avatar(name: name)
             VStack(alignment: .leading, spacing: 2) {
@@ -87,7 +87,7 @@ private struct RoomRow: View {
                     Text(roomTime(room.lastMessage?.createdAt ?? room.createdAt)).font(.pearlMeta).foregroundStyle(Palette.fg2)
                 }
                 HStack(alignment: .top) {
-                    Text(room.lastMessage?.preview(myLanguage: myLanguage) ?? "No messages yet")
+                    Text(room.lastMessage?.preview(myLanguage: myLanguage) ?? String(localized: "No messages yet"))
                         .font(.custom("IBMPlexSans", size: 15, relativeTo: .subheadline))
                         .foregroundStyle(Palette.fg.opacity(0.72))
                         .lineLimit(2)

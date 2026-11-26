@@ -30,10 +30,10 @@ extension View {
 
 /// A quiet action: underlined text, as "Not now, use the phone's voice" in the design.
 struct LinkButton: View {
-    let title: String
+    let title: LocalizedStringKey
     let action: () -> Void
 
-    init(_ title: String, action: @escaping () -> Void) {
+    init(_ title: LocalizedStringKey, action: @escaping () -> Void) {
         self.title = title
         self.action = action
     }
@@ -54,7 +54,7 @@ struct LinkButton: View {
 }
 
 /// Something the person should know, never styled as an alarm: warm text with an outline icon, as the handoff
-/// suggests for errors.
+/// suggests for errors. The text comes already in the person's language, from where the problem was put in words.
 struct Notice: View {
     let text: String
 

@@ -42,7 +42,7 @@ final class Rest: Sendable {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw BackendClient.connectionError(error, "Could not reach the server")
+            throw BackendClient.connectionError(error, String(localized: "Could not reach the server"))
         }
         guard let http = response as? HTTPURLResponse else {
             throw BackendError(message: "The server's answer was not HTTP", retryable: false)
@@ -72,7 +72,7 @@ final class Rest: Sendable {
         do {
             return try Self.decoder.decode(T.self, from: data)
         } catch {
-            throw BackendError(message: "The server sent an unreadable response", retryable: false)
+            throw BackendError(message: String(localized: "The server sent an unreadable response"), retryable: false)
         }
     }
 

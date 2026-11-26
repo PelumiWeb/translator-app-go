@@ -46,7 +46,7 @@ actor WhisperContext {
         // Before any of whisper.cpp's code runs: on a processor without the instructions it was built for, it
         // would stop the app.
         guard WhisperSupport.processorSupported else {
-            throw .failed("This iPhone's processor cannot run the speech model")
+            throw .failed(String(localized: "This iPhone's processor cannot run the speech model"))
         }
         let path = model.path(percentEncoded: false)
         guard FileManager.default.isReadableFile(atPath: path) else {
@@ -81,7 +81,7 @@ actor WhisperContext {
             return samples.withUnsafeBufferPointer { whisper_full(context, params, $0.baseAddress, Int32($0.count)) }
         }
         guard status == 0 else {
-            throw .failed("The on-device model failed to run")
+            throw .failed(String(localized: "The on-device model failed to run"))
         }
 
         let segments = whisper_full_n_segments(context)

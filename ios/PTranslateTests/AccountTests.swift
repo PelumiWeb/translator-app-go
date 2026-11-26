@@ -62,6 +62,38 @@ struct AccountTests {
         #expect(account.step == .name)
     }
 
+    @Test func appleSAuthorizationCodeGoesWithTheSignIn() async throws {
+        server.enqueue(.json(status: 200, body: #"{"token":"t1","user":{"id":"u1","display_name":"Ada","handle":"ada","language":"en"},"new_user":false}"#))
+        let account = testAccount(server: server)
+
+        try await account.signInWithApple(identityToken: "id-token", nonce: "raw", name: nil, authorizationCode: "code-1")
+
+        let body = try JSONSerialization.jsonObject(with: try #require(server.requests.first).body) as? [String: String]
+        #expect(body == ["identity_token": "id-token", "nonce": "raw", "authorization_code": "code-1"])
+    }
+
+    @Test func theServicesStepIsAskedUntilThisVersionIsAgreedTo() async throws {
+        let account = testAccount(server: server, store: MemorySessionStore(signedUp), progress: MemoryProgress(.done))
+        #expect(account.needsServicesConsent)
+
+        server.enqueue(.json(status: 200, body: """
+            {"id":"u1","display_name":"Ada","handle":"ada","language":"en","services_consent":"\(servicesConsentVersion)"}
+            """))
+        try await account.agreeToServices()
+
+        let request = try #require(server.requests.first)
+        #expect(request.method == "PATCH" && request.path == "/v1/me")
+        #expect(request.bodyText == #"{"services_consent":"\#(servicesConsentVersion)"}"#)
+        #expect(!account.needsServicesConsent)
+    }
+
+    @Test func anOlderVersionOfTheServicesStepIsAskedAgain() {
+        var agreedBefore = signedUp
+        agreedBefore.profile.servicesConsent = "2026-01-01"
+        let account = testAccount(server: server, store: MemorySessionStore(agreedBefore), progress: MemoryProgress(.done))
+        #expect(account.needsServicesConsent)
+    }
+
     @Test func aTestAccountSignsInWithItsAddressAndCode() async throws {
         server.enqueue(.json(status: 201, body: #"{"token":"t3","user":{"id":"u3","display_name":"","handle":"","language":""},"new_user":true}"#))
         let account = testAccount(server: server)
