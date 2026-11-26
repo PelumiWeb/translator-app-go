@@ -38,6 +38,9 @@ type User struct {
 	DisplayName string
 	Handle      string // empty until chosen
 	Language    string // empty until chosen
+	// ServicesConsent is the version of the wording the person agreed to, for
+	// their words going to the services that help; empty until they agree.
+	ServicesConsent string
 
 	suspended bool // read at sign-in only; a suspended user has no sessions
 }
@@ -48,6 +51,9 @@ type ProfileUpdate struct {
 	DisplayName *string
 	Handle      *string // lower case
 	Language    *string
+	// ServicesConsent records the person agreeing, now, to this version of
+	// the wording about the services that help.
+	ServicesConsent *string
 }
 
 // Store keeps accounts in Postgres.
@@ -118,8 +124,8 @@ func (s *Store) findOrCreate(ctx context.Context, provider, subject, email, name
 
 	var user User
 	err = tx.QueryRow(ctx,
-		`SELECT id, display_name, coalesce(handle, ''), language, suspended_at IS NOT NULL FROM users WHERE id = $1`, userID,
-	).Scan(&user.ID, &user.DisplayName, &user.Handle, &user.Language, &user.suspended)
+		`SELECT id, display_name, coalesce(handle, ''), language, services_consent, suspended_at IS NOT NULL FROM users WHERE id = $1`, userID,
+	).Scan(&user.ID, &user.DisplayName, &user.Handle, &user.Language, &user.ServicesConsent, &user.suspended)
 	if err != nil {
 		return User{}, false, fmt.Errorf("reading a user: %w", err)
 	}
@@ -136,7 +142,7 @@ func (s *Store) UserForToken(ctx context.Context, token string) (User, error) {
 		WITH session AS (
 			UPDATE sessions SET last_used_at = now() WHERE token_hash = $1 RETURNING user_id
 		)
-		SELECT u.id, u.display_name, coalesce(u.handle, ''), u.language
+		SELECT u.id, u.display_name, coalesce(u.handle, ''), u.language, u.services_consent
 		FROM users u JOIN session ON u.id = session.user_id
 		WHERE u.suspended_at IS NULL`,
 		hashToken(token),
@@ -163,10 +169,12 @@ func (s *Store) UpdateProfile(ctx context.Context, userID string, update Profile
 			display_name = coalesce($2, display_name),
 			handle       = coalesce($3, handle),
 			language     = coalesce($4, language),
+			services_consent      = coalesce($5, services_consent),
+			services_consented_at = CASE WHEN $5::text IS NULL THEN services_consented_at ELSE now() END,
 			updated_at   = now()
 		WHERE id = $1
-		RETURNING id, display_name, coalesce(handle, ''), language`,
-		userID, update.DisplayName, update.Handle, update.Language,
+		RETURNING id, display_name, coalesce(handle, ''), language, services_consent`,
+		userID, update.DisplayName, update.Handle, update.Language, update.ServicesConsent,
 	))
 	if isUniqueViolation(err) {
 		return User{}, ErrHandleTaken
@@ -200,6 +208,33 @@ func (s *Store) Suspend(ctx context.Context, userID string) error {
 	return nil
 }
 
+// SetAppleRefreshToken keeps the refresh token Sign in with Apple gave for
+// an identity, to revoke when the account is deleted.
+func (s *Store) SetAppleRefreshToken(ctx context.Context, subject, token string) error {
+	_, err := s.db.Exec(ctx,
+		`UPDATE identities SET apple_refresh_token = $2 WHERE provider = $3 AND subject = $1`, subject, token, ProviderApple)
+	if err != nil {
+		return fmt.Errorf("keeping the Apple refresh token: %w", err)
+	}
+	return nil
+}
+
+// AppleRefreshTokens lists the refresh tokens kept for a user's Sign in with
+// Apple identities: none for an account signed in before they were kept.
+func (s *Store) AppleRefreshTokens(ctx context.Context, userID string) ([]string, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT apple_refresh_token FROM identities
+		WHERE user_id = $1 AND provider = $2 AND apple_refresh_token IS NOT NULL`, userID, ProviderApple)
+	if err != nil {
+		return nil, fmt.Errorf("reading Apple refresh tokens: %w", err)
+	}
+	tokens, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("reading Apple refresh tokens: %w", err)
+	}
+	return tokens, nil
+}
+
 // DeleteUser deletes a user, and with them their identities and sessions.
 func (s *Store) DeleteUser(ctx context.Context, userID string) error {
 	tag, err := s.db.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
@@ -212,11 +247,11 @@ func (s *Store) DeleteUser(ctx context.Context, userID string) error {
 	return nil
 }
 
-const selectUser = `SELECT id, display_name, coalesce(handle, ''), language FROM users`
+const selectUser = `SELECT id, display_name, coalesce(handle, ''), language, services_consent FROM users`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.DisplayName, &u.Handle, &u.Language)
+	err := row.Scan(&u.ID, &u.DisplayName, &u.Handle, &u.Language, &u.ServicesConsent)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNoUser
 	}

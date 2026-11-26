@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/PelumiWeb/translator-app-go/server/internal/accounts"
 )
@@ -16,6 +18,11 @@ import (
 // as "2026-10-31". The phones send the version the user agreed to, and the
 // server keeps it, so it is known later exactly what each person was told.
 var consentPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,40}$`)
+
+// maxVoiceTranscriptChars caps the passage a phone says was read. Every
+// translation of it is a few hundred characters; this leaves room and keeps
+// anything else out of what is sent to the voice engine.
+const maxVoiceTranscriptChars = 1000
 
 type voiceResponse struct {
 	ConsentVersion string    `json:"consent_version"`
@@ -29,8 +36,10 @@ func voiceJSON(v accounts.Voice) voiceResponse {
 // handlePutVoice keeps the user's voice sample, replacing any earlier one.
 //
 // It accepts multipart/form-data with the "voice" (a WAV recording of the
-// user reading the onboarding passage) and "consent", the version of the
-// consent wording the user agreed to before recording it.
+// user reading the onboarding passage), "consent", the version of the
+// consent wording the user agreed to before recording it, and, optionally,
+// "transcript": the passage as the phone showed it, in the user's language.
+// Without it, the passage was read in English.
 func (a *API) handlePutVoice(w http.ResponseWriter, r *http.Request, user accounts.User, _ string) {
 	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUploadBytes)
 	if err := r.ParseMultipartForm(formMemory); err != nil {
@@ -47,6 +56,11 @@ func (a *API) handlePutVoice(w http.ResponseWriter, r *http.Request, user accoun
 	consent := r.FormValue("consent")
 	if !consentPattern.MatchString(consent) {
 		writeError(w, http.StatusBadRequest, "missing_consent", `"consent" must name the consent wording the user agreed to`)
+		return
+	}
+	transcript := strings.TrimSpace(r.FormValue("transcript"))
+	if utf8.RuneCountInString(transcript) > maxVoiceTranscriptChars {
+		writeError(w, http.StatusBadRequest, "invalid_transcript", "the transcript is longer than any passage")
 		return
 	}
 	file, _, err := r.FormFile("voice")
@@ -68,7 +82,7 @@ func (a *API) handlePutVoice(w http.ResponseWriter, r *http.Request, user accoun
 		writeError(w, http.StatusInternalServerError, "internal", "could not store the voice")
 		return
 	}
-	voice, replaced, err := a.Accounts.SetVoice(r.Context(), user.ID, key, consent)
+	voice, replaced, err := a.Accounts.SetVoice(r.Context(), user.ID, key, consent, transcript)
 	if err != nil {
 		a.deleteVoiceBlob(key)
 		if errors.Is(err, accounts.ErrNoUser) {
@@ -164,16 +178,17 @@ func (a *API) deleteVoiceBlob(key string) {
 }
 
 // speechVoice stores the voice to speak in as a new job blob and returns its
-// key, or answers the request itself and returns false. The voice is the
-// uploaded "voice" file when there is one; otherwise the signed-in user's
+// key and the words read in it, or answers the request itself and returns
+// false. The voice is the uploaded "voice" file when there is one, read in
+// English (Android's, until milestone 22); otherwise the signed-in user's
 // kept voice, copied, since the job deletes its blob when it ends.
-func (a *API) speechVoice(w http.ResponseWriter, r *http.Request, user accounts.User) (string, bool) {
+func (a *API) speechVoice(w http.ResponseWriter, r *http.Request, user accounts.User) (key, transcript string, ok bool) {
 	var voice io.Reader
 	if file, _, err := r.FormFile("voice"); err == nil {
 		defer file.Close()
 		if !isWAV(file) {
 			writeError(w, http.StatusBadRequest, "unsupported_audio", "the voice sample must be a WAV file")
-			return "", false
+			return "", "", false
 		}
 		voice = file
 	} else {
@@ -182,27 +197,27 @@ func (a *API) speechVoice(w http.ResponseWriter, r *http.Request, user accounts.
 		case errors.Is(err, accounts.ErrNoVoice):
 			// 409: the request is fine, but the account is not ready for it.
 			writeError(w, http.StatusConflict, "no_voice", "record your voice first")
-			return "", false
+			return "", "", false
 		case err != nil:
 			a.Logger.Error("reading a voice", "user_id", user.ID, "error", err)
 			writeError(w, http.StatusInternalServerError, "internal", "could not read the voice")
-			return "", false
+			return "", "", false
 		}
 		file, err := a.Voices.Open(kept.BlobKey)
 		if err != nil {
 			a.Logger.Error("opening a kept voice", "user_id", user.ID, "error", err)
 			writeError(w, http.StatusInternalServerError, "internal", "could not read the voice")
-			return "", false
+			return "", "", false
 		}
 		defer file.Close()
-		voice = file
+		voice, transcript = file, kept.Transcript
 	}
 
-	key := rand.Text() + ".wav"
+	key = rand.Text() + ".wav"
 	if err := a.Audio.Put(key, voice); err != nil {
 		a.Logger.Error("storing voice sample", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal", "could not store the voice sample")
-		return "", false
+		return "", "", false
 	}
-	return key, true
+	return key, transcript, true
 }

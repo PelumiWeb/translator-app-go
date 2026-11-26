@@ -17,12 +17,16 @@ type Voice struct {
 	BlobKey        string
 	ConsentVersion string // the version of the consent wording they agreed to
 	ConsentedAt    time.Time
+
+	// Transcript is the words read in the sample, as the phone showed them;
+	// empty for the English passage.
+	Transcript string
 }
 
 // SetVoice records a new voice sample for the user, with their consent, and
 // returns the blob key of the sample it replaces, or "" if there was none,
 // for the caller to delete.
-func (s *Store) SetVoice(ctx context.Context, userID, blobKey, consentVersion string) (voice Voice, replaced string, err error) {
+func (s *Store) SetVoice(ctx context.Context, userID, blobKey, consentVersion, transcript string) (voice Voice, replaced string, err error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return Voice{}, "", fmt.Errorf("starting a transaction: %w", err)
@@ -45,13 +49,14 @@ func (s *Store) SetVoice(ctx context.Context, userID, blobKey, consentVersion st
 		return Voice{}, "", fmt.Errorf("reading the old voice: %w", err)
 	}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO voices (user_id, blob_key, consent_version) VALUES ($1, $2, $3)
+		INSERT INTO voices (user_id, blob_key, consent_version, transcript) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (user_id) DO UPDATE SET
 			blob_key        = excluded.blob_key,
 			consent_version = excluded.consent_version,
+			transcript      = excluded.transcript,
 			consented_at    = now()
 		RETURNING consented_at`,
-		userID, blobKey, consentVersion,
+		userID, blobKey, consentVersion, transcript,
 	).Scan(&voice.ConsentedAt)
 	if err != nil {
 		return Voice{}, "", fmt.Errorf("keeping the voice: %w", err)
@@ -59,7 +64,7 @@ func (s *Store) SetVoice(ctx context.Context, userID, blobKey, consentVersion st
 	if err := tx.Commit(ctx); err != nil {
 		return Voice{}, "", fmt.Errorf("committing the voice: %w", err)
 	}
-	voice.BlobKey, voice.ConsentVersion = blobKey, consentVersion
+	voice.BlobKey, voice.ConsentVersion, voice.Transcript = blobKey, consentVersion, transcript
 	return voice, replaced, nil
 }
 
@@ -67,8 +72,8 @@ func (s *Store) SetVoice(ctx context.Context, userID, blobKey, consentVersion st
 func (s *Store) Voice(ctx context.Context, userID string) (Voice, error) {
 	var v Voice
 	err := s.db.QueryRow(ctx,
-		`SELECT blob_key, consent_version, consented_at FROM voices WHERE user_id = $1`, userID,
-	).Scan(&v.BlobKey, &v.ConsentVersion, &v.ConsentedAt)
+		`SELECT blob_key, consent_version, consented_at, transcript FROM voices WHERE user_id = $1`, userID,
+	).Scan(&v.BlobKey, &v.ConsentVersion, &v.ConsentedAt, &v.Transcript)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Voice{}, ErrNoVoice
 	}

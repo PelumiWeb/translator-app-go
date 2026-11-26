@@ -98,6 +98,36 @@ func TestSynthesizeTellsPassingFailuresFromLastingOnes(t *testing.T) {
 	}
 }
 
+func TestSynthesizeSendsTheWordsReadInTheSample(t *testing.T) {
+	tests := []struct {
+		name      string
+		voiceText string
+		want      string
+	}{
+		{"read in Spanish", "Cuando viajo, me gusta hablar", "Cuando viajo, me gusta hablar"},
+		{"read in English, before passages were translated", "", "the English passage"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sample := []byte("RIFF....WAVE the voice")
+			fish := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				if want := encodeRequest("hello", "en", sample, tt.want); !bytes.Equal(body, want) {
+					t.Errorf("the sample was not sent with %q as its transcript", tt.want)
+				}
+				w.Write([]byte{1, 0})
+			}))
+			defer fish.Close()
+
+			s := Synthesizer{APIKey: "k", VoiceText: "the English passage", BaseURL: fish.URL}
+			opts := provider.SynthesisOptions{Text: "hello", Language: "en", Attempt: 1, VoiceText: tt.voiceText}
+			if err := s.Synthesize(context.Background(), bytes.NewReader(sample), opts, io.Discard); err != nil {
+				t.Fatalf("Synthesize: %v", err)
+			}
+		})
+	}
+}
+
 func TestSynthesizeDoesNotAskFishToSayNothing(t *testing.T) {
 	var calls atomic.Int32
 	fish := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }))

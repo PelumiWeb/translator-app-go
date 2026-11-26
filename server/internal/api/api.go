@@ -27,7 +27,7 @@ type Pinger interface {
 
 type JobStore interface {
 	EnqueueOnce(ctx context.Context, sourceLang, audioKey, idempotencyKey string) (id string, created bool, err error)
-	EnqueueSynthesis(ctx context.Context, targetLang, text, voiceKey, idempotencyKey string) (id string, created bool, err error)
+	EnqueueSynthesis(ctx context.Context, targetLang, text, voiceKey, voiceText, idempotencyKey string) (id string, created bool, err error)
 	ResultAudio(ctx context.Context, jobID string) (key string, err error)
 	Status(ctx context.Context, jobID string) (string, error)
 	Events(ctx context.Context, jobID string, afterSeq int) ([]queue.Event, error)
@@ -94,6 +94,10 @@ type API struct {
 
 	// Waitlist keeps the website's sign-ups for invitations (ADR 0030).
 	Waitlist WaitlistStore
+
+	// AppleTokens revokes a deleted account's Sign in with Apple, and keeps
+	// what is needed to; nil when the server has no Sign in with Apple key.
+	AppleTokens AppleTokenService
 
 	// Billing keeps who has paid (ADR 0034); nil on a server that takes no
 	// purchases. RequireSubscription decides whether sending needs one: off

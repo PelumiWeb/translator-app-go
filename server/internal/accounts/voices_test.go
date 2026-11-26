@@ -19,15 +19,16 @@ func TestAVoiceIsKeptReplacedAndDeleted(t *testing.T) {
 		t.Fatalf("before recording: error = %v, want ErrNoVoice", err)
 	}
 
-	first, replaced, err := store.SetVoice(ctx, user.ID, "first.wav", "2026-10-31")
+	first, replaced, err := store.SetVoice(ctx, user.ID, "first.wav", "2026-10-31", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if replaced != "" || first.BlobKey != "first.wav" || first.ConsentVersion != "2026-10-31" || first.ConsentedAt.IsZero() {
+	if replaced != "" || first.BlobKey != "first.wav" || first.ConsentVersion != "2026-10-31" || first.ConsentedAt.IsZero() || first.Transcript != "" {
 		t.Errorf("first voice = %+v, replaced %q", first, replaced)
 	}
 
-	_, replaced, err = store.SetVoice(ctx, user.ID, "second.wav", "2026-11-15")
+	// Recorded again, reading the passage in Spanish.
+	_, replaced, err = store.SetVoice(ctx, user.ID, "second.wav", "2026-11-15", "Cuando viajo, me gusta hablar")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +36,7 @@ func TestAVoiceIsKeptReplacedAndDeleted(t *testing.T) {
 		t.Errorf("replaced = %q, want the first recording's key, to delete it", replaced)
 	}
 	kept, err := store.Voice(ctx, user.ID)
-	if err != nil || kept.BlobKey != "second.wav" || kept.ConsentVersion != "2026-11-15" {
+	if err != nil || kept.BlobKey != "second.wav" || kept.ConsentVersion != "2026-11-15" || kept.Transcript != "Cuando viajo, me gusta hablar" {
 		t.Errorf("kept voice = %+v, %v", kept, err)
 	}
 
@@ -59,7 +60,7 @@ func TestAVoiceNeedsAUser(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := store.SetVoice(ctx, user.ID, "late.wav", "2026-10-31"); !errors.Is(err, ErrNoUser) {
+	if _, _, err := store.SetVoice(ctx, user.ID, "late.wav", "2026-10-31", ""); !errors.Is(err, ErrNoUser) {
 		t.Errorf("error = %v, want ErrNoUser", err)
 	}
 }
@@ -68,7 +69,7 @@ func TestDeletingAUserForgetsTheirVoice(t *testing.T) {
 	store := NewStore(testdb.New(t))
 	ctx := context.Background()
 	_, user, _, _ := store.SignIn(ctx, ProviderApple, "sub-1", "", "Ada")
-	if _, _, err := store.SetVoice(ctx, user.ID, "voice.wav", "2026-10-31"); err != nil {
+	if _, _, err := store.SetVoice(ctx, user.ID, "voice.wav", "2026-10-31", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,7 +93,7 @@ func TestUploadsAtOnceEachReplaceOneAndLeaveNoneBehind(t *testing.T) {
 	for i, key := range keys {
 		wg.Go(func() {
 			var err error
-			if _, replaced[i], err = store.SetVoice(ctx, user.ID, key, "2026-10-31"); err != nil {
+			if _, replaced[i], err = store.SetVoice(ctx, user.ID, key, "2026-10-31", ""); err != nil {
 				t.Error(err)
 			}
 		})

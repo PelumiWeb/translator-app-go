@@ -117,7 +117,7 @@ func (d *Deliverer) Deliver(ctx context.Context, messageID, lang string, attempt
 		return d.Store.ready(ctx, messageID, lang, VoicePhone, "")
 	}
 	var speech bytes.Buffer
-	opts := provider.SynthesisOptions{Text: spoken, Language: lang, Attempt: attempt}
+	opts := provider.SynthesisOptions{Text: spoken, Language: lang, Attempt: attempt, VoiceText: voice.Transcript}
 	if err := d.Speaker.Synthesize(ctx, sample, opts, &speech); err != nil {
 		return err
 	}

@@ -491,12 +491,12 @@ func TestSynthesisJobIsClaimedWithItsDetails(t *testing.T) {
 	store := NewStore(testdb.New(t))
 	ctx := context.Background()
 
-	id, created, err := store.EnqueueSynthesis(ctx, "fr", "bonjour tout le monde", "voice.wav", "key-1")
+	id, created, err := store.EnqueueSynthesis(ctx, "fr", "bonjour tout le monde", "voice.wav", "Cuando viajo", "key-1")
 	if err != nil || !created {
 		t.Fatalf("EnqueueSynthesis = %q, %v, %v", id, created, err)
 	}
 	// The idempotency key works for this kind of job too.
-	if repeat, created, err := store.EnqueueSynthesis(ctx, "fr", "bonjour tout le monde", "copy.wav", "key-1"); err != nil || created || repeat != id {
+	if repeat, created, err := store.EnqueueSynthesis(ctx, "fr", "bonjour tout le monde", "copy.wav", "Cuando viajo", "key-1"); err != nil || created || repeat != id {
 		t.Errorf("repeat = %q, %v, %v; want the same job and created false", repeat, created, err)
 	}
 
@@ -506,7 +506,7 @@ func TestSynthesisJobIsClaimedWithItsDetails(t *testing.T) {
 	}
 	want := Job{
 		ID: id, Kind: KindSynthesize, AudioKey: "voice.wav",
-		TargetLang: "fr", Text: "bonjour tout le monde",
+		TargetLang: "fr", Text: "bonjour tout le monde", VoiceText: "Cuando viajo",
 		Attempt: 1, MaxAttempts: 3,
 	}
 	if job != want {
@@ -537,7 +537,7 @@ func TestTakeExpiredResultsReturnsOnlyOldAudioAndOnlyOnce(t *testing.T) {
 
 	finish := func(resultKey string) string {
 		t.Helper()
-		id, _, err := store.EnqueueSynthesis(ctx, "es", "hola", "voice.wav", "")
+		id, _, err := store.EnqueueSynthesis(ctx, "es", "hola", "voice.wav", "", "")
 		if err != nil {
 			t.Fatalf("EnqueueSynthesis: %v", err)
 		}

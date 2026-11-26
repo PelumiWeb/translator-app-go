@@ -36,6 +36,10 @@ type SynthesisOptions struct {
 	Text     string // what to say
 	Language string // the language Text is in, as a BCP 47 code
 	Attempt  int    // 1 on the first try of this job
+
+	// VoiceText is the words read in the voice sample: the passage, in the
+	// language the phone showed it in. Empty for the English passage.
+	VoiceText string
 }
 
 // Synthesizer speaks a text in the voice heard in a sample recording.

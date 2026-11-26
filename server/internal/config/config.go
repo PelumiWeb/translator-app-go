@@ -85,6 +85,11 @@ type Config struct {
 	// Both key files are secret, and kept outside the repository.
 	FCMServiceAccountFile string
 
+	// The Sign in with Apple key, for revoking a deleted account's sign-in
+	// (ADR 0018); none means sign-ins are not revoked. Its team is APNsTeamID.
+	AppleSignInKeyFile string
+	AppleSignInKeyID   string
+
 	// What one person may send in any 24 hours (ADR 0029): minutes of voice
 	// notes, and text messages.
 	DailyVoiceMinutes int
@@ -144,6 +149,8 @@ func Load() Config {
 		APNsKeyID:             env("APNS_KEY_ID", ""),
 		APNsTeamID:            env("APNS_TEAM_ID", "4USZRKF452"),
 		FCMServiceAccountFile: env("FCM_SERVICE_ACCOUNT_FILE", ""),
+		AppleSignInKeyFile:    env("APPLE_SIGNIN_KEY_FILE", ""),
+		AppleSignInKeyID:      env("APPLE_SIGNIN_KEY_ID", ""),
 
 		DailyVoiceMinutes: envInt("DAILY_VOICE_MINUTES", 10),
 		DailyTexts:        envInt("DAILY_TEXT_MESSAGES", 100),

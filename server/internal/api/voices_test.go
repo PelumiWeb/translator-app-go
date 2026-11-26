@@ -17,10 +17,20 @@ import (
 // voice leaves that part out.
 func voiceRequest(t *testing.T, token, consent string, voice []byte) *http.Request {
 	t.Helper()
+	return voiceRequestReading(t, token, consent, "", voice)
+}
+
+// voiceRequestReading is voiceRequest with the words read in the voice, the
+// transcript; empty leaves it out, as Android does.
+func voiceRequestReading(t *testing.T, token, consent, transcript string, voice []byte) *http.Request {
+	t.Helper()
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
-	if consent != "" {
-		if err := form.WriteField("consent", consent); err != nil {
+	for name, value := range map[string]string{"consent": consent, "transcript": transcript} {
+		if value == "" {
+			continue
+		}
+		if err := form.WriteField(name, value); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -113,6 +123,38 @@ func TestPutVoiceRejectsBadInput(t *testing.T) {
 				t.Errorf("voice files = %v, want none", kept)
 			}
 		})
+	}
+}
+
+func TestPutVoiceKeepsTheWordsReadForSpeechInIt(t *testing.T) {
+	a, token := signedInAPI()
+
+	rec := serve(a, voiceRequestReading(t, token, "2026-10-31", "  Cuando viajo, me gusta hablar ", wavBytes(100)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT: status %d, body %s", rec.Code, rec.Body)
+	}
+	req := speechRequest(t, "en", "hello", nil) // in the kept voice
+	req.Header.Set("Authorization", "Bearer "+token)
+	if rec := serve(a, req); rec.Code != http.StatusAccepted {
+		t.Fatalf("speech: status %d, body %s", rec.Code, rec.Body)
+	}
+
+	jobs := a.Jobs.(*fakeJobs)
+	if len(jobs.synthesized) != 1 || !strings.HasSuffix(jobs.synthesized[0], " | Cuando viajo, me gusta hablar") {
+		t.Errorf("synthesis jobs = %q, want the kept voice's words with it", jobs.synthesized)
+	}
+}
+
+func TestPutVoiceRefusesWordsLongerThanAnyPassage(t *testing.T) {
+	a, token := signedInAPI()
+
+	rec := serve(a, voiceRequestReading(t, token, "2026-10-31", strings.Repeat("palabra ", 200), wavBytes(100)))
+
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"invalid_transcript"`) {
+		t.Errorf("status %d, body %s; want 400 invalid_transcript", rec.Code, rec.Body)
+	}
+	if kept := a.Voices.(*fakeAudio).keys(); len(kept) != 0 {
+		t.Errorf("voice files = %v, want none", kept)
 	}
 }
 

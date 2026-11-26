@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/PelumiWeb/translator-app-go/server/internal/testdb"
 )
@@ -195,5 +196,55 @@ func TestASuspendedAccountIsSignedOutAndStaysOut(t *testing.T) {
 	}
 	if err := store.Suspend(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, ErrNoUser) {
 		t.Errorf("suspending no one: err = %v, want ErrNoUser", err)
+	}
+}
+
+func TestAppleRefreshTokensAreKeptForTheirIdentity(t *testing.T) {
+	store := NewStore(testdb.New(t))
+	ctx := context.Background()
+	_, ada, _, err := store.SignIn(ctx, ProviderApple, "apple-ada", "", "Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tokens, err := store.AppleRefreshTokens(ctx, ada.ID); err != nil || len(tokens) != 0 {
+		t.Errorf("before: %v, %v; want none", tokens, err)
+	}
+	if err := store.SetAppleRefreshToken(ctx, "apple-ada", "r-1"); err != nil {
+		t.Fatal(err)
+	}
+	// Signing in again with a new code replaces it.
+	if err := store.SetAppleRefreshToken(ctx, "apple-ada", "r-2"); err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := store.AppleRefreshTokens(ctx, ada.ID)
+	if err != nil || len(tokens) != 1 || tokens[0] != "r-2" {
+		t.Errorf("tokens = %v, %v; want r-2", tokens, err)
+	}
+}
+
+func TestAgreeingToTheServicesIsRecordedWithItsWording(t *testing.T) {
+	store := NewStore(testdb.New(t))
+	ctx := context.Background()
+	token, ada, _, err := store.SignIn(ctx, ProviderApple, "sub-1", "", "Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ada.ServicesConsent != "" {
+		t.Errorf("a new account has agreed to %q", ada.ServicesConsent)
+	}
+	updated, err := store.UpdateProfile(ctx, ada.ID, ProfileUpdate{ServicesConsent: ptr("2026-11-23")})
+	if err != nil || updated.ServicesConsent != "2026-11-23" {
+		t.Fatalf("after agreeing: %+v, %v", updated, err)
+	}
+	// Another change leaves it, and when it was given, as they were.
+	if _, err := store.UpdateProfile(ctx, ada.ID, ProfileUpdate{DisplayName: ptr("Ada L")}); err != nil {
+		t.Fatal(err)
+	}
+	var when *time.Time
+	if err := store.db.QueryRow(ctx, `SELECT services_consented_at FROM users WHERE id = $1`, ada.ID).Scan(&when); err != nil || when == nil {
+		t.Errorf("services_consented_at = %v, %v", when, err)
+	}
+	if got, err := store.UserForToken(ctx, token); err != nil || got.ServicesConsent != "2026-11-23" {
+		t.Errorf("as the session reads it: %+v, %v", got, err)
 	}
 }

@@ -22,6 +22,8 @@ type fakeAccounts struct {
 	sessions map[string]string         // token to user ID
 	voices   map[string]accounts.Voice // by user ID
 	pushes   map[string]string         // session token to "service token"
+	// appleTokens is each user's Sign in with Apple refresh token.
+	appleTokens map[string]string
 }
 
 func newFakeAccounts() *fakeAccounts {
@@ -42,6 +44,25 @@ func (f *fakeAccounts) SetPushToken(_ context.Context, session, service, token s
 	}
 	f.pushes[session] = service + " " + token
 	return nil
+}
+
+func (f *fakeAccounts) SetAppleRefreshToken(_ context.Context, subject, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.appleTokens == nil {
+		f.appleTokens = map[string]string{}
+	}
+	f.appleTokens[f.bySub[subject]] = token
+	return nil
+}
+
+func (f *fakeAccounts) AppleRefreshTokens(_ context.Context, userID string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if token, ok := f.appleTokens[userID]; ok {
+		return []string{token}, nil
+	}
+	return nil, nil
 }
 
 func (f *fakeAccounts) SignIn(_ context.Context, provider, subject, _, name string) (string, accounts.User, bool, error) {
@@ -107,14 +128,14 @@ func (f *fakeAccounts) DeleteUser(_ context.Context, userID string) error {
 	return nil
 }
 
-func (f *fakeAccounts) SetVoice(_ context.Context, userID, blobKey, consentVersion string) (accounts.Voice, string, error) {
+func (f *fakeAccounts) SetVoice(_ context.Context, userID, blobKey, consentVersion, transcript string) (accounts.Voice, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, ok := f.users[userID]; !ok {
 		return accounts.Voice{}, "", accounts.ErrNoUser
 	}
 	replaced := f.voices[userID].BlobKey
-	voice := accounts.Voice{BlobKey: blobKey, ConsentVersion: consentVersion, ConsentedAt: time.Unix(1_800_000_000, 0).UTC()}
+	voice := accounts.Voice{BlobKey: blobKey, ConsentVersion: consentVersion, ConsentedAt: time.Unix(1_800_000_000, 0).UTC(), Transcript: transcript}
 	f.voices[userID] = voice
 	return voice, replaced, nil
 }

@@ -42,7 +42,7 @@ type fakeJobs struct {
 	enqueued []string        // "lang key" per job created
 	keys     map[string]bool // idempotency keys seen
 
-	synthesized []string // "lang | text | voice key" per synthesis job created
+	synthesized []string // "lang | text | voice key" per synthesis job created, then " | voice text" if it has one
 }
 
 func (f *fakeJobs) EnqueueOnce(_ context.Context, sourceLang, audioKey, idempotencyKey string) (string, bool, error) {
@@ -62,7 +62,7 @@ func (f *fakeJobs) EnqueueOnce(_ context.Context, sourceLang, audioKey, idempote
 	return testJobID, true, nil
 }
 
-func (f *fakeJobs) EnqueueSynthesis(_ context.Context, targetLang, text, voiceKey, idempotencyKey string) (string, bool, error) {
+func (f *fakeJobs) EnqueueSynthesis(_ context.Context, targetLang, text, voiceKey, voiceText, idempotencyKey string) (string, bool, error) {
 	if f.enqueueErr != nil {
 		return "", false, f.enqueueErr
 	}
@@ -75,7 +75,11 @@ func (f *fakeJobs) EnqueueSynthesis(_ context.Context, targetLang, text, voiceKe
 		f.keys = map[string]bool{}
 	}
 	f.keys[idempotencyKey] = true
-	f.synthesized = append(f.synthesized, targetLang+" | "+text+" | "+voiceKey)
+	job := targetLang + " | " + text + " | " + voiceKey
+	if voiceText != "" {
+		job += " | " + voiceText
+	}
+	f.synthesized = append(f.synthesized, job)
 	return testJobID, true, nil
 }
 

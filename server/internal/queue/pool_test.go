@@ -555,7 +555,7 @@ func TestPoolAbandonsAJobItNoLongerOwns(t *testing.T) {
 
 func enqueueSynthesis(t *testing.T, store *Store, text string) string {
 	t.Helper()
-	id, _, err := store.EnqueueSynthesis(context.Background(), "es", text, "voice.wav", "")
+	id, _, err := store.EnqueueSynthesis(context.Background(), "es", text, "voice.wav", "", "")
 	if err != nil {
 		t.Fatalf("EnqueueSynthesis: %v", err)
 	}

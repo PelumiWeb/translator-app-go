@@ -78,12 +78,12 @@ func (a *API) handleCreateSpeech(w http.ResponseWriter, r *http.Request, user ac
 		return
 	}
 
-	key, ok := a.speechVoice(w, r, user)
+	key, voiceText, ok := a.speechVoice(w, r, user)
 	if !ok {
 		return
 	}
 
-	id, created, err := a.Jobs.EnqueueSynthesis(r.Context(), lang, text, key, idempotencyKey)
+	id, created, err := a.Jobs.EnqueueSynthesis(r.Context(), lang, text, key, voiceText, idempotencyKey)
 	if err != nil {
 		a.Logger.Error("enqueueing synthesis", "error", err)
 		a.deleteAudio(key)

@@ -4,17 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/PelumiWeb/translator-app-go/server/internal/es256"
 )
 
 // AppStoreAPI calls Apple's App Store Server API, signed with the In-App
@@ -34,19 +30,11 @@ type AppStoreAPI struct {
 }
 
 // ParseKey reads the .p8 file App Store Connect gives for an In-App Purchase
-// key: a PKCS #8 elliptic-curve key in PEM.
+// key.
 func ParseKey(p8 []byte) (*ecdsa.PrivateKey, error) {
-	block, _ := pem.Decode(p8)
-	if block == nil {
-		return nil, errors.New("the In-App Purchase key is not a PEM file")
-	}
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	key, err := es256.ParseP8(p8)
 	if err != nil {
-		return nil, fmt.Errorf("reading the In-App Purchase key: %w", err)
-	}
-	key, ok := parsed.(*ecdsa.PrivateKey)
-	if !ok {
-		return nil, errors.New("the In-App Purchase key is not an elliptic-curve key")
+		return nil, fmt.Errorf("the In-App Purchase key: %w", err)
 	}
 	return key, nil
 }
@@ -114,29 +102,10 @@ func (c AppStoreAPI) call(ctx context.Context, method, path string, into any) er
 // token is the JSON Web Token Apple asks for, signed with the key. Apple
 // refuses one that lives longer than an hour; this one lives five minutes.
 func (c AppStoreAPI) token(now time.Time) (string, error) {
-	header := map[string]string{"alg": "ES256", "kid": c.KeyID, "typ": "JWT"}
-	claims := map[string]any{
-		"iss": c.IssuerID, "iat": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(),
-		"aud": "appstoreconnect-v1", "bid": c.BundleID,
-	}
-	h, err := json.Marshal(header)
-	if err != nil {
-		return "", err
-	}
-	cl, err := json.Marshal(claims)
-	if err != nil {
-		return "", err
-	}
-	input := base64.RawURLEncoding.EncodeToString(h) + "." + base64.RawURLEncoding.EncodeToString(cl)
-	sum := sha256.Sum256([]byte(input))
-	r, s, err := ecdsa.Sign(rand.Reader, c.Key, sum[:])
-	if err != nil {
-		return "", fmt.Errorf("signing the App Store token: %w", err)
-	}
-	// As for APNs (internal/push): the two numbers side by side, 32 bytes
-	// each, not ASN.1.
-	sig := make([]byte, 64)
-	r.FillBytes(sig[:32])
-	s.FillBytes(sig[32:])
-	return input + "." + base64.RawURLEncoding.EncodeToString(sig), nil
+	return es256.Sign(c.Key,
+		map[string]string{"alg": "ES256", "kid": c.KeyID, "typ": "JWT"},
+		map[string]any{
+			"iss": c.IssuerID, "iat": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(),
+			"aud": "appstoreconnect-v1", "bid": c.BundleID,
+		})
 }

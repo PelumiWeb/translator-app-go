@@ -4,6 +4,7 @@ package fish
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -34,8 +35,8 @@ type Synthesizer struct {
 	// theirs by default.
 	Model string
 
-	// VoiceText is the transcript of the voice samples: the passage the
-	// phones ask users to read.
+	// VoiceText is the transcript of a voice sample that comes without its
+	// own (SynthesisOptions.VoiceText): the English passage.
 	VoiceText string
 
 	// Client and BaseURL default to an HTTP client with a timeout and Fish
@@ -58,7 +59,7 @@ func (s Synthesizer) Synthesize(ctx context.Context, voice io.Reader, opts provi
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
-	body := encodeRequest(text, opts.Language, sample, s.VoiceText)
+	body := encodeRequest(text, opts.Language, sample, cmp.Or(opts.VoiceText, s.VoiceText))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/v1/tts", bytes.NewReader(body))
 	if err != nil {
 		return provider.Permanent(fmt.Errorf("building the request: %w", err))

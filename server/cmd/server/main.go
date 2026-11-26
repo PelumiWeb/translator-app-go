@@ -23,6 +23,7 @@ import (
 	"github.com/PelumiWeb/translator-app-go/server/internal/auth"
 	"github.com/PelumiWeb/translator-app-go/server/internal/billing"
 	"github.com/PelumiWeb/translator-app-go/server/internal/config"
+	"github.com/PelumiWeb/translator-app-go/server/internal/es256"
 	"github.com/PelumiWeb/translator-app-go/server/internal/models"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider"
 	"github.com/PelumiWeb/translator-app-go/server/internal/provider/azure"
@@ -294,6 +295,11 @@ func run(logger *slog.Logger) error {
 		testAccounts = parsed
 		logger.Info("test accounts", "count", parsed.Len())
 	}
+	appleTokens, err := newAppleTokens(cfg)
+	if err != nil {
+		return err
+	}
+	logger.Info("sign in with apple revocation", "on", appleTokens != nil)
 	handlers := &api.API{
 		Logger:         logger,
 		DB:             pool,
@@ -323,6 +329,7 @@ func run(logger *slog.Logger) error {
 			Store:    billing.NewStore(pool),
 		},
 		RequireSubscription: cfg.RequireSubscription,
+		AppleTokens:         appleTokens,
 		TrialLimits:         rooms.Limits{VoiceMS: cfg.TrialVoiceMinutes * 60_000, Texts: cfg.TrialTexts},
 	}
 
@@ -440,6 +447,28 @@ func newTranslator(cfg config.Config) (provider.Translator, string, error) {
 	default:
 		return nil, "", fmt.Errorf("unknown TRANSLATE_ENGINE %q: want google, azure, fake, or nothing for none", cfg.TranslateEngine)
 	}
+}
+
+// newAppleTokens reads the Sign in with Apple key, when one is named. Left a
+// nil interface, not a nil *auth.AppleTokens, when there is none: the API
+// checks for nil to skip revoking. A key named but unreadable stops the
+// server, rather than leaving revocation quietly off.
+func newAppleTokens(cfg config.Config) (api.AppleTokenService, error) {
+	if cfg.AppleSignInKeyFile == "" {
+		return nil, nil
+	}
+	if cfg.AppleSignInKeyID == "" {
+		return nil, errors.New("APPLE_SIGNIN_KEY_FILE needs APPLE_SIGNIN_KEY_ID, the key's ID from the developer account")
+	}
+	p8, err := os.ReadFile(cfg.AppleSignInKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("reading APPLE_SIGNIN_KEY_FILE: %w", err)
+	}
+	key, err := es256.ParseP8(p8)
+	if err != nil {
+		return nil, fmt.Errorf("APPLE_SIGNIN_KEY_FILE: %w", err)
+	}
+	return auth.AppleTokens{TeamID: cfg.APNsTeamID, KeyID: cfg.AppleSignInKeyID, ClientID: cfg.AppleAudience, Key: key}, nil
 }
 
 // newPushServices reads the push services' key files, for those that are set

@@ -209,6 +209,26 @@ func (a *API) deleteReportFile(key string) {
 	}
 }
 
+// revokeApple revokes the account's Sign in with Apple, as Apple asks of an
+// account deleted (Guideline 5.1.1(v)): the person sees Shinar leave their
+// Apple account's list of apps. It does not stop the deletion when it fails,
+// which Apple's guidance allows; it logs its own errors.
+func (a *API) revokeApple(ctx context.Context, user accounts.User) {
+	if a.AppleTokens == nil {
+		return
+	}
+	tokens, err := a.Accounts.AppleRefreshTokens(ctx, user.ID)
+	if err != nil {
+		a.Logger.Warn("reading Apple refresh tokens", "user_id", user.ID, "error", err)
+		return
+	}
+	for _, token := range tokens {
+		if err := a.AppleTokens.Revoke(ctx, token); err != nil {
+			a.Logger.Warn("revoking Sign in with Apple", "user_id", user.ID, "error", err)
+		}
+	}
+}
+
 // sendRefused answers a send or a retry that a block stopped, and reports
 // whether it did.
 func sendRefused(w http.ResponseWriter, err error) bool {
@@ -228,6 +248,7 @@ func sendRefused(w http.ResponseWriter, err error) bool {
 // rooms. It logs its own errors. Deleting one's own account uses it, and so
 // does the owner's command for deleting an account on request.
 func (a *API) DeleteAccount(ctx context.Context, user accounts.User) error {
+	a.revokeApple(ctx, user)
 	// The voice and the messages first: the database would drop their rows
 	// with the user, but not their audio files, which only this knows to
 	// delete.

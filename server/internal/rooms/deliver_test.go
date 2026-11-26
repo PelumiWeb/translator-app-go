@@ -47,7 +47,7 @@ func deliveryWorld(t *testing.T) (world, *Deliverer, Message) {
 	if err := files.Put("ada-voice.wav", bytes.NewReader(make([]byte, 64_000))); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := w.accounts.SetVoice(ctx, ada, "ada-voice.wav", "2026-10-31"); err != nil {
+	if _, _, err := w.accounts.SetVoice(ctx, ada, "ada-voice.wav", "2026-10-31", ""); err != nil {
 		t.Fatal(err)
 	}
 	d := &Deliverer{
@@ -82,6 +82,36 @@ func TestDeliverTranslatesAndSpeaksInTheSendersVoice(t *testing.T) {
 	}
 	if got := d.Messages.(*memFiles).keys(); !slices.Equal(got, []string{r.AudioKey}) {
 		t.Errorf("message files = %v, want the speech", got)
+	}
+}
+
+// heardSpeaker speaks like the fake engine and remembers what it was told
+// was read in the voice.
+type heardSpeaker struct {
+	fake.Synthesizer
+	voiceText *string
+}
+
+func (h heardSpeaker) Synthesize(ctx context.Context, voice io.Reader, opts provider.SynthesisOptions, out io.Writer) error {
+	*h.voiceText = opts.VoiceText
+	return h.Synthesizer.Synthesize(ctx, voice, opts, out)
+}
+
+func TestDeliverSpeaksWithTheWordsReadInTheSendersVoice(t *testing.T) {
+	w, d, m := deliveryWorld(t)
+	ctx := context.Background()
+	// Ada recorded her voice again, reading the passage in Spanish.
+	if _, _, err := w.accounts.SetVoice(ctx, m.SenderID, "ada-voice.wav", "2026-10-31", "Cuando viajo"); err != nil {
+		t.Fatal(err)
+	}
+	var heard string
+	d.Speaker = heardSpeaker{voiceText: &heard}
+
+	if err := d.Deliver(ctx, m.ID, "es", 1); err != nil {
+		t.Fatal(err)
+	}
+	if heard != "Cuando viajo" {
+		t.Errorf("the engine was told %q was read in the voice, want the Spanish passage", heard)
 	}
 }
 

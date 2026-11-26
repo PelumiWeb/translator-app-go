@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -21,7 +22,7 @@ type AccountStore interface {
 	UpdateProfile(ctx context.Context, userID string, update accounts.ProfileUpdate) (accounts.User, error)
 	DeleteUser(ctx context.Context, userID string) error
 
-	SetVoice(ctx context.Context, userID, blobKey, consentVersion string) (voice accounts.Voice, replaced string, err error)
+	SetVoice(ctx context.Context, userID, blobKey, consentVersion, transcript string) (voice accounts.Voice, replaced string, err error)
 	Voice(ctx context.Context, userID string) (accounts.Voice, error)
 	DeleteVoice(ctx context.Context, userID string) (blobKey string, err error)
 
@@ -30,6 +31,16 @@ type AccountStore interface {
 	UserByHandle(ctx context.Context, handle string) (accounts.User, error)
 
 	SetPushToken(ctx context.Context, sessionToken, service, pushToken string) error
+
+	SetAppleRefreshToken(ctx context.Context, subject, token string) error
+	AppleRefreshTokens(ctx context.Context, userID string) ([]string, error)
+}
+
+// AppleTokenService trades a Sign in with Apple authorization code for a
+// refresh token, and revokes it when the account is deleted.
+type AppleTokenService interface {
+	Exchange(ctx context.Context, code string) (refreshToken string, err error)
+	Revoke(ctx context.Context, refreshToken string) error
 }
 
 // TokenVerifier checks an identity token from Sign in with Apple or Google.
@@ -44,15 +55,23 @@ type CodeChecker interface {
 
 const maxNameChars = 50
 
+// consentVersion is how a version of the wording people agree to is named: a
+// date, such as "2026-11-23".
+var consentVersion = regexp.MustCompile(`^[0-9A-Za-z.-]{1,32}$`)
+
 type userResponse struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
 	Handle      string `json:"handle"`
 	Language    string `json:"language"`
+	// The version of the wording about the services that help that the user
+	// agreed to; only in their own profile.
+	ServicesConsent string `json:"services_consent,omitempty"`
 }
 
+// userJSON is the user's own profile.
 func userJSON(u accounts.User) userResponse {
-	return userResponse{ID: u.ID, DisplayName: u.DisplayName, Handle: u.Handle, Language: u.Language}
+	return userResponse{ID: u.ID, DisplayName: u.DisplayName, Handle: u.Handle, Language: u.Language, ServicesConsent: u.ServicesConsent}
 }
 
 type signInResponse struct {
@@ -69,7 +88,9 @@ type signInResponse struct {
 // The body is JSON: the "identity_token" the provider gave the phone, the
 // "nonce" the phone made for this sign-in, and optionally the person's
 // "name". Apple tells the phone the name once, at the first sign-in, and
-// never puts it in the token; Google's tokens carry it.
+// never puts it in the token; Google's tokens carry it. From Apple, also the
+// "authorization_code", traded for the refresh token that is revoked when the
+// account is deleted.
 func (a *API) handleSignIn(provider string, verifier TokenVerifier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if verifier == nil {
@@ -77,9 +98,10 @@ func (a *API) handleSignIn(provider string, verifier TokenVerifier) http.Handler
 			return
 		}
 		var body struct {
-			IdentityToken string `json:"identity_token"`
-			Nonce         string `json:"nonce"`
-			Name          string `json:"name"`
+			IdentityToken     string `json:"identity_token"`
+			Nonce             string `json:"nonce"`
+			Name              string `json:"name"`
+			AuthorizationCode string `json:"authorization_code"`
 		}
 		if !decodeJSON(w, r, &body) {
 			return
@@ -100,7 +122,7 @@ func (a *API) handleSignIn(provider string, verifier TokenVerifier) http.Handler
 			return
 		}
 
-		a.openSession(w, r, provider, identity, cmp.Or(cutName(body.Name), cutName(identity.Name)))
+		a.openSession(w, r, provider, identity, cmp.Or(cutName(body.Name), cutName(identity.Name)), body.AuthorizationCode)
 	}
 }
 
@@ -132,13 +154,13 @@ func (a *API) handleEmailSignIn(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_code", "that email and code do not match")
 		return
 	}
-	a.openSession(w, r, accounts.ProviderEmail, identity, "")
+	a.openSession(w, r, accounts.ProviderEmail, identity, "", "")
 }
 
 // openSession signs in the person a provider vouched for, creating their
 // account on its first sign-in, and answers with a session token for the
 // phone to keep.
-func (a *API) openSession(w http.ResponseWriter, r *http.Request, provider string, identity auth.Identity, name string) {
+func (a *API) openSession(w http.ResponseWriter, r *http.Request, provider string, identity auth.Identity, name, appleCode string) {
 	token, user, created, err := a.Accounts.SignIn(r.Context(), provider, identity.Subject, identity.Email, name)
 	if errors.Is(err, accounts.ErrSuspended) {
 		writeError(w, http.StatusForbidden, "account_suspended", "this account has been suspended")
@@ -151,11 +173,31 @@ func (a *API) openSession(w http.ResponseWriter, r *http.Request, provider strin
 	}
 	// The user's ID only: names and emails stay out of the logs.
 	a.Logger.Info("signed in", "provider", provider, "user_id", user.ID, "new_user", created)
+	if provider == accounts.ProviderApple && appleCode != "" {
+		a.keepAppleRefreshToken(r.Context(), identity.Subject, user.ID, appleCode)
+	}
 	status := http.StatusOK
 	if created {
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, signInResponse{Token: token, User: userJSON(user), NewUser: created})
+}
+
+// keepAppleRefreshToken trades the code for the refresh token to revoke when
+// the account is deleted. A failure does not fail the sign-in: the person is
+// signed in either way, and the next sign-in brings a new code. It logs its
+// own errors.
+func (a *API) keepAppleRefreshToken(ctx context.Context, subject, userID, code string) {
+	if a.AppleTokens == nil {
+		return
+	}
+	token, err := a.AppleTokens.Exchange(ctx, code)
+	if err == nil {
+		err = a.Accounts.SetAppleRefreshToken(ctx, subject, token)
+	}
+	if err != nil {
+		a.Logger.Warn("keeping the Apple refresh token", "user_id", userID, "error", err)
+	}
 }
 
 func (a *API) handleSignOut(w http.ResponseWriter, r *http.Request, _ accounts.User, token string) {
@@ -175,9 +217,10 @@ func (a *API) handleGetMe(w http.ResponseWriter, _ *http.Request, user accounts.
 // "language", leaving out what is not given.
 func (a *API) handleUpdateMe(w http.ResponseWriter, r *http.Request, user accounts.User, _ string) {
 	var body struct {
-		DisplayName *string `json:"display_name"`
-		Handle      *string `json:"handle"`
-		Language    *string `json:"language"`
+		DisplayName     *string `json:"display_name"`
+		Handle          *string `json:"handle"`
+		Language        *string `json:"language"`
+		ServicesConsent *string `json:"services_consent"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -206,6 +249,13 @@ func (a *API) handleUpdateMe(w http.ResponseWriter, r *http.Request, user accoun
 			return
 		}
 		update.Language = body.Language
+	}
+	if body.ServicesConsent != nil {
+		if !consentVersion.MatchString(*body.ServicesConsent) {
+			writeError(w, http.StatusBadRequest, "invalid_consent", `services_consent is the version agreed to, such as "2026-11-23"`)
+			return
+		}
+		update.ServicesConsent = body.ServicesConsent
 	}
 
 	updated, err := a.Accounts.UpdateProfile(r.Context(), user.ID, update)

@@ -444,7 +444,7 @@ func (p *Pool) synthesize(ctx context.Context, job Job) (record func(context.Con
 	// in memory and stored once complete. A half-written result is never
 	// visible to anyone.
 	var speech bytes.Buffer
-	opts := provider.SynthesisOptions{Text: job.Text, Language: job.TargetLang, Attempt: job.Attempt}
+	opts := provider.SynthesisOptions{Text: job.Text, Language: job.TargetLang, Attempt: job.Attempt, VoiceText: job.VoiceText}
 	if err := p.synthesizer.Synthesize(ctx, voice, opts, &speech); err != nil {
 		return nil, err
 	}

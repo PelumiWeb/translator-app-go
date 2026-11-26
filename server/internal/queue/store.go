@@ -61,6 +61,7 @@ type Job struct {
 	SourceLang string // transcription: the language spoken
 	TargetLang string // synthesis, delivery and push: the language to speak in
 	Text       string // synthesis: what to say
+	VoiceText  string // synthesis: the words read in the voice sample; empty for the English passage
 	MessageID  string // delivery and push: the message
 	ReportID   string // report: the report the owner is told of
 
@@ -106,9 +107,10 @@ func (s *Store) EnqueueOnce(ctx context.Context, sourceLang, audioKey, idempoten
 }
 
 // EnqueueSynthesis adds a job to speak text in targetLang, in the voice heard
-// in the stored sample voiceKey. The idempotency key works as in EnqueueOnce.
-func (s *Store) EnqueueSynthesis(ctx context.Context, targetLang, text, voiceKey, idempotencyKey string) (id string, created bool, err error) {
-	return s.enqueue(ctx, Job{Kind: KindSynthesize, TargetLang: targetLang, Text: text, AudioKey: voiceKey}, idempotencyKey)
+// in the stored sample voiceKey, in which voiceText was read ("" for the
+// English passage). The idempotency key works as in EnqueueOnce.
+func (s *Store) EnqueueSynthesis(ctx context.Context, targetLang, text, voiceKey, voiceText, idempotencyKey string) (id string, created bool, err error) {
+	return s.enqueue(ctx, Job{Kind: KindSynthesize, TargetLang: targetLang, Text: text, VoiceText: voiceText, AudioKey: voiceKey}, idempotencyKey)
 }
 
 // EnqueueDeliveries adds a job for each language in langs, to deliver the
@@ -180,11 +182,11 @@ func (s *Store) enqueue(ctx context.Context, job Job, idempotencyKey string) (id
 		// to this kind of job, or a missing key, which the unique index
 		// ignores.
 		err := tx.QueryRow(ctx, `
-			INSERT INTO jobs (status, kind, audio_path, source_lang, target_lang, input_text, idempotency_key)
-			VALUES ('queued', $1, $2, NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), NULLIF($6, ''))
+			INSERT INTO jobs (status, kind, audio_path, source_lang, target_lang, input_text, voice_text, idempotency_key)
+			VALUES ('queued', $1, $2, NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), NULLIF($6, ''), NULLIF($7, ''))
 			ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
 			RETURNING id`,
-			job.Kind, job.AudioKey, job.SourceLang, job.TargetLang, job.Text, idempotencyKey,
+			job.Kind, job.AudioKey, job.SourceLang, job.TargetLang, job.Text, job.VoiceText, idempotencyKey,
 		).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			// The insert was skipped: a job with this key exists. If another
@@ -232,10 +234,10 @@ func (s *Store) Claim(ctx context.Context, lease time.Duration) (Job, error) {
 			)
 			RETURNING id, kind, audio_path, attempts, max_attempts,
 			          COALESCE(source_lang, ''), COALESCE(target_lang, ''), COALESCE(input_text, ''),
-			          COALESCE(message_id::text, ''), COALESCE(report_id::text, '')`,
+			          COALESCE(voice_text, ''), COALESCE(message_id::text, ''), COALESCE(report_id::text, '')`,
 			lease,
 		).Scan(&job.ID, &job.Kind, &job.AudioKey, &job.Attempt, &job.MaxAttempts,
-			&job.SourceLang, &job.TargetLang, &job.Text, &job.MessageID, &job.ReportID)
+			&job.SourceLang, &job.TargetLang, &job.Text, &job.VoiceText, &job.MessageID, &job.ReportID)
 		if err != nil {
 			return err
 		}
