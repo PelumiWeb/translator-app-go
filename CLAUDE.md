@@ -194,6 +194,12 @@ migrations/          plain SQL, embedded in the binary
   C functions.
 - Tests use Swift Testing, built into Xcode. Network tests stub `URLSession`
   with a `URLProtocol`; no third-party test libraries.
+- The app speaks the iPhone's language, in 20 languages besides English
+  (checkpoint 18.16): every word shown is translatable, in
+  `Localizable.xcstrings`. Literals in `Text`, `Button` and the like are
+  found by the compiler; text built elsewhere uses `String(localized:)`, and
+  shared components take `LocalizedStringKey`. New text gets its 20
+  translations in the same change.
 
 ### Go
 
@@ -264,6 +270,7 @@ lives in `ios/`; open `ios/PTranslate.xcodeproj` in Xcode.
 | `make voice-check` | one real request to Fish Audio (key from `server/.env`), then plays what it made |
 | `make transcribe-check` | one real transcription from Groq (key from `server/.env`) of whisper.cpp's sample clip |
 | `make appstore-check` | ask Apple's sandbox for a test notification with the In-App Purchase key named in `server/.env`, and check Apple's signature on it (ADR 0034) |
+| `make signin-check` | check the Sign in with Apple key named in `server/.env` with Apple: a made-up code must be refused as a bad code (ADR 0018, addendum) |
 | `make push-check` | sign in to Apple's and Google's push services with the key files named in `server/.env`, and send to a made-up phone, so nothing arrives (ADR 0026) |
 | `make translate-check` | a few real translations from Azure AI Translator (key from `server/.env`), English to Yoruba among them |
 | `make sample-speech` | ask the running server to speak a sentence, and play the result; start the server with `VOICE_ENGINE=fake make server-run`, since without a voice engine it refuses |

@@ -1516,34 +1516,98 @@ the owner's request)
 Planned on 2026-11-21, for the first App Store version, after the first part
 of milestone 16 and milestone 21. iPhone only.
 
-**Checkpoint 18.11: the rest of what App Review asks for**
-- Asking before words leave the phone. Guideline 5.1.2(i), since November
-  2025: an app must say which outside AI services get people's data, and ask
-  first; a privacy page alone is not enough, and Apple has rejected apps for
-  it. One step in sign-up, before anything is sent, naming each service and
-  what it gets: Groq writes the words down when the phone cannot, Microsoft's
-  translator translates them, Fish Audio speaks them in your voice. The
-  voice step already asks for Fish Audio. People who signed up before it see
-  the step once
-- Deleting an account revokes its Sign in with Apple (Guideline 5.1.1(v),
-  ADR 0018). The phone sends Apple's authorization code at sign-in; the
-  server exchanges it for a refresh token, keeps it, and revokes it when the
-  account is deleted. Needs a Sign in with Apple key (the owner, in the
-  developer account)
-- The call button goes on Android too, since milestone 17 is dropped for
-  now: a few lines, so Android does not wait for milestone 22. The iPhone's
-  went in 16.2, where the room's menu took its place
-- The terms: Shinar is run by the owner's company, a private company limited
-  by shares registered in Nigeria, under Nigerian law (the owner's choice,
-  2026-11-22; its name to come), named as the App Store names the seller;
-  and the subscription: the price, the trial, renewal, and cancelling and refunds
-  through Apple. The privacy pages: what Apple tells us of a purchase (the
-  product and its dates, never card details)
-- The two test accounts stay behind the hidden entry (13.5); the review
-  notes say how to reach it
-- Verify: `make server-test`, `make ios-test`; on the iPhone, sign up afresh,
-  then delete the account: Shinar leaves the Apple account's list of apps
-  using Sign in with Apple
+**Checkpoint 18.11: the rest of what App Review asks for** (built 2026-11-24)
+- Asking before words leave the phone (Guideline 5.1.2(i)). "How your words
+  travel", a screen before the app opens: Groq writes your words down when the
+  phone cannot, Microsoft's translator translates them, Fish Audio speaks
+  them in your voice, and none gets your name or your ID. "Agree and
+  continue", or "Not now, sign out". It comes after signing up, and once for
+  everyone who signed up before it, since it shows whenever the profile has
+  not agreed to this version (`servicesConsentVersion`, 2026-11-23). The
+  server keeps the version and when (`services_consent` on `PATCH /v1/me`,
+  migration 0013). Nothing on the server refuses without it: the phone asks
+- Deleting an account revokes its Sign in with Apple (Guideline 5.1.1(v)).
+  The phone sends Apple's authorization code with each sign-in; the server
+  trades it for a refresh token with a client secret signed by the Sign in
+  with Apple key, keeps it on the identity, and revokes it before deleting
+  the account, in the app or by `make account-delete`. A failed trade or
+  revocation is logged, and stops neither. `internal/auth/appletokens.go`;
+  `internal/es256`, the ES256 signing shared with the App Store client.
+  `make signin-check` checked the key with Apple: a made-up code was refused
+  as a bad code, so Apple accepted the app's signature. ADR 0018, addendum
+- The call button is gone from Android's room too, with its dialog
+- The terms: "The law", Shinar is run from Nigeria under Nigerian law. The
+  business's name, HO Studio, comes once CAC has registered it (21.1); a
+  business name is the owner trading under that name, so how the terms
+  name the two is the owner's to decide then. The subscription's
+  terms came with 21.3. The privacy pages: Apple's token, kept only to end
+  the sign-in, and the date of agreeing to the services
+- The test accounts stay behind the hidden entry (13.5); the review notes
+  say how to reach it (18.14)
+- Tests: the Apple token client (the trade, the revocation, Apple's reasons),
+  the refresh tokens and the consent in accounts, the API (a code traded and
+  kept, a trade that fails leaving the sign-in standing, deleting revoking,
+  the consent recorded and refused when empty); on the iPhone the code sent,
+  the services step asked until this version is agreed, and asked again for
+  an older one. iOS 224 pass, none skipped
+- Owner, before this server ships: the Sign in with Apple key on the machine,
+  beside the push key, and its two settings (the commands are in the batch
+  notes). Without them the server runs, and only revocation is off
+- Verify: `make server-test`, `make ios-test`, `make signin-check`; on the
+  iPhone, open the app as an existing account: "How your words travel"
+  first; agree, and it does not come back
+
+**Checkpoint 18.15: the voice passage in the person's language** (built
+2026-11-26, at the owner's request, as a priority; placed here, before the
+submission)
+- Everyone read the English passage to record their voice, whatever language
+  they chose the step before: Rosa, who speaks Spanish, had to read English.
+  Now the iPhone shows it in their language, pre-translated, for 20
+  languages: Spanish, French, Portuguese, German, Italian, Dutch, Polish,
+  Russian, Ukrainian, Turkish, Arabic, Hindi, Chinese, Japanese, Korean,
+  Indonesian, Vietnamese, Swahili, Yoruba and Hausa (`Core/Voice/
+  VoicePassage.swift`). The others read the English. Translated by Claude;
+  a native speaker should read the Yoruba and Hausa before launch
+- The phone sends the words it showed with the recording (`transcript` on
+  `PUT /v1/me/voice`), the server keeps them with the voice (migration 0014)
+  and gives them to Fish Audio with the sample. A voice kept without them
+  was read in English: those recorded before, and Android's
+- The interpreter on the iPhone no longer uploads the phone's copy of the
+  voice with each request: the server speaks in the voice it keeps, whose
+  words it knows. Android still sends its copy, read in English
+- The app's own words stay in English, as before
+- Tests: on the server, the words kept, refused past 1000 characters, carried
+  by speech jobs and deliveries, and sent to Fish Audio (the English passage
+  when there are none); on the iPhone, the passages (the English the
+  server's word for word, every translation a language that can be chosen,
+  five lines each), the Spanish passage shown and sent for a Spanish speaker,
+  and the interpreter sending no voice
+- Verify: `make server-test`, `make ios-test`; on the iPhone, sign up a
+  second account choosing Español: the passage is in Spanish; keep the
+  voice, and a message to an English speaker is heard in it
+
+**Checkpoint 18.16: the app in the iPhone's language** (built 2026-11-26, at
+the owner's request, with 18.15)
+- The owner asked for a Spanish speaker to see Spanish from the first screen
+  ("Talk to anyone. Be heard in your own voice.", then sign-in and the rest).
+  The whole iPhone app is now translated into the same 20 languages as the
+  voice passage, and follows the iPhone's language: Welcome and Sign-in
+  come before the person says which language they speak
+- String Catalogs: `Localizable.xcstrings` (about 390 texts in each
+  language) and `InfoPlist.xcstrings` (the microphone and camera prompts).
+  Shared components take `LocalizedStringKey`; view models and `Core` use
+  `String(localized:)`. Arabic lays out right to left; the fonts fall back to
+  the system's for scripts IBM Plex does not have
+- Left in English: the server's own error messages, developer diagnostics,
+  and the settings screen nothing opens any more (`SettingsScreen.swift`)
+- The website stays in English for now; the promise is the same words in
+  each language on the Welcome screen
+- Owner, for 18.14 and 21.1: the App Store listing, and the subscription's
+  display name and description in App Store Connect, in the languages the
+  app is listed in. Native speakers to read Yoruba and Hausa first
+- Verify: `make ios-test`; on the simulator, open the app with
+  `-AppleLanguages (es)` (or set the iPhone to Spanish): Welcome, Sign-in and
+  the rest in Spanish; Arabic right to left
 
 **Checkpoint 18.12: paid engines, within a monthly budget**
 - Paying people cannot be cut off by a free allowance that everyone shares.
@@ -1739,16 +1803,19 @@ below that, but the limits should be set with it in mind.
 
 **Checkpoint 21.1: Apple's set-up** (the owner, in App Store Connect; the
 code does not wait for it)
-- First, the seller (the owner's choice, 2026-11-22): Shinar is published by
-  the owner's company, so other apps can sit beside it. The company is
-  registered with CAC as a private company limited by shares (a business
-  name is not enough: Apple takes only legal entities as organisations). It
-  needs a bank account in its name, a website and work email on its own
-  domain, and a D-U-N-S number; then Apple converts the individual
-  membership to an organisation one, keeping the app. The agreement, tax,
-  bank and trader status below are done as the company, after the
-  conversion. Sandbox purchases on a real iPhone wait for the agreement; the
-  StoreKit configuration file does not
+- First, the seller (the owner's choice, 2026-11-24, replacing that of
+  2026-11-22): a business name now, HO Studio, registered with CAC as a sole
+  proprietorship (Information and Communication: software development); a
+  private company limited by shares later. A business name is not a legal
+  entity, and Apple takes only legal entities as organisations, so the Apple
+  membership stays individual: the App Store shows the owner's own name as
+  the seller, and the agreement, tax, bank and trader status below are done
+  as the owner. When the company is registered, it needs a bank account in
+  its name, a website and work email on its own domain, and a D-U-N-S
+  number; then Apple Developer Support converts the individual membership
+  to an organisation one (to be confirmed with Apple then that the app and
+  its subscribers carry over). Sandbox purchases on a real iPhone wait for
+  the agreement; the StoreKit configuration file does not
 - Business: the Paid Applications Agreement, with the bank account, the tax
   forms and contact details; then the App Store Small Business Program,
   before the first sale
@@ -1881,8 +1948,11 @@ Added on 2026-11-21, when the owner chose to take the iPhone to the App Store
 first. Android gets what was built for the iPhone alone from milestone 16
 on: block and report (the screens, `you_blocked`, and leaving `***` out of
 the phone's voice; the server's side is shared), `account_suspended` at
-sign-in, the day headings in a room, asking before words leave the phone, and
-the paywall
+sign-in, the day headings in a room, asking before words leave the phone,
+the voice passage in the person's language with its words sent as
+`transcript` and the interpreter speaking in the kept voice (18.15), the
+app's words in 20 languages (18.16: Android's `strings.xml` per language),
+and the paywall
 and subscriptions through Google Play Billing (a dependency to approve), with
 the server checking purchases with Google (the Play Developer API, and
 notifications through Cloud Pub/Sub). Then Google Play itself: a developer

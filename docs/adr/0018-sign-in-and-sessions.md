@@ -118,3 +118,36 @@ nothing says which addresses exist.
 - Before the App Store (milestone 18): App Review may ask for a demo account.
   A test account is one, and its hidden entry must be described in the review
   notes, since Apple's guideline 2.3.1 asks for no undocumented features.
+
+## Addendum, 2026-11-24: revoking Sign in with Apple when an account is deleted
+
+**Context.** Apple asks apps that offer Sign in with Apple to revoke the
+user's Apple tokens when they delete their account (Guideline 5.1.1(v)), so
+that the person sees the app leave their Apple account's list of apps using
+Sign in with Apple. Revoking needs a token Apple gave the app for that
+person, which the server did not keep: it checked the identity token and let
+it go.
+
+**Decision.**
+
+- At each sign-in with Apple the phone also sends the
+  `authorization_code` Apple gave it. The server trades it, once and within
+  Apple's five minutes, for a refresh token, with a client secret it signs
+  with the Sign in with Apple key (ES256, five minutes long), and keeps that
+  token on the identity (migration 0013). A trade that fails does not fail
+  the sign-in: the person is signed in either way, and the next sign-in
+  brings a new code.
+- Deleting an account, in the app or by the owner's command, revokes each
+  kept token first. A revocation that fails does not stop the deletion,
+  which Apple's guidance allows; it is logged.
+- The key is `APPLE_SIGNIN_KEY_FILE` and `APPLE_SIGNIN_KEY_ID`, its team
+  `APNS_TEAM_ID`. Without them nothing is traded or revoked.
+  `make signin-check` checks the key with Apple: a made-up code must be
+  refused as a bad code (`invalid_grant`), which Apple says only once it
+  accepts the app's signature.
+
+**Consequences.** An account made before this, and not signed in since, has
+no token, and its Sign in with Apple cannot be revoked by the server; the
+person can still remove Shinar in their Apple account's settings. The kept
+token can do nothing but end the link, so it is not encrypted beyond what the
+database is. The privacy pages say it is kept, and why.

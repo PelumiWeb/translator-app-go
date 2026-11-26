@@ -250,7 +250,10 @@ reasoning.
 From checkpoint 9.3 the app speaks in the user's own voice when it can.
 `RemoteSpeechSynthesizer` sends the voice sample (section 2.10) and the
 translation to `POST /v1/speech`, follows the job like a transcription, then
-downloads the audio and plays it. `FallbackSpeechSynthesizer` tries it first
+downloads the audio and plays it. On the iPhone, since 2026-11-26, it sends
+only the translation, and the server speaks in the voice it keeps for the
+user, whose passage it knows (section 2.10); Android still sends its sample
+until milestone 22. `FallbackSpeechSynthesizer` tries it first
 and the phone's voice second: with no voice recorded, no network, or a failed
 job, the phone's voice says it instead, so the translation is always heard.
 The server speaks with Fish Audio when it has a key for it (checkpoint 9.4,
@@ -264,6 +267,16 @@ voice speaks at once.
 To speak translations in the user's own voice, the app needs a sample of it.
 The user records one once, by reading a passage of about 20 seconds on a
 "Record your voice" screen shown at first launch.
+
+The passage is in the language the user chose at the step before, on the
+iPhone since 2026-11-26: 20 languages have a translation, written once
+(`VoicePassage`), and the others read the English. The phone sends the words
+it showed with the recording (`transcript` on `PUT /v1/me/voice`), the server
+keeps them with the voice, and the voice engine is told them with every
+request, since it imitates a voice better knowing what was said in the
+sample. A voice kept without them was read in English
+(`provider.OnboardingPassage`): those recorded before, and Android's until
+milestone 22, which shows the English passage to everyone.
 
 - `VoiceSampleStore` keeps it as one WAV file in the app's private files. It
   is not uploaded when recorded. It is sent with each request to speak, and
@@ -411,6 +424,31 @@ about a phone, and the device benchmark (section 2.6) only means something on
 a real iPhone. A free Apple ID is enough to install on the owner's iPhone; the
 app stops opening after 7 days and is installed again from Xcode.
 
+### 3.6a The app's own words, in the iPhone's language
+
+Since checkpoint 18.16 the iPhone app is translated into the 20 languages
+the voice passage has (section 2.10): Spanish, French, Portuguese, German,
+Italian, Dutch, Polish, Russian, Ukrainian, Turkish, Arabic, Hindi, Chinese
+(Simplified), Japanese, Korean, Indonesian, Vietnamese, Swahili, Yoruba and
+Hausa. It follows the iPhone's language (Settings, or the app's own language
+in Settings), as iOS apps do, since Welcome and Sign-in come before the
+person chooses the language they speak; the two are usually the same, and
+the language chosen at sign-up is what the person is heard in, not what the
+app is written in.
+
+- One String Catalog, `Localizable.xcstrings`, with Xcode's extraction:
+  literals in SwiftUI views are found by the compiler, text made in view
+  models and `Core` uses `String(localized:)`, and shared components take
+  `LocalizedStringKey`. Counts that change a word's form (seconds in
+  Russian, Polish, Ukrainian and Arabic) use the catalog's plural forms.
+- `InfoPlist.xcstrings` translates the microphone and camera prompts. The
+  translations leave the app's name out, since iOS shows it in the prompt's
+  title and it is written once until its trademark check (ADR 0021).
+- Not translated: words from the server (its error messages are English, and
+  the phones show their own), developer diagnostics, and the website.
+- Translated by Claude. A native speaker should read Yoruba and Hausa before
+  launch, and any language before its App Store listing goes out.
+
 ### 3.7 The keyboard, ahead
 
 iOS does not let a keyboard extension use the microphone. Apps that offer
@@ -461,7 +499,8 @@ proxies from closing an idle connection.
 
 **`POST /v1/speech`**: `multipart/form-data` with the `text` to say, its
 language as `lang`, and the voice to say it in: a `voice` part (a WAV sample
-of the voice to imitate), or, with no `voice` part, the user's kept voice.
+of the voice to imitate, read in English), or, with no `voice` part, the
+user's kept voice, with the words read in it.
 Signed in only, since 2026-11-09 (ADR 0023). Like a transcription it is queued and
 answered with `202 Accepted`:
 
@@ -487,15 +526,15 @@ with code `unauthenticated`.
 
 | Endpoint | What it does |
 | --- | --- |
-| `POST /v1/sessions/apple` | JSON `identity_token`, `nonce`, optional `name`. Checks the token, creates the account on its first sign-in, answers `{ "token", "user", "new_user" }`: `201` for a new account, `200` otherwise. `401 invalid_token` for a token that fails a check; `503 sign_in_unavailable` when Apple's keys cannot be fetched |
+| `POST /v1/sessions/apple` | JSON `identity_token`, `nonce`, optional `name`, and `authorization_code`, traded for the refresh token revoked when the account is deleted (ADR 0018, addendum). Checks the token, creates the account on its first sign-in, answers `{ "token", "user", "new_user" }`: `201` for a new account, `200` otherwise. `401 invalid_token` for a token that fails a check; `503 sign_in_unavailable` when Apple's keys cannot be fetched |
 | `POST /v1/sessions/google` | the same, with a Google ID token; `501 sign_in_not_configured` when the server has no `GOOGLE_CLIENT_ID` |
 | `POST /v1/sessions/email` | JSON `email`, `code`: a test account, whose code is fixed in `TEST_ACCOUNTS` until codes are sent by mail (ADR 0018, addendum). Answers as the others; `401 invalid_code` for a wrong pair or an address that is not a test account; `501 sign_in_not_configured` with no test accounts |
 | `DELETE /v1/sessions/current` | signs out this session |
 | `PUT /v1/sessions/current/push` | JSON `service` (`apns`, `apns-sandbox` for builds run from Xcode, or `fcm`) and `token` (Apple's device token, or the app's Firebase installation ID): where this phone receives notifications (ADR 0026). `204`; `400` for a token not of that service's shape. Kept with the session, so signing out forgets it |
-| `GET /v1/me` | the profile: `{ "id", "display_name", "handle", "language" }` |
-| `PATCH /v1/me` | changes any of `display_name`, `handle`, `language`; `409 handle_taken` |
+| `GET /v1/me` | the profile: `{ "id", "display_name", "handle", "language", "services_consent" }`; `services_consent` is the version of the services step the user agreed to |
+| `PATCH /v1/me` | changes any of `display_name`, `handle`, `language`, or records `services_consent` (the version agreed to, now); `409 handle_taken` |
 | `DELETE /v1/me` | deletes the account, its sessions and its voice |
-| `PUT /v1/me/voice` | `multipart/form-data`: the `voice` (WAV) and `consent`, the version of the consent wording the user agreed to. Replaces any earlier voice. Answers `{ "consent_version", "consented_at" }` |
+| `PUT /v1/me/voice` | `multipart/form-data`: the `voice` (WAV), `consent`, the version of the consent wording the user agreed to, and optionally `transcript`, the passage as the phone showed it (up to 1000 characters; `400 invalid_transcript` past that); without it, the English passage. Replaces any earlier voice. Answers `{ "consent_version", "consented_at" }` |
 | `GET /v1/me/voice` | the same, or `404 no_voice` |
 | `GET /v1/me/voice/audio` | the user's own kept sample, for a phone they sign in on later |
 | `DELETE /v1/me/voice` | deletes the voice |
@@ -651,6 +690,9 @@ CREATE INDEX jobs_ready ON jobs (run_at) WHERE status = 'queued';
 -- adding up what someone sent in the last 24 hours. Migration 0009, ADR 0029.
 -- The waitlist (18.6): waitlist (email, unique whatever its capitals; name;
 -- phone; invited_at). Migration 0010, ADR 0030.
+-- What App Review asks for (18.11): identities.apple_refresh_token, kept to
+-- revoke Sign in with Apple when the account is deleted;
+-- users.services_consent and services_consented_at. Migration 0013.
 -- Paying (21.2): subscriptions (one per Apple original transaction: the
 -- account, product, environment, the period and whether it is the trial,
 -- revoked_at, auto_renew, grace_until) and store_notifications (each of
@@ -779,8 +821,9 @@ type Synthesizer interface {
 ```
 
 Two implementations: `fish.Synthesizer` calls Fish Audio (ADR 0010), sending
-the voice sample with each request along with its transcript, the passage the
-phones ask users to read (`provider.OnboardingPassage`); and a fake that
+the voice sample with each request along with its transcript: the passage as
+the phone showed it (`SynthesisOptions.VoiceText`), or the English one
+(`provider.OnboardingPassage`) for a sample that came without it; and a fake that
 answers with one beep per word, for tests and for working without a key.
 Both kinds of work run through the
 one queue: a job row has a `kind`, and a worker looks at it to choose the
@@ -808,7 +851,7 @@ Environment variables read once in `main` (`DATABASE_URL`, `HTTP_ADDR`,
 `GOOGLE_TRANSLATE_KEY`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`,
 `TRANSCRIBE_ENGINE`, `GROQ_API_KEY`, `GROQ_MODEL`, `APNS_KEY_FILE`,
 `APNS_KEY_ID`, `APNS_TEAM_ID`, `FCM_SERVICE_ACCOUNT_FILE`, `DAILY_VOICE_MINUTES`,
-`DAILY_TEXT_MESSAGES`, `REPORTS_DIR`, `REPORTS_NOTIFY_HANDLE`, `BILLING`,
+`DAILY_TEXT_MESSAGES`, `REPORTS_DIR`, `REPORTS_NOTIFY_HANDLE`, `APPLE_SIGNIN_KEY_FILE`, `APPLE_SIGNIN_KEY_ID`, `BILLING`,
 `TRIAL_VOICE_MINUTES`, `TRIAL_TEXT_MESSAGES`). The In-App Purchase key
 (`APPSTORE_KEY_FILE`, `APPSTORE_KEY_ID`, `APPSTORE_ISSUER_ID`) is read only by
 `make appstore-check` for now. Secrets live in
