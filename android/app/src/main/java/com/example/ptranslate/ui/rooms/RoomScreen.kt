@@ -17,11 +17,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -142,24 +137,6 @@ fun RoomScreen(
     LaunchedEffect(recording) {
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
     }
-    var callsSoon by rememberSaveable { mutableStateOf(false) }
-    if (callsSoon) {
-        AlertDialog(
-            onDismissRequest = { callsSoon = false },
-            title = { Text("Calls are coming soon", style = PearlType.title) },
-            text = {
-                Text(
-                    "You'll be able to call $name and hear each other in your own languages. Until then, send a voice note or a message.",
-                    style = PearlType.message,
-                )
-            },
-            confirmButton = { TextButton(onClick = { callsSoon = false }) { Text("OK", color = colors.fg, style = PearlType.chip) } },
-            containerColor = colors.bgRaised,
-            titleContentColor = colors.fg,
-            textContentColor = colors.fg2,
-        )
-    }
-
     // The composer rides above the keyboard while the user types.
     Column(modifier.fillMaxSize().imePadding()) {
         CenterAlignedTopAppBar(
@@ -172,13 +149,6 @@ fun RoomScreen(
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(PearlIcons.Back, contentDescription = "Back", tint = colors.fg, modifier = Modifier.size(24.dp))
-                }
-            },
-            actions = {
-                if (other != null) {
-                    IconButton(onClick = { callsSoon = true }) {
-                        Icon(PearlIcons.Call, contentDescription = "Call, coming soon", tint = colors.fg, modifier = Modifier.size(22.dp))
-                    }
                 }
             },
             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = colors.bg),

@@ -104,6 +104,11 @@ export default function Terms() {
         Apple and Google are not responsible for {APP_NAME}, or for supporting it.
       </p>
 
+      <h2>The law</h2>
+      <p>
+        {APP_NAME} is run from Nigeria, and these terms are governed by the laws of Nigeria.
+      </p>
+
       <h2>Changes</h2>
       <p>
         When these terms change, the date at the top changes too. If a change matters, we&apos;ll say so here and in a

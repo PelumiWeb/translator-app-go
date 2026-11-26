@@ -29,7 +29,9 @@ export default function Privacy() {
       <p>
         Your name, your ID and the language you speak, so people can find you and hear you in their language. You sign
         in with Apple on iPhone, or Google on Android. We keep your email address only if Apple shares it or Google
-        confirms it, to recognise your account.
+        confirms it, to recognise your account. With Apple, we also keep a token Apple gives us, used only to end your
+        Sign in with Apple when you delete your account. And we note when you agreed to the services that help (below),
+        and to which wording.
       </p>
 
       <h2>Your voice</h2>

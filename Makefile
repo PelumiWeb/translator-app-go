@@ -148,6 +148,10 @@ account-delete: ## Delete the account HANDLE=... and everything it said, on requ
 appstore-check: ## Ask Apple's sandbox for a test notification and check its signature (In-App Purchase key from server/.env)
 	cd server && $(SERVER_ENV) go test ./internal/billing -run TestLiveAppleSignature -count=1 -v
 
+.PHONY: signin-check
+signin-check: ## Check the Sign in with Apple key with Apple (key from server/.env): a made-up code must be refused as a bad code
+	cd server && $(SERVER_ENV) go test ./internal/auth -run TestLiveSignInWithAppleKey -count=1 -v
+
 .PHONY: server-test
 server-test: ## Run the Go tests (needs `make db-up`)
 	cd server && go test ./...
